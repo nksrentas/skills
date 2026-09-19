@@ -1,4 +1,7 @@
 interface:
   display_name: "Bussin Code Feature"
   short_description: "Ship layered features with built-in quality gates"
+  icon_small: "./assets/Bussin-mark.svg"
+  icon_large: "./assets/Bussin-logo.svg"
+  brand_color: "#FF4809"
   default_prompt: "Use $bussin-code-feature to implement this feature with clean layers, complete states, and verified dependent updates."
