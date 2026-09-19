@@ -1,0 +1,4 @@
+interface:
+  display_name: "Bussin Code Feature"
+  short_description: "Ship layered features with built-in quality gates"
+  default_prompt: "Use $bussin-code-feature to implement this feature with clean layers, complete states, and verified dependent updates."
