@@ -13,6 +13,7 @@
 ## Included skills
 
 - [bussin-code-feature](./bussin-code-feature): Build and refactor TypeScript/JavaScript features with clean layers, complete runtime states, dependent-file updates, and verification.
+- [honest-feedback](./honest-feedback): Direct assessments instead of agreeable ones: verdict first, a rating out of 10 against fixed anchors, weak assumptions named, "you're wrong" with the reason, and "I don't know" when that is the truth.
 - [write-like-a-human](./write-like-a-human): Check and revise drafts against the narrative choices that separate human from AI fiction, using measured rates from the StoryScope study of 61,608 stories.
 
 ## Install
