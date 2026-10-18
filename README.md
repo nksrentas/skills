@@ -83,14 +83,21 @@ bash ~/.claude/skills/bussin-autoloop/scripts/loop.sh
 
 For UI work add `bussin-ui` and `review:review-animations` to `--skills`. See [bussin-autoloop](./bussin-autoloop/SKILL.md) for modes, gates and running unattended safely.
 
-## Tests
+## Tests and evals
 
-The autoloop scripts have shell tests:
+CI runs every `tests/*.test.sh` with the system bash on `ubuntu-latest` and `macos-latest`, on pull requests and on pushes to `main`. Run them locally with:
 
 ```bash
-bash tests/autoloop-guard.test.sh
-bash tests/autoloop-loop.test.sh
+for t in tests/*.test.sh; do bash "$t" || exit 1; done
 ```
+
+The `evals/` folder holds trigger cases for `claude plugin eval`: one per skill, plus negative cases where no bussin skill may fire. Run the suite from the repo root:
+
+```bash
+claude plugin eval . --runs 1 --ablation none --no-publish --trust-plugin
+```
+
+Evals run real Claude sessions on your own Claude credentials and cost money, roughly $0.06-0.09 per case.
 
 ## Compatibility
 
