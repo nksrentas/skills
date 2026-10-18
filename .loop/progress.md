@@ -111,3 +111,8 @@ Next: R1
 Did: ran bash .loop/verify.sh: passed; autoloop-guard.test.sh 27 ok, autoloop-loop.test.sh ok, skills-structure.test.sh 59 ok, each exit 0 under /bin/bash 3.2.57. `git diff c253de1 -- tests/autoloop-guard.test.sh tests/autoloop-loop.test.sh` is empty. No code change, so no implementation commit and no review subagent; evidence points at 6aa4c72.
 Learned: the json formatting of feature_list.json round-trips cleanly through python json.dumps(indent=2), so marking via script keeps the diff to the one item.
 Next: R2
+
+## Session 19 · R2 · 2026-10-18
+Did: `git diff --stat c253de1 -- 'bussin-*' .claude-plugin` lists only .claude-plugin/plugin.json, the forced fix named in session 11; no bussin-* file changed. marketplace.json skills match base (same eight). `claude plugin validate --strict .` passed. package.json exists only under evals/*/fixture. Tests and CI need bash and jq; jq was already used at base (autoloop-guard.test.sh, assets/guard-commit.sh, assets/verify.sh). verify.sh passed. No code change, so no implementation commit and no review subagent; evidence points at fe87d2d.
+Learned: `claude plugin validate --strict .` reports on marketplace.json only; plugin.json strictness was checked in session 11.
+Next: none, every item passes

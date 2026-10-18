@@ -225,8 +225,11 @@
       "ui": false,
       "description": "Skill behaviour and plugin packaging are unchanged apart from fixes the structure test forced: no edits to bussin-* SKILL.md text, references, scripts or assets beyond those fixes; marketplace.json still lists the same eight skills; no new runtime dependency (no package.json at the repo root, no new tool required by any test).",
       "verify": "`git diff --stat <config.base> -- 'bussin-*' .claude-plugin` lists only files named in progress.md as forced fixes. `claude plugin validate --strict .` passes. No package.json at repo root (evals fixture excepted).",
-      "passes": false,
-      "evidence": null
+      "passes": true,
+      "evidence": {
+        "commit": "fe87d2d",
+        "ran": "git diff --stat c253de1 -- 'bussin-*' .claude-plugin: only .claude-plugin/plugin.json (+16, forced fix per session 11); marketplace.json skills identical to base (8); claude plugin validate --strict . passed; package.json only under evals/*/fixture; tests need only bash+jq, jq already required at base; bash .loop/verify.sh passed"
+      }
     }
   ]
 }
