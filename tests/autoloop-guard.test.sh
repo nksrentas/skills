@@ -99,6 +99,14 @@ echo 'export const w = "unverified"' > "$weird" && git add "$weird" && echo 'exp
 expect 2 "a staged change to a file name git would quote is blocked" "git commit -m x"
 git reset -q -- "$weird"
 
+:
+magic=':(exclude)*'
+echo 'export const m = 1' > "$magic" && git --literal-pathspecs add -- "$magic" && git commit -qm "add magic-named file" --no-verify
+bash .loop/verify.sh >/dev/null
+echo 'export const m = "unverified"' > "$magic" && git --literal-pathspecs add -- "$magic" && echo 'export const m = 1' > "$magic"
+expect 2 "a staged change to a file named like pathspec magic is blocked" "git commit -m x"
+git --literal-pathspecs reset -q -- "$magic"
+
 bash .loop/verify.sh >/dev/null
 expect 2 "a commit against another index is blocked" "GIT_INDEX_FILE=/tmp/other git commit -m x"
 expect 2 "a commit with --git-dir is blocked" "git --git-dir=.git --work-tree=. commit -m x"
