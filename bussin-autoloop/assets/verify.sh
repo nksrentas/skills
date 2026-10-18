@@ -5,9 +5,18 @@ here="$(cd "$(dirname "$0")" && pwd)"
 cd "$(git rev-parse --show-toplevel)"
 marker=.loop/tests-passed
 
-committed() { git show "HEAD:.loop/$1" 2>/dev/null || cat "$here/$1"; }
-eval "$(committed fingerprint.sh)"
-config="$(committed config.json)"
+loop_fingerprint() {
+  local index
+  index="$(mktemp)"
+  cp "$(git rev-parse --git-path index)" "$index" 2>/dev/null || rm -f "$index"
+  GIT_INDEX_FILE="$index" git add -A -- .
+  GIT_INDEX_FILE="$index" git rm -q --cached --ignore-unmatch -- \
+    .loop/tests-passed .loop/feature_list.json .loop/progress.md .loop/retro.md
+  GIT_INDEX_FILE="$index" git write-tree
+  rm -f "$index"
+}
+
+config="$(git show HEAD:.loop/config.json 2>/dev/null || cat "$here/config.json")"
 cfg() { jq -r "$1" <<< "$config"; }
 
 rm -f "$marker"

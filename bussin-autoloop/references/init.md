@@ -35,7 +35,7 @@ Ask for the stack only if `--stack` is missing and the task does not imply one. 
 
 ```bash
 mkdir -p .loop
-cp "$SKILL_DIR/assets/verify.sh" "$SKILL_DIR/assets/guard-commit.sh" "$SKILL_DIR/assets/fingerprint.sh" .loop/
+cp "$SKILL_DIR/assets/verify.sh" "$SKILL_DIR/assets/guard-commit.sh" .loop/
 chmod +x .loop/verify.sh .loop/guard-commit.sh
 ```
 

@@ -40,7 +40,6 @@ The guard and `verify.sh` read the loop scripts and config from the last commit,
 | `feature_list.json` | init writes items; run touches only `passes` and `evidence` | The contract and the final proof |
 | `init.sh` | init | Boots the environment so no session rediscovers how |
 | `verify.sh` | init copies from `assets/` | Runs tests, then Stryker on changed files when enabled, then writes the code's fingerprint to `.loop/tests-passed` |
-| `fingerprint.sh` | init copies from `assets/` | Hashes the working tree, leaving out the bookkeeping files, so the marker is tied to the exact code that passed |
 | `guard-commit.sh` | init copies from `assets/` | PreToolUse hook, always run from the committed copy (`git show HEAD:`), that blocks any `git commit` unless the marker matches the current code, items are unchanged apart from `passes` and `evidence`, and the loop config and scripts are untouched |
 | `progress.md` | run | What each session did, learned about the codebase, and what is next |
 | `retro.md` | run, thorough mode | Proposed environment improvements, never applied by the loop |

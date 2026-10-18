@@ -10,7 +10,7 @@ git init -q
 git config user.email loop@test
 git config user.name loop
 mkdir -p .loop src
-cp "$assets/verify.sh" "$assets/guard-commit.sh" "$assets/fingerprint.sh" .loop/
+cp "$assets/verify.sh" "$assets/guard-commit.sh" .loop/
 echo '{"commands":{"test":"true"},"gates":{"mutation":false}}' > .loop/config.json
 echo '{"features":[{"id":"F1","description":"export csv","passes":false,"evidence":null}]}' > .loop/feature_list.json
 echo '.loop/tests-passed' > .gitignore
@@ -77,10 +77,9 @@ expect 2 "editing verify.sh is blocked" "git commit -m x"
 git checkout -q .loop/verify.sh
 
 printf '#!/usr/bin/env bash\nexit 0\n' > .loop/guard-commit.sh
-printf 'loop_fingerprint() { cat .loop/tests-passed 2>/dev/null; }\n' > .loop/fingerprint.sh
 echo 'export const a = 4' > src/a.ts
-expect 2 "a gutted guard and fingerprint in the working tree are ignored" "git commit -m x"
-git checkout -q .loop/guard-commit.sh .loop/fingerprint.sh
+expect 2 "a gutted guard in the working tree is ignored" "git commit -m x"
+git checkout -q .loop/guard-commit.sh
 
 echo 'export const a = 5' > src/a.ts
 bash .loop/verify.sh >/dev/null
@@ -93,6 +92,18 @@ expect 2 "a staged loop-script edit hidden behind a clean working tree is blocke
 git reset -q .loop/verify.sh
 git checkout -q src/a.ts
 
+weird=$'src/we"ird\tname.ts'
+echo 'export const w = 1' > "$weird" && git add "$weird" && git commit -qm "add weird file" --no-verify
+bash .loop/verify.sh >/dev/null
+echo 'export const w = "unverified"' > "$weird" && git add "$weird" && echo 'export const w = 1' > "$weird"
+expect 2 "a staged change to a file name git would quote is blocked" "git commit -m x"
+git reset -q -- "$weird"
+
+bash .loop/verify.sh >/dev/null
+expect 2 "a commit against another index is blocked" "GIT_INDEX_FILE=/tmp/other git commit -m x"
+expect 2 "a commit with --git-dir is blocked" "git --git-dir=.git --work-tree=. commit -m x"
+expect 0 "commit -a after verify passes" "git commit -am x"
+
 if printf '{"tool_input":{"command":"git commit -m x"}}' | CLAUDE_PROJECT_DIR="$repo/missing" bash -c "$hook_command" 2>/dev/null; then
   echo "FAIL a guard that cannot run lets the commit through"; failures=$((failures + 1))
 else
@@ -102,7 +113,7 @@ fi
 fresh="$(mktemp -d)"
 (
   cd "$fresh" && git init -q && mkdir .loop
-  cp "$assets/verify.sh" "$assets/guard-commit.sh" "$assets/fingerprint.sh" .loop/
+  cp "$assets/verify.sh" "$assets/guard-commit.sh" .loop/
   echo '{"commands":{"test":"true"},"gates":{"mutation":false}}' > .loop/config.json
   echo '{"features":[]}' > .loop/feature_list.json
   echo '.loop/tests-passed' > .gitignore
