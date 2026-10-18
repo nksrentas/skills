@@ -31,8 +31,11 @@
       "ui": false,
       "description": "The structure test checks that .claude-plugin/marketplace.json is valid JSON (with jq, already used by the existing tests).",
       "verify": "Run `bash tests/skills-structure.test.sh`: ok line for marketplace JSON. In a scratchpad fixture with a trailing comma in marketplace.json: FAIL line for JSON validity, non-zero exit, and the run does not abort before printing the other checks.",
-      "passes": false,
-      "evidence": null
+      "passes": true,
+      "evidence": {
+        "commit": "6c12e17",
+        "ran": "bash .loop/verify.sh (3 test files pass); structure test on repo: ok marketplace.json is valid JSON, exit 0; scratchpad fixture with trailing comma in marketplace.json: FAIL marketplace.json is valid JSON, remaining checks still printed, exit 1; review subagent: spec/standards/lean clean"
+      }
     },
     {
       "id": "F4",

@@ -31,3 +31,8 @@ Next: F2
 Did: structure test now checks each bussin-* dir is in marketplace.json `plugins[].skills` and the README `## Included skills` list, and each entry in either list exists on disk. Commit 7a48ef2.
 Learned: `readme_skills` already scopes to the `## Included skills` section (awk toggles on `## ` headings), so E3 likely only needs its fixture proof. `marketplace_skills` swallows jq errors (empty list), so invalid JSON shows up as "not listed" FAILs until F3 adds an explicit validity check. Use `grep ... >/dev/null`, not `grep -q`, after a producer under pipefail (SIGPIPE).
 Next: F3
+
+## Session 3 · F3 · 2026-10-18
+Did: added `valid_json` (`jq empty`) and a `check "marketplace.json is valid JSON"` before the per-skill loop. Trailing-comma fixture prints the FAIL and keeps running the other checks. Commit 6c12e17.
+Learned: `check` wraps the predicate in `if`, so a failing predicate never trips set -e; new checks just need a predicate function. With invalid JSON the per-skill "listed in marketplace.json" checks also FAIL (marketplace_skills yields nothing), which is expected noise.
+Next: F4
