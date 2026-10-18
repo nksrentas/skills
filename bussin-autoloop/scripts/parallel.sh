@@ -115,13 +115,13 @@ merge_item() {
     log "$id conflicts with work merged meanwhile; it runs again on top of it"
     return
   fi
-  if ! git diff --cached --quiet HEAD -- .loop/config.json '.loop/*.sh'; then
+  restore_bookkeeping
+  if git diff --cached --name-only HEAD -- ':(icase).loop' ':(icase).claude' | grep -qvx ".loop/results/$id.json"; then
     git merge --abort >/dev/null 2>&1 || true
-    log "$id changed the loop config or scripts, which workers may not do; not merged"
+    log "$id changed files under .loop or .claude other than its own result, which workers may not do; not merged"
     return
   fi
-  restore_bookkeeping
-  if ! bash .loop/verify.sh >> "$state_dir/merge.log" 2>&1; then
+  if ! bash <(git show HEAD:.loop/verify.sh) >> "$state_dir/merge.log" 2>&1; then
     git merge --abort >/dev/null 2>&1 || true
     log "$id failed the gate once merged with the latest work; it runs again on top of it"
     return

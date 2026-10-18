@@ -111,7 +111,7 @@ make_project "$tamper" true '{"features": [
 tamper_status=0
 run_loop "$tamper" LOOP_WORKERS=2 LOOP_ITEM_ATTEMPTS=1 || tamper_status=$?
 check "a worker cannot mark other items as passing" '[ "$(grep -c "^start T2$" "$tamper/events")" = 1 ] && [ -f "$tamper/src/t2.txt" ]'
-check "a worker that edits loop scripts is not merged" '[ "$tamper_status" != 0 ] && [ ! -e "$tamper/src/t3.txt" ] && grep -q "T3 changed the loop config or scripts" "$tamper/out" && [ "$(git -C "$tamper" show HEAD:.loop/verify.sh | tail -1)" != "exit 0" ]'
+check "a worker that edits loop scripts is not merged" '[ "$tamper_status" != 0 ] && [ ! -e "$tamper/src/t3.txt" ] && grep -q "T3 changed files under .loop or .claude" "$tamper/out" && [ "$(git -C "$tamper" show HEAD:.loop/verify.sh | tail -1)" != "exit 0" ]'
 
 cap="$tmp/cap"
 make_project "$cap" true '{"features": [{"id": "A", "passes": false, "evidence": null, "writes": "src/a.txt"}]}'
