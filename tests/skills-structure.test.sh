@@ -31,8 +31,11 @@ readme_skills() {
     sed -n 's/^- \[\([^]]*\)\].*/\1/p'
 }
 
+valid_json() { jq empty "$1" 2>/dev/null; }
 listed_in() { "$2" | grep -xF "$1" >/dev/null; }
 exists_on_disk() { [ -d "$root/$1" ]; }
+
+check "marketplace.json is valid JSON" valid_json "$root/.claude-plugin/marketplace.json"
 
 for dir in "$root"/bussin-*/; do
   dir="${dir%/}"
