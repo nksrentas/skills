@@ -41,3 +41,8 @@ Next: F4
 Did: added `kebab_file_names` (find over bussin-* and tests, excluding SKILL.md and .DS_Store, `LC_ALL=C grep -v '/[a-z0-9.-]*$'`), which prints `     not kebab-case: <path>` per offender before one FAIL. A missing root fails the check rather than passing it. Commit 0044b8d.
 Learned: Finder writes .DS_Store into folders (the repo root has one and it is not gitignored), so filesystem scans must skip it. Set `LC_ALL=C` on bracket ranges so macOS and Linux agree. The scan already covers only bussin-*/ and tests/, so E4's .git/, evals/results/ and .loop/ exclusions hold for file names, and paths with spaces print whole (one line per path). E4 still needs its fixture proof. F5's retired-name scan is a different walk (all tracked files) and does need those exclusions.
 Next: F5
+
+## Session 5 · F5 · 2026-10-18
+Did: added `no_retired_skill_refs`: find from the root pruning ./.git, ./.loop, ./evals/results and skipping the test file, `xargs -0 grep -lIE` for the four retired names anywhere plus Pocock names (tdd, code-review, test-audit, retro) only as `/name`, `` `name` skill`` or verb (invoke/load/use/run) + name, with explicit `before`/`after` boundary classes. Commit e5fda5c.
+Learned: `xargs` with no input exits 0 without running grep on BSD, so test emptiness of the output (`[ -n "$bad" ]`) rather than relying on grep's exit code. ERE has no portable `\b`; use `(^|[^A-Za-z0-9_.-])` / `([^A-Za-z0-9_.-]|$)` on both sides or substrings like `mytdd skill` and `overuse tdd` match. E4's exclusions and space-in-path handling already hold for this scan too (verified with a 'refs dir' fixture); E4 still needs its formal fixture proof.
+Next: F6

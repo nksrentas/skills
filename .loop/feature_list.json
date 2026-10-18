@@ -55,8 +55,11 @@
       "ui": false,
       "description": "The structure test fails when any tracked file in the repo mentions a retired skill as a skill reference: bussin-code-feature, ts-feature-architecture, drizzle-data-access, edefy-ui anywhere, and the Pocock skills tdd, code-review, test-audit, retro only when used as a skill dependency (for example `/tdd`, `` `tdd` skill``, `invoke tdd`, `uses the code-review skill`). The test file itself is excluded so its own pattern list does not trip it.",
       "verify": "Run `bash tests/skills-structure.test.sh` on the repo: ok line for retired names, even though the repo mentions retro.md and plain-English code review. In a scratchpad fixture, a SKILL.md that says 'invoke the `tdd` skill' and another that says 'see edefy-ui': FAIL naming both files, non-zero exit.",
-      "passes": false,
-      "evidence": null
+      "passes": true,
+      "evidence": {
+        "commit": "e5fda5c",
+        "ran": "bash .loop/verify.sh (3 test files pass); structure test on repo: ok no references to retired skills, exit 0; scratchpad fixture with invoke the `tdd` skill and see edefy-ui: FAIL naming bussin-tdd/SKILL.md and bussin-edefy/SKILL.md, exit 1; negatives (retro.md, code review pass, test audit, tdd_mode, retrofit, mytdd skill, overuse tdd) not flagged; /tdd, uses the code-review skill, invoke tdd, load `test-audit` flagged; empty root ok; review subagents: 1st flagged xargs empty-input false FAIL (fixed), 2nd flagged missing left word boundary (fixed), 3rd clean incl. Ubuntu GNU run"
+      }
     },
     {
       "id": "F6",
