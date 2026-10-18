@@ -238,14 +238,33 @@ export const progressBar = (done: number, total: number, width: number) => {
   return '█'.repeat(filled) + '░'.repeat(width - filled)
 }
 
+const pricedCost = (snapshot: LoopSnapshot) =>
+  snapshot.sessions - snapshot.unpricedSessions > 0 ? formatCost(snapshot.costUsd) : undefined
+
 export const statusLine = (snapshot: LoopSnapshot) => {
   const progress = `${snapshot.done}/${snapshot.total}`
-  const cost = formatCost(snapshot.costUsd)
+  const cost = pricedCost(snapshot)
+  const elapsed = snapshot.elapsedSec > 0 ? formatDuration(snapshot.elapsedSec) : undefined
+  const parts = (head: string, ...rest: (string | undefined)[]) => [head, ...rest].filter(Boolean).join(' · ')
   if (snapshot.loopState === 'running') {
     const eta = snapshot.etaSec === null ? 'ETA after first item' : `ETA ${formatDuration(snapshot.etaSec)}`
-    return `autoloop ${progress} done · ${snapshot.running} running · ${eta} · ${cost}`
+    return parts(`autoloop ${progress} done`, `${snapshot.running} running`, eta, cost)
   }
-  if (snapshot.loopState === 'finished') return `autoloop finished ${progress} · ${formatDuration(snapshot.elapsedSec)} · ${cost}`
-  if (snapshot.loopState === 'stopped') return `autoloop stopped at ${progress} · ${cost}`
-  return snapshot.hasLiveData ? `autoloop ${progress} done · not running` : `autoloop ${progress} done · no live data`
+  if (snapshot.loopState === 'finished') return parts(`autoloop finished ${progress}`, elapsed, cost)
+  if (snapshot.loopState === 'stopped') return parts(`autoloop stopped at ${progress}`, cost)
+  return parts(`autoloop ${progress} done`, snapshot.hasLiveData ? 'not running' : 'no live data')
 }
+
+export const parentDir = (path: string) => path.replace(/\/+$/, '').replace(/\/[^/]*$/, '') || '/'
+
+export const baseName = (path: string) => path.replace(/\/+$/, '').split('/').pop() ?? path
+
+export const commonDirFromGitFile = (text: string) => {
+  const match = /^gitdir:\s*(.+)$/m.exec(text)
+  return match?.[1] === undefined ? undefined : parentDir(parentDir(match[1].trim()))
+}
+
+const LOOP_ORDER: Record<LoopSnapshot['loopState'], number> = { running: 0, stopped: 1, idle: 2, finished: 3 }
+
+export const orderLoops = <T extends { name: string; snapshot: LoopSnapshot }>(loops: T[]) =>
+  [...loops].sort((a, b) => LOOP_ORDER[a.snapshot.loopState] - LOOP_ORDER[b.snapshot.loopState] || a.name.localeCompare(b.name))
