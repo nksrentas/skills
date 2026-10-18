@@ -2,20 +2,23 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
-source "$here/fingerprint.sh"
 cd "$(git rev-parse --show-toplevel)"
-cfg=.loop/config.json
 marker=.loop/tests-passed
+
+committed() { git show "HEAD:.loop/$1" 2>/dev/null || cat "$here/$1"; }
+eval "$(committed fingerprint.sh)"
+config="$(committed config.json)"
+cfg() { jq -r "$1" <<< "$config"; }
 
 rm -f "$marker"
 
-test_cmd="$(jq -r '.commands.test // "npm test"' "$cfg")"
+test_cmd="$(cfg '.commands.test // "npm test"')"
 bash -c "$test_cmd"
 
-if [ "$(jq -r '.gates.mutation // false' "$cfg")" = "true" ]; then
-  base="$(jq -r '.base // "HEAD"' "$cfg")"
+if [ "$(cfg '.gates.mutation // false')" = "true" ]; then
+  base="$(cfg '.base // "HEAD"')"
   set -f
-  paths="$(jq -r '(.mutation_paths // ["src/**/*.ts", "src/**/*.tsx"]) | .[] | ":(glob)" + .' "$cfg")"
+  paths="$(cfg '(.mutation_paths // ["src/**/*.ts", "src/**/*.tsx"]) | .[] | ":(glob)" + .')"
   excludes=(':(exclude,glob)**/*.test.*' ':(exclude,glob)**/*.spec.*' ':(exclude,glob)**/*.d.ts')
   changed="$( {
     git diff --name-only --diff-filter=AM "$base" -- $paths "${excludes[@]}"

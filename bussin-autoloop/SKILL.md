@@ -24,9 +24,9 @@ bash ~/.claude/skills/bussin-autoloop/scripts/loop.sh
 
 ### Running unattended
 
-Each session runs headless, so it gets only the tools the driver passes in `--allowedTools`: the file tools, `Skill`, `Agent`, `TodoWrite`, `bash .loop/init.sh`, `bash .loop/verify.sh`, the read and commit subset of git, and every command in `config.commands`. Any other shell command is denied rather than run. Add tools with a comma-separated `LOOP_EXTRA_TOOLS`, most often the browser MCP server that browser verification needs, for example `LOOP_EXTRA_TOOLS=mcp__plugin_playwright_playwright`.
+Each session runs headless, so it gets only the tools the driver passes in `--allowedTools`: the file tools, `Skill`, `Agent`, `TodoWrite`, `bash .loop/init.sh`, `bash .loop/verify.sh`, the read and commit subset of git, and every command in `config.commands`. Any other shell command is denied rather than run, and Edit and Write are denied on `.loop/*.sh`, `.loop/config.json`, `.claude/` and `.git/`. Add tools with a comma-separated `LOOP_EXTRA_TOOLS`, most often the browser MCP server that browser verification needs, for example `LOOP_EXTRA_TOOLS=mcp__plugin_playwright_playwright`.
 
-The allowlist and the commit guard stop the loop from shortcutting its own gates. They are not a sandbox against hostile code: a project's test command runs whatever the repo says. For an overnight run, use Claude Code's sandbox or a devcontainer with no production credentials and limited network access.
+The guard and `verify.sh` read the loop scripts and config from the last commit, so editing them in the working tree changes nothing, and committing an edit is blocked. Together with the allowlist this stops the loop from shortcutting its own gates. It is not a sandbox against hostile code: the project's test script runs whatever the repo says, so a deliberately adversarial session could still rewrite it. When the proof has to hold against that, run the same tests in CI on the pushed commits. For an overnight run, use Claude Code's sandbox or a devcontainer with no production credentials and limited network access.
 
 ## Artifacts in `.loop/`
 
@@ -37,7 +37,7 @@ The allowlist and the commit guard stop the loop from shortcutting its own gates
 | `init.sh` | init | Boots the environment so no session rediscovers how |
 | `verify.sh` | init copies from `assets/` | Runs tests, then Stryker on changed files when enabled, then writes the code's fingerprint to `.loop/tests-passed` |
 | `fingerprint.sh` | init copies from `assets/` | Hashes the working tree, leaving out the bookkeeping files, so the marker is tied to the exact code that passed |
-| `guard-commit.sh` | init copies from `assets/` | PreToolUse hook that blocks any `git commit` unless the marker matches the current code, items are unchanged apart from `passes` and `evidence`, and the loop config and scripts are untouched |
+| `guard-commit.sh` | init copies from `assets/` | PreToolUse hook, always run from the committed copy (`git show HEAD:`), that blocks any `git commit` unless the marker matches the current code, items are unchanged apart from `passes` and `evidence`, and the loop config and scripts are untouched |
 | `progress.md` | run | What each session did, learned about the codebase, and what is next |
 | `retro.md` | run, thorough mode | Proposed environment improvements, never applied by the loop |
 
