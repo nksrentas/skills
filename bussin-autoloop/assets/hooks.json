@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'bash <(git -C \"$CLAUDE_PROJECT_DIR\" show HEAD:.loop/guard-commit.sh 2>/dev/null)'"
+            "command": "bash -c 'cd \"$CLAUDE_PROJECT_DIR\" || exit 2; guard=\"$(git show HEAD:.loop/guard-commit.sh 2>/dev/null || cat .loop/guard-commit.sh 2>/dev/null)\"; [ -n \"$guard\" ] || exit 0; bash <(printf \"%s\\n\" \"$guard\")'"
           }
         ]
       }

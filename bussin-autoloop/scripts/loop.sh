@@ -9,7 +9,13 @@ max_stalls="${MAX_STALLS:-3}"
 limit_wait="${LIMIT_WAIT:-600}"
 limit_pattern="hit your .*limit|usage limit reached"
 
-[ -f "$list" ] || { echo "autoloop: $list not found, run /bussin-autoloop init first" >&2; exit 1; }
+case "$0" in
+  */plugins/cache/*) default_command="/bussin:bussin-autoloop" ;;
+  *) default_command="/bussin-autoloop" ;;
+esac
+skill_command="${LOOP_SKILL_COMMAND:-$default_command}"
+
+[ -f "$list" ] || { echo "autoloop: $list not found, run $skill_command init first" >&2; exit 1; }
 
 allowed_tools=(
   Read Edit Write Glob Grep Skill Agent TodoWrite
@@ -48,7 +54,7 @@ while [ "$(remaining)" -gt 0 ]; do
   echo "autoloop: iteration $iteration, $(remaining) items remaining"
   before="$(snapshot)"
   status=0
-  claude -p "/bussin-autoloop run" --allowedTools "${allowed_tools[@]}" --disallowedTools "${denied_tools[@]}" 2>&1 | tee "$session_output" || status=$?
+  claude -p "$skill_command run" --allowedTools "${allowed_tools[@]}" --disallowedTools "${denied_tools[@]}" 2>&1 | tee "$session_output" || status=$?
   [ "$status" -eq 0 ] || echo "autoloop: session exited non-zero" >&2
   after="$(snapshot)"
   if [ "$before" = "$after" ] && [ "$status" -ne 0 ] && grep -qiE "$limit_pattern" "$session_output"; then

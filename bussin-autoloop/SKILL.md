@@ -16,11 +16,15 @@ Two prompts over one harness. `init` runs once and leaves artifacts in `.loop/`.
 | `/bussin-autoloop status` | nothing | Print items still `passes:false` and the last 20 lines of `.loop/progress.md` |
 | `/bussin-autoloop <text>` with no `.loop/` | `references/init.md` | Treat the text as the task |
 
-The driver `scripts/loop.sh` calls `claude -p "/bussin-autoloop run"` until no item has `passes:false`, with a stall guard. A session that exits on a usage limit is not a stall: the driver waits `LIMIT_WAIT` seconds (default 600) and retries. Start it from the project root:
+Installed as the `bussin` plugin, the command is `/bussin:bussin-autoloop`; everything else is the same.
+
+The driver `scripts/loop.sh` calls `claude -p "/bussin-autoloop run"` (or the plugin form, chosen from where the script lives; override with `LOOP_SKILL_COMMAND`) until no item has `passes:false`, with a stall guard. A session that exits on a usage limit is not a stall: the driver waits `LIMIT_WAIT` seconds (default 600) and retries. Start it from the project root:
 
 ```bash
-bash ~/.claude/skills/bussin-autoloop/scripts/loop.sh
+bash <skill directory>/scripts/loop.sh
 ```
+
+Init prints the exact path for the current install, for example `~/.claude/skills/bussin-autoloop/scripts/loop.sh`.
 
 ### Running unattended
 
@@ -71,6 +75,8 @@ House context skills, opt-in per feature:
 | `bussin-ui` | Landing pages and dashboards in Next.js + Tailwind v4 + GSAP + Lenis with the house look |
 
 Example: `/bussin-autoloop init "Invoice reminders" --skills bussin-ts-architecture,bussin-drizzle`. Init copies each one's review checklist into `CODING_STANDARDS.md`, so the review stage enforces it.
+
+For UI work, pair the house look with Emil Kowalski's animation review: `/bussin-autoloop init "Pricing page" --skills bussin-ts-architecture,bussin-ui,review:review-animations`.
 
 ## Config shape
 
