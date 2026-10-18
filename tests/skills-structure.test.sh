@@ -15,7 +15,17 @@ frontmatter() {
 }
 
 field() {
-  frontmatter "$1" | sed -n "s/^$2:[[:space:]]*//p" | head -n 1 | sed -e 's/^["'\'']//' -e 's/["'\'']$//'
+  frontmatter "$1" | awk -v key="$2" '
+    block && /^[[:space:]]*$/ { next }
+    block { if ($0 ~ /^[[:space:]]/) { sub(/^[[:space:]]+/, ""); print } exit }
+    index($0, key ":") == 1 {
+      value = substr($0, length(key) + 2)
+      sub(/^[[:space:]]+/, "", value)
+      if (value ~ /^[>|][-+]?[[:space:]]*$/) { block = 1; next }
+      gsub(/^["'\'']|["'\'']$/, "", value)
+      print value
+      exit
+    }'
 }
 
 opens_with_frontmatter() { [ -f "$1" ] && [ "$(head -n 1 "$1")" = "---" ]; }
