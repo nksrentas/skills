@@ -21,3 +21,8 @@ Task: structure test, CI on ubuntu and macOS, `claude plugin eval` trigger suite
 - `evals/results/` is gitignored; eval runs write there.
 
 ## Sessions
+
+## Session 1 · F1 · 2026-10-18
+Did: added tests/skills-structure.test.sh with a `check <label> <fn> args...` helper and per-skill frontmatter, name and description checks; optional root argument for fixtures. Commit e7aa7a3.
+Learned: frontmatter is parsed with awk (first line must be ---, stops at the next ---); `field` strips one pair of surrounding quotes, which bussin-honest-feedback and bussin-write-like-a-human need. Folded/literal (`>`/`|`) descriptions are not handled yet: E2 extends `field`/`has_description`. New checks should reuse `check` so the run keeps going after a FAIL (F3 needs that).
+Next: F2

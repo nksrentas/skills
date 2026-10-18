@@ -7,8 +7,11 @@
       "ui": false,
       "description": "tests/skills-structure.test.sh exists in the plain-bash style of the existing tests and checks that every top-level bussin-* directory has a SKILL.md whose first line is ---, whose frontmatter name: equals the directory name, and whose frontmatter description: is non-empty. One ok/FAIL line per skill and check; exits non-zero on any FAIL. It takes an optional root directory argument (default: the repo containing the script) so the checks can be pointed at a fixture.",
       "verify": "Run `bash tests/skills-structure.test.sh`: exit 0 and an ok line for the frontmatter, name and description check of each of the eight bussin-* skills. Write a fixture root in the scratchpad with bussin-good/SKILL.md (valid) and bussin-bad/SKILL.md whose name: is bussin-other, run `bash tests/skills-structure.test.sh <fixture>`: a FAIL line naming bussin-bad and a non-zero exit.",
-      "passes": false,
-      "evidence": null
+      "passes": true,
+      "evidence": {
+        "commit": "e7aa7a3",
+        "ran": "bash .loop/verify.sh (3 test files pass); structure test on repo: 24 ok, exit 0; scratchpad fixture bussin-good + bussin-bad(name: bussin-other): FAIL bussin-bad: name matches directory, exit 1; review subagent: spec/standards/lean clean"
+      }
     },
     {
       "id": "F2",
