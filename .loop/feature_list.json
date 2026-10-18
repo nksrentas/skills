@@ -103,8 +103,12 @@
       "ui": false,
       "description": "The cases for bussin-feature, bussin-ts-architecture, bussin-drizzle and bussin-ui run inside a minimal fixture project: package.json with next, drizzle-orm and typescript dependencies, and src/features/orders/order.schema.ts with a small Drizzle orders table. Use the eval tool's own fixture mechanism (not scaffold_script, which is off by default) and keep one shared fixture if the format allows it.",
       "verify": "Read the four case folders: each references or contains the fixture; the fixture package.json parses with jq and lists next, drizzle-orm and typescript; order.schema.ts defines an orders table with drizzle-orm. The other four positive cases do not use the fixture.",
-      "passes": false,
-      "evidence": null
+      "passes": true,
+      "evidence": {
+        "commit": "a309edb",
+        "ran": "bash .loop/verify.sh (all ok); jq on 4 fixture package.json lists next, drizzle-orm, typescript; claude plugin validate --strict . passed; claude plugin eval --case trigger-bussin-drizzle loaded case.yaml+add_dirs with no format error (score 0.00, plugin not resolved, F11)",
+        "review": "subagent: spec/standards/lean none"
+      }
     },
     {
       "id": "F10",
