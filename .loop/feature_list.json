@@ -128,8 +128,11 @@
       "ui": false,
       "description": "A single eval case runs end to end and reports a score.",
       "verify": "`claude plugin validate --strict .` passes. Run `claude plugin eval . --runs 1 --ablation none --no-publish --trust-plugin --case <the bussin-honest-feedback case>`: it completes without a format or loading error and prints a score. Record the score and the case name in evidence; a score below 1 is acceptable for this item as long as the run completed, but note it in progress.md.",
-      "passes": false,
-      "evidence": null
+      "passes": true,
+      "evidence": {
+        "commit": "3f5738e",
+        "ran": "claude plugin validate --strict . (passed); claude plugin eval . --runs 1 --ablation none --no-publish --trust-plugin --case trigger-bussin-honest-feedback: plugin \"bussin\" 1.0.0 resolved, score 1.00 ($0.09); same with --case negative-git-rebase-onto: score 1.00 (Skill called 0x, expected 0..0); bash .loop/verify.sh passed"
+      }
     },
     {
       "id": "F12",

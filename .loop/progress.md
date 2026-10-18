@@ -71,3 +71,8 @@ Next: F10
 Did: added evals/negative-git-rebase-onto (prompt only, Read/Glob/Grep/Skill) and evals/negative-rename-variable (case.yaml add_dirs [fixture], fixture/utils.ts with a `usr` param, Edit allowed). Both have graders/no-bussin-skill.md: `type: tool_used`, `tool: Skill`, `input_match: '"skill"\s*:\s*"(?:[\w-]+:)?bussin-'`, `min: 0`, `max: 0`. max_turns 15. Commit ae8404f.
 Learned: not run through `claude plugin eval` yet, so whether min/max 0 parses as expected is unconfirmed until F11 gets the plugin resolving; F11 can run a negative case too as a cheap check of the grader format.
 Next: F11
+
+## Session 11 · F11 · 2026-10-18
+Did: added .claude-plugin/plugin.json (name bussin, version 1.0.0, description, author, the eight ./bussin-* skill paths). `claude plugin validate --strict .` passes; `claude plugin eval . --runs 1 --ablation none --no-publish --trust-plugin --case trigger-bussin-honest-feedback` resolved plugin "bussin" 1.0.0 and scored 1.00. negative-git-rebase-onto also scored 1.00, so the `min: 0` / `max: 0` grader format parses. Commit 3f5738e.
+Learned: without plugin.json a path target resolves nothing and every case runs against baseline (score 0). `{"name":"bussin"}` alone resolves the plugin but fails --strict (version, description, author warnings) and loads no skills, because skills sit at the repo root rather than skills/; plugin.json needs the explicit `skills` list. That list now lives in both plugin.json and marketplace.json; the structure test only checks marketplace.json, so a skill added to only one would drift (follow-up for a human, outside the item list). For R2: .claude-plugin/plugin.json is a forced fix (F11's eval loading required it); marketplace.json is unchanged. Each case costs about $0.06-0.09.
+Next: F12
