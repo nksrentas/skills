@@ -113,7 +113,9 @@ The `bussin-loop-status` mod puts the run in your status line and, through `/aut
 ```bash
 claude plugin marketplace add nksrentas/skills
 claude plugin install bussin-loop-status@bussin
-``` See [bussin-autoloop](./bussin-autoloop/SKILL.md) for modes, gates and running unattended safely.
+```
+
+For a loop that started before this telemetry existed, run `bash ~/.claude/skills/bussin-autoloop/scripts/backfill-usage.sh` in the project. It recovers past sessions' tokens, models and time from Claude Code's transcripts. Then restart the loop so it keeps reporting live. See [bussin-autoloop](./bussin-autoloop/SKILL.md) for modes, gates and running unattended safely.
 
 ## Tests and evals
 

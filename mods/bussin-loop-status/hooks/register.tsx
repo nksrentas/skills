@@ -14,6 +14,15 @@ const STATE_MARK: Record<ItemState, string> = { done: '✓', running: '▶', wai
 const STATE_COLOR: Record<ItemState, string> = { done: 'success', running: 'claude', waiting: 'subtle', failing: 'error', ready: 'text' }
 const LOOP_COLOR: Record<LoopSnapshot['loopState'], string> = { running: 'claude', finished: 'success', stopped: 'warning', idle: 'subtle' }
 
+function costSummary(snapshot: LoopSnapshot) {
+  const priced = snapshot.sessions - snapshot.unpricedSessions
+  if (snapshot.sessions === 0) return 'no sessions recorded yet'
+  if (priced === 0) return `unknown for ${snapshot.sessions} sessions recovered from transcripts`
+  const perSession = formatCost(snapshot.costUsd / priced)
+  const base = `${formatCost(snapshot.costUsd)} over ${priced} sessions · ${perSession} per session`
+  return snapshot.unpricedSessions > 0 ? `${base} · ${snapshot.unpricedSessions} older sessions have no cost data` : base
+}
+
 async function readOptional($: EngineInterface, path: string) {
   try {
     return await $.fs.read(path)
@@ -95,6 +104,9 @@ export const register: Register = on => {
             </Text>
             <Text dimColor>{snapshot.updatedAgoSec === null ? '' : `updated ${formatDuration(snapshot.updatedAgoSec)} ago`}</Text>
           </Box>
+          {!snapshot.hasLiveData && (
+            <Text color="warning">No live data yet: restart this loop with the latest bussin-autoloop to see what is running and the ETA.</Text>
+          )}
           <Text>
             {progressBar(snapshot.done, snapshot.total, 24)} {snapshot.done}/{snapshot.total} done · {snapshot.running} running ·{' '}
             {snapshot.waiting} waiting · {snapshot.failing} failing
@@ -112,8 +124,7 @@ export const register: Register = on => {
           </Text>
           <Text>
             <Text bold>Cost   </Text>
-            {formatCost(snapshot.costUsd)} over {snapshot.sessions} sessions
-            {snapshot.sessions > 0 ? ` · ${formatCost(snapshot.costUsd / snapshot.sessions)} per session` : ''}
+            {costSummary(snapshot)}
           </Text>
           {snapshot.models.map(model => (
             <Text>

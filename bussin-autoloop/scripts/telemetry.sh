@@ -4,6 +4,12 @@ live_file=.loop/live.json
 usage_file=.loop/usage.jsonl
 loop_started="$(date +%s)"
 
+exclude_file="$(git rev-parse --git-path info/exclude)"
+mkdir -p "$(dirname "$exclude_file")"
+for pattern in /.loop/usage.jsonl /.loop/live.json /.loop/live.json.tmp; do
+  grep -qxF "$pattern" "$exclude_file" 2>/dev/null || echo "$pattern" >> "$exclude_file"
+done
+
 usage_query='
 ($result[0] // {}) as $r
 | ($r.modelUsage // {}) as $models

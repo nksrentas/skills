@@ -136,6 +136,7 @@ seq_status=0
 run_loop "$seq" LOOP_WORKERS=1 || seq_status=$?
 check "the sequential loop records each session as passed" '[ "$seq_status" = 0 ] && [ "$(jq -s -r "map(.item + \":\" + .outcome) | join(\",\")" "$seq/.loop/usage.jsonl")" = "S1:passed,S2:passed" ]'
 check "the sequential loop records tokens, cost and model" '[ "$(jq -s "map(.output_tokens) | add" "$seq/.loop/usage.jsonl")" = 180 ] && [ "$(jq -s "map(.cost_usd) | add" "$seq/.loop/usage.jsonl")" = 0.5 ] && [ "$(jq -r ".state" "$seq/.loop/live.json")" = finished ]'
+check "telemetry files are kept out of commits through info/exclude" 'grep -qxF /.loop/usage.jsonl "$seq/.git/info/exclude" && grep -qxF /.loop/live.json "$seq/.git/info/exclude" && [ -z "$(git -C "$seq" status --porcelain .loop/usage.jsonl .loop/live.json)" ]'
 check "the sequential loop prints a summary per session" 'grep -q "autoloop: S1 passed after 1m, \$0.25, 700 in / 90 out tokens" "$seq/out"'
 
 cap="$tmp/cap"

@@ -20,6 +20,8 @@ export type LoopSnapshot = {
   finishAt: number | null
   updatedAgoSec: number | null
   sessions: number
+  unpricedSessions: number
+  hasLiveData: boolean
   costUsd: number
   inputTokens: number
   outputTokens: number
