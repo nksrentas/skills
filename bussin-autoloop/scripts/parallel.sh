@@ -79,7 +79,7 @@ launch() {
   set_attempts "$id" $(($(attempts_of "$id") + 1))
   log "worker $slot started $id (attempt $(attempts_of "$id") of $item_attempts)"
   install_commit_hook
-  agent_command "$skill_command run --item $id"
+  agent_command "$skill_command run --item $id" "$dir"
   (cd "$dir" && LOOP_WORKER="$slot" LOOP_MAIN_DIR="$main_dir" AUTOLOOP_SESSION=1 exec perl -e 'setpgrp(0, 0); exec @ARGV' \
     "${agent_cmd[@]}") > "$state_dir/w$slot.json" 2> "$state_dir/w$slot.log" < /dev/null &
   slot_pid[$slot]=$!

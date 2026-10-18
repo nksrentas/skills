@@ -35,7 +35,7 @@ Init prints the exact path for the current install, for example `~/.claude/skill
 | `LOOP_AGENT` | Session command | Tool limits | Telemetry |
 |---|---|---|---|
 | `claude` | `claude -p … --output-format json` | Allowlist per tool and command, Edit and Write denied on loop files | Tokens, cost and models from the result |
-| `codex` | `codex exec --json --sandbox workspace-write --add-dir <git dir>` | Codex's sandbox: writes only inside the project and its git dir, no network | Tokens per turn; cost unknown |
+| `codex` | `codex exec --json --sandbox workspace-write --add-dir <git dir>` | Codex's sandbox: writes only inside the project and its git dir, no network. A parallel worker gets only the git objects, refs, logs and its own worktree data, not git config or hooks | Tokens per turn; cost unknown |
 | `copilot` | `copilot -p … --output-format json --no-ask-user` | `--allow-tool` for file writes, `.loop/init.sh` and `.loop/verify.sh` by path, the git read and commit subcommands, and each project command by its first two words; writes to the loop scripts and config denied | Model, turns and premium requests; tokens and cost unknown |
 
 `LOOP_MODEL` sets the model for any agent. `LOOP_AGENT_ARGS` appends raw flags, for example `LOOP_AGENT_ARGS='-c sandbox_workspace_write.network_access=true'` when Codex sessions need the network for installs or a browser check. `LOOP_EXTRA_TOOLS` adds Claude or Copilot tool rules; Codex takes its MCP servers from its own config.
@@ -78,7 +78,7 @@ Each session runs headless with the limits in the agents table. A Claude session
 
 The commit guard runs in two places. In Claude Code it is a PreToolUse hook on Bash. For every agent, the driver also installs a git `pre-commit` hook that runs the same guard on the commit being made, but only inside sessions it started (`AUTOLOOP_SESSION` is set), so your own commits are untouched. An existing `pre-commit` hook is kept as `pre-commit.before-autoloop` and still runs after the guard. When `core.hooksPath` is set (husky), the driver skips the hook and says so.
 
-Codex and Copilot sessions can write the git directory, so the driver checks git's config and hooks after every session (and on every poll in parallel mode) and stops before running git again if a session changed them, because a planted hook or `core.fsmonitor` would run outside the agent's sandbox.
+Codex and Copilot sessions can write the git directory, so the driver checks git's config and hooks after every session (and on every poll in parallel mode) and stops before running git again if a session changed them, because a planted hook or `core.fsmonitor` would run outside the agent's sandbox. The driver's own git commands run with hooks and fsmonitor switched off (`GIT_CONFIG_COUNT`), so nothing a session plants runs in the driver even between checks.
 
 A git hook can be skipped with `--no-verify`, so after every sequential session the driver audits what was committed. It stops the loop when a commit changed the loop config or scripts (`init.sh` included), or added, removed or reworded items. For Codex and Copilot, which have no tool-level guard, it also re-runs `verify.sh` whenever an item turned passing. The parallel driver already re-gates every merge.
 

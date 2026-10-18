@@ -6,7 +6,7 @@ hook_warned=0
 
 install_commit_hook() {
   local hook
-  if [ -n "$(git config core.hooksPath || true)" ]; then
+  if [ -n "$(env -u GIT_CONFIG_COUNT git config core.hooksPath || true)" ]; then
     [ "$hook_warned" = 1 ] || echo "autoloop: core.hooksPath is set, so the git pre-commit guard is not installed; the driver still audits every session" >&2
     hook_warned=1
     return 0
@@ -39,8 +39,11 @@ restore_uncommitted_list() {
 git_controls() {
   (
     cd "$(git rev-parse --git-common-dir)" || exit 1
-    find . -path ./objects -prune -o -type f \( -path ./config -o -path './hooks/*' -o -name config.worktree \) -print \
-      | LC_ALL=C sort | while IFS= read -r file; do echo "$file"; cat "$file"; done | cksum
+    find . -path ./objects -prune -o \( -type f -o -type l \) \( -path ./config -o -path ./hooks -o -path './hooks/*' -o -name config.worktree \) -print \
+      | LC_ALL=C sort | while IFS= read -r file; do
+        echo "$file"
+        if [ -L "$file" ]; then readlink "$file"; else cat "$file"; fi
+      done | cksum
   )
 }
 
@@ -73,8 +76,8 @@ audit_session() {
   [ "$agent" != claude ] || return 0
   [ "$(passing_at HEAD)" != "$(passing_at "$from")" ] || return 0
   git cat-file -e HEAD:.loop/verify.sh 2> /dev/null || return 0
-  if ! git diff --quiet HEAD; then
-    audit_failed "$from" "an item was marked passing while tracked files still have uncommitted changes, so the gate cannot judge the committed code"
+  if [ -n "$(git status --porcelain)" ]; then
+    audit_failed "$from" "an item was marked passing while the session left uncommitted or untracked files, so the gate cannot judge the committed code"
     return 1
   fi
   echo "autoloop: re-running the gate on the new passing items, because $agent has no tool-level commit guard"

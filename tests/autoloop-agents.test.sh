@@ -81,10 +81,14 @@ write_agent "$codex" codex "$codex_output"
 codex_status=0
 run_loop "$codex" LOOP_AGENT=codex LOOP_MODEL=gpt-test || codex_status=$?
 check "a codex loop finishes every item" '[ "$codex_status" = 0 ] && [ "$(jq "[.features[] | select(.passes)] | length" "$codex/.loop/feature_list.json")" = 2 ]'
-check "codex runs headless with json events, the workspace sandbox and the git dir writable" '[ "$(head -n 5 "$codex/argv" | tr "\n" " ")" = "exec --json --sandbox workspace-write --add-dir " ] && grep -qx "$(cd "$codex/.git" && pwd -P)" "$codex/argv" && grep -qxF "gpt-test" "$codex/argv"'
+check "codex runs headless with json events, the workspace sandbox and the git dir writable" '[ "$(head -n 4 "$codex/argv" | tr "\n" " ")" = "exec --json --sandbox workspace-write " ] && grep -A1 -x -- --add-dir "$codex/argv" | grep -qx "$(cd "$codex/.git" && pwd -P)" && grep -qxF "gpt-test" "$codex/argv"'
 check "codex gets the skill through its \$ mention" '[ "$(tail -n 1 "$codex/argv")" = "\$bussin-autoloop run" ]'
 check "codex sessions record tokens without cache double counting" '[ "$(jq -s "map(.input_tokens) | add" "$codex/.loop/usage.jsonl")" = 2000 ] && [ "$(jq -s "map(.cache_read_tokens) | add" "$codex/.loop/usage.jsonl")" = 1000 ] && [ "$(jq -s "map(.turns) | add" "$codex/.loop/usage.jsonl")" = 4 ]'
 check "codex sessions are unpriced and carry agent and model" '[ "$(jq -s -r "map(.agent + \"/\" + (.models | keys[0]) + \"/\" + (has(\"cost_usd\") | tostring)) | unique | join(\",\")" "$codex/.loop/usage.jsonl")" = "codex/gpt-test/false" ]'
+git -C "$codex" worktree add -q -b loop/probe "$tmp/codex-worker"
+worker_dirs="$(cd "$codex" && PATH="$codex/bin:$PATH" LOOP_AGENT=codex bash -c 'source "$1/scripts/agents.sh" && git_write_dirs "$2"' _ "$skill" "$tmp/codex-worker")"
+check "a codex worker may write git objects, refs and its own worktree data, but not git config or hooks" '[ "$(echo "$worker_dirs" | wc -l | tr -d " ")" = 4 ] && grep -q "/.git/objects$" <<< "$worker_dirs" && grep -q "/.git/worktrees/codex-worker$" <<< "$worker_dirs" && ! grep -qx "$(cd "$codex/.git" && pwd -P)" <<< "$worker_dirs"'
+git -C "$codex" worktree remove --force "$tmp/codex-worker"
 check "the live state names the agent" '[ "$(jq -r .agent "$codex/.loop/live.json")" = codex ]'
 check "the gate is re-run for agents without a tool-level guard" 'grep -q "re-running the gate" "$codex/out"'
 

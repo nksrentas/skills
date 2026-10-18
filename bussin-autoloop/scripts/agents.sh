@@ -56,7 +56,7 @@ claude_flags() {
 
 copilot_flags() {
   local command words tool path
-  agent_flags=(--output-format json --no-ask-user --add-dir "$(pwd)" --allow-tool write)
+  agent_flags=(--output-format json --no-ask-user --allow-tool write)
   for path in .loop/init.sh .loop/verify.sh; do
     agent_flags+=(--allow-tool "shell($path)" --allow-tool "shell(./$path)")
   done
@@ -76,19 +76,35 @@ copilot_flags() {
 }
 
 codex_flags() {
-  agent_flags=(--json --sandbox workspace-write --add-dir "$(cd "$(git rev-parse --git-common-dir)" && pwd)")
+  agent_flags=(--json --sandbox workspace-write)
 }
 
 "${agent}_flags"
 [ -z "$agent_model" ] || agent_flags+=(--model "$agent_model")
 agent_flags+=(${extra_args[@]+"${extra_args[@]}"})
 
+git_write_dirs() {
+  local common git_dir
+  common="$(cd "$(git -C "$1" rev-parse --git-common-dir)" && pwd -P)"
+  git_dir="$(cd "$(git -C "$1" rev-parse --git-dir)" && pwd -P)"
+  if [ "$git_dir" = "$common" ]; then
+    echo "$common"
+  else
+    printf '%s\n' "$common/objects" "$common/refs" "$common/logs" "$git_dir"
+  fi
+}
+
 agent_command() {
+  local prompt="$1" workdir="${2:-.}" dir sandbox_dirs=()
   case "$agent" in
-    claude) agent_cmd=(claude -p "$1" "${agent_flags[@]}") ;;
-    copilot) agent_cmd=(copilot -p "$1" "${agent_flags[@]}") ;;
-    codex) agent_cmd=(codex exec "${agent_flags[@]}" "$1") ;;
+    claude) agent_cmd=(claude -p "$prompt" "${agent_flags[@]}") ;;
+    copilot) agent_cmd=(copilot -p "$prompt" "${agent_flags[@]}") ;;
+    codex)
+      while IFS= read -r dir; do sandbox_dirs+=(--add-dir "$dir"); done < <(git_write_dirs "$workdir")
+      agent_cmd=(codex exec "${agent_flags[@]}" "${sandbox_dirs[@]}" "$prompt")
+      ;;
   esac
+  agent_cmd=(env -u GIT_CONFIG_COUNT "${agent_cmd[@]}")
 }
 
 model_label() {

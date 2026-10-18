@@ -11,6 +11,7 @@ limit_wait="${LIMIT_WAIT:-600}"
 limit_pattern="hit your .*limit|usage limit reached"
 
 source "$script_dir/agents.sh"
+export GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=/dev/null GIT_CONFIG_KEY_1=core.fsmonitor GIT_CONFIG_VALUE_1=false
 skill_command="${LOOP_SKILL_COMMAND:-$(default_skill_command "$0")}"
 
 git cat-file -e "HEAD:$list" 2> /dev/null || { echo "autoloop: $list is not committed, run $skill_command init first" >&2; exit 1; }
