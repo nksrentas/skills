@@ -1,7 +1,8 @@
+import type { On } from 'claude-code'
 import { expect, test } from 'claude-code/testing'
 
 import { PANE } from './register'
-import { compute, formatDuration, formatTokens, statusLine } from './snapshot'
+import { commonDirFromGitFile, compute, formatDuration, formatTokens, statusLine } from './snapshot'
 
 const NOW = 4000
 
@@ -190,12 +191,13 @@ test('/autoloop-status reads the loop files, sets the status line and fills the 
     return { value: undefined }
   })
   on('ui.open', async () => ({ value: { isPlaced: true } }))
+  on('fs.stat', async (_, e) => ({ deny: `ENOENT: ${e.path}` }))
   const ran = await $.command.run(RUN_COMMAND)
   expect(ran).toMatchObject({ text: 'autoloop 1/4 done · 1 running · ETA 22m · $2.00' })
   expect(statuses.at(-1)).toBe('autoloop 1/4 done · 1 running · ETA 22m · $2.00')
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ ...PANE_TARGET, surface })
-    expect(await ui.find({ type: 'Text', text: /autoloop · running · parallel × 2/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /project · running · parallel × 2/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /1\/4 done · 1 running · 1 waiting · 1 failing/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /elapsed 50m · ETA ~22m \(around \d\d:\d\d\)/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /in 1\.4k · out 250 · cache read 5\.0k · cache write 100/ })).toBeDefined()
@@ -213,14 +215,93 @@ test('/autoloop-status explains when the project has no loop, and the pane says 
   on('session.root', async () => ({ value: '/project' }))
   on('clock.now', async () => ({ value: NOW * 1000 }))
   on('fs.read', async (_, e) => ({ deny: `ENOENT: ${e.path}` }))
+  on('fs.stat', async (_, e) => ({ deny: `ENOENT: ${e.path}` }))
   on('ui.status', async (_, e) => {
     statuses.push(e.text)
     return { value: undefined }
   })
   const ran = await $.command.run(RUN_COMMAND)
-  expect(ran).toMatchObject({ text: expect.stringContaining('No .loop/feature_list.json') })
+  expect(ran).toMatchObject({ text: expect.stringContaining('No .loop/feature_list.json in this repository') })
   expect(statuses.at(-1)).toBeUndefined()
   const ui = await $.ui.mount({ ...PANE_TARGET, surface: 'terminal' })
-  expect(await ui.find({ type: 'Text', text: /No autoloop in this project/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /No autoloop in this repository or its worktrees/ })).toBeDefined()
+  await ui.unmount()
+})
+
+const FINISHED = JSON.stringify({ features: [{ id: 'T1', description: 'Old', passes: true }, { id: 'T2', description: 'Older', passes: true }] })
+
+const REPO_FILES: Record<string, string> = {
+  '/repo/.loop/feature_list.json': FINISHED,
+  '/repo/.git/worktrees/wt-a/gitdir': '/elsewhere/wt-a/.git\n',
+  '/repo/.git/worktrees/wt-b/gitdir': '/elsewhere/wt-b/.git\n',
+  '/elsewhere/wt-a/.git': 'gitdir: /repo/.git/worktrees/wt-a\n',
+  '/elsewhere/wt-a/.loop/feature_list.json': FEATURES,
+  '/elsewhere/wt-a/.loop/usage.jsonl': USAGE,
+  '/elsewhere/wt-a/.loop/live.json': LIVE,
+}
+
+const ENTRY = { kind: 'dir', size: 0, mtimeMs: 0, isLink: false } as const
+
+function answerRepo(on: On, root: string, statuses: (string | undefined)[]) {
+  on('session.root', async () => ({ value: root }))
+  on('clock.now', async () => ({ value: NOW * 1000 }))
+  on('fs.read', async (_, e) => {
+    const text = REPO_FILES[e.path]
+    return text === undefined ? { deny: `ENOENT: ${e.path}` } : { value: text }
+  })
+  on('fs.stat', async (_, e) => {
+    if (e.path === '/repo/.git') return { value: { ...ENTRY } }
+    if (e.path === '/elsewhere/wt-a/.git') return { value: { ...ENTRY, kind: 'file' } }
+    return { deny: `ENOENT: ${e.path}` }
+  })
+  on('fs.list', async (_, e) =>
+    e.path === '/repo/.git/worktrees'
+      ? { value: [{ ...ENTRY, name: 'wt-a' }, { ...ENTRY, name: 'wt-b' }] }
+      : { deny: `ENOENT: ${e.path}` },
+  )
+  on('ui.status', async (_, e) => {
+    statuses.push(e.text)
+    return { value: undefined }
+  })
+  on('ui.open', async () => ({ value: { isPlaced: true } }))
+}
+
+test('a finished loop without usage data does not claim zero time or cost', async () => {
+  const snapshot = compute({ features: FINISHED, now: NOW })
+  expect(snapshot && statusLine(snapshot)).toBe('autoloop finished 2/2')
+})
+
+test('reads the common git dir from a worktree pointer file', async () => {
+  expect(commonDirFromGitFile('gitdir: /repo/.git/worktrees/wt-a\n')).toBe('/repo/.git')
+  expect(commonDirFromGitFile('not a pointer')).toBeUndefined()
+})
+
+test('finds loops in every worktree from the main checkout, running ones first', async ($, on) => {
+  const statuses: (string | undefined)[] = []
+  answerRepo(on, '/repo', statuses)
+  const ran = await $.command.run(RUN_COMMAND)
+  expect(ran).toMatchObject({ text: 'wt-a: autoloop 1/4 done · 1 running · ETA 22m · $2.00' })
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const ui = await $.ui.mount({ ...PANE_TARGET, surface })
+    expect(await ui.find({ key: 'select-wt-a' })).toBeDefined()
+    expect(await ui.find({ key: 'select-repo' })).toBeDefined()
+    expect(await ui.find({ key: 'select-wt-b' })).toBeUndefined()
+    expect(await ui.find({ type: 'Text', text: /wt-a · running · parallel × 2/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^autoloop finished 2\/2$/ })).toBeDefined()
+    await ui.press({ key: 'select-repo' })
+    expect(await ui.find({ type: 'Text', text: /repo · finished · sequential/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /elapsed — · ETA —/ })).toBeDefined()
+    await ui.press({ key: 'select-wt-a' })
+    await ui.unmount()
+  }
+})
+
+test('finds the same loops from inside a worktree', async ($, on) => {
+  const statuses: (string | undefined)[] = []
+  answerRepo(on, '/elsewhere/wt-a', statuses)
+  const ran = await $.command.run(RUN_COMMAND)
+  expect(ran).toMatchObject({ text: 'wt-a: autoloop 1/4 done · 1 running · ETA 22m · $2.00' })
+  const ui = await $.ui.mount({ ...PANE_TARGET, surface: 'terminal' })
+  expect(await ui.find({ key: 'select-repo' })).toBeDefined()
   await ui.unmount()
 })

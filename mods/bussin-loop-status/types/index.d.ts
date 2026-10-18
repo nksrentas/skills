@@ -33,8 +33,10 @@ export type LoopSnapshot = {
   recent: string[]
 }
 
+export type LoopView = { name: string; path: string; snapshot: LoopSnapshot }
+
 declare module 'claude-code' {
   interface PluginState {
-    'bussin-loop-status': { snapshot: LoopSnapshot | null }
+    'bussin-loop-status': { loops: LoopView[]; selected: string | null }
   }
 }
