@@ -23,8 +23,8 @@ loop_fingerprint() {
   index="$(mktemp)"
   cp "$(git rev-parse --git-path index)" "$index" 2>/dev/null || rm -f "$index"
   GIT_INDEX_FILE="$index" git add -A -- .
-  GIT_INDEX_FILE="$index" git rm -q --cached --ignore-unmatch -- \
-    .loop/tests-passed .loop/feature_list.json .loop/progress.md .loop/retro.md
+  GIT_INDEX_FILE="$index" git rm -r -q --cached --ignore-unmatch -- \
+    .loop/tests-passed .loop/feature_list.json .loop/progress.md .loop/retro.md .loop/results
   GIT_INDEX_FILE="$index" git write-tree
   rm -f "$index"
 }
@@ -41,10 +41,10 @@ done
 
 list=.loop/feature_list.json
 if git cat-file -e "HEAD:$list" 2>/dev/null; then
-  items='del(.features[]?.passes, .features[]?.evidence)'
+  items='del(.features[]?.passes, .features[]?.evidence, .features[]?.depends_on, .features[]?.touches)'
   committed_items="$(git show "HEAD:$list" | jq -S "$items")"
   current_items="$(jq -S "$items" "$list")"
-  [ "$committed_items" = "$current_items" ] || block "Items in $list were added, removed or reworded. A run may only change passes and evidence."
+  [ "$committed_items" = "$current_items" ] || block "Items in $list were added, removed or reworded. A run may only change passes and evidence; depends_on and touches are free to edit."
 fi
 
 marker=.loop/tests-passed

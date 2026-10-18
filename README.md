@@ -98,6 +98,8 @@ Init researches the codebase and writes `.loop/`. That holds the feature list (f
 bash ~/.claude/skills/bussin-autoloop/scripts/loop.sh
 ```
 
+To run independent items at the same time, each in its own git worktree, set a cap: `LOOP_WORKERS=3 bash ~/.claude/skills/bussin-autoloop/scripts/loop.sh`. Init works out which items depend on which and what files each touches; you can edit both in `.loop/feature_list.json`.
+
 For UI work add `bussin-ui` and `review:review-animations` to `--skills`. See [bussin-autoloop](./bussin-autoloop/SKILL.md) for modes, gates and running unattended safely.
 
 ## Tests
@@ -107,6 +109,7 @@ The autoloop scripts have shell tests:
 ```bash
 bash tests/autoloop-guard.test.sh
 bash tests/autoloop-loop.test.sh
+bash tests/autoloop-parallel.test.sh
 ```
 
 ## Compatibility
