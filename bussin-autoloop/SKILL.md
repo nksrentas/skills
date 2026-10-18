@@ -59,7 +59,7 @@ House context skills, opt-in per feature:
 
 | Skill | Use when |
 |---|---|
-| `bussin-ts-architecture` | TypeScript backend work: feature folders with controller, service, DTO and job files |
+| `bussin-ts-architecture` | Any TypeScript backend or Next.js feature: portable feature folders with controller, service, DTO, job and UI files |
 | `bussin-drizzle` | The feature reads or writes a SQL database from TypeScript |
 | `bussin-ui` | Landing pages and dashboards in Next.js + Tailwind v4 + GSAP + Lenis with the house look |
 

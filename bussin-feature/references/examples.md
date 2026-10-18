@@ -9,23 +9,24 @@ Add an invoices page that fetches invoices and links it from billing navigation.
 </request>
 
 <anchors>
-The repository already groups pages under `features/`, uses TanStack Query, validates external responses with Zod, and registers pages in a central route table.
+The repository is a Next.js app with features under `src/features/`, uses TanStack Query, validates external responses with Zod, and keeps navigation in the app layout.
 </anchors>
 
 <decision>
 Create only the remote-data and presentation layers:
 
 ```text
-features/invoices/
-|-- api.ts
-|-- dto.ts
-|-- hooks.ts
-|-- InvoicesPage.tsx
+src/features/invoices/
+|-- index.ts
+|-- invoice.api.ts
+|-- invoice.dto.ts
+|-- invoice.hooks.ts
+|-- invoices-page.tsx
 `-- components/
-    `-- InvoiceList.tsx
+    `-- invoice-list.tsx
 ```
 
-`dto.ts` validates the response, `api.ts` performs transport and mapping, `hooks.ts` owns the query, and components render the states. Do not add `service.ts`, `controller.ts`, or `store.ts`; they would not own distinct responsibilities. Update the route table, billing navigation, feature export, and focused tests. Render separate loading, error/retry, no-invoices, and list states.
+`invoice.dto.ts` validates the response, `invoice.api.ts` performs transport and mapping, `invoice.hooks.ts` owns the query, and components render the states. Do not add a service, controller, or store; they would not own distinct responsibilities. Outside the folder, add only the thin `src/app/billing/invoices/page.tsx` and the navigation entry in the app layout; do not edit a billing feature to link to it. Render separate loading, error/retry, no-invoices, and list states.
 </decision>
 
 ## Example 2: Backend command endpoint
@@ -35,22 +36,22 @@ Add an endpoint that confirms a booking and persists the confirmation timestamp.
 </request>
 
 <anchors>
-The server uses controllers for HTTP adaptation, services for domain rules, repositories for persistence, Zod at request boundaries, and a central router plus dependency-injection container.
+The server uses controllers for HTTP adaptation, services for domain rules, repositories for persistence, Zod at request boundaries, and registers each feature in `src/app.ts`. Guests must be emailed after confirmation, and email belongs to a separate notifications feature.
 </anchors>
 
 <decision>
 Use the layers that correspond to existing responsibilities:
 
 ```text
-features/booking-confirmation/
-|-- dto.ts
-|-- repository.ts
-|-- service.ts
-|-- controller.ts
-`-- routes.ts
+src/features/bookings/
+|-- index.ts
+|-- booking.dto.ts
+|-- booking.repository.ts
+|-- booking.service.ts
+`-- booking.controller.ts
 ```
 
-The controller parses the request and maps errors to HTTP responses. The service enforces confirmability and idempotency. The repository updates persistence. Do not add `api.ts` because the controller already owns this transport boundary. Update the router, container bindings, database mapping if needed, request fixtures, and controller/service/repository tests. Verify not-found, invalid-state, persistence-failure, already-confirmed, and success behavior.
+The controller parses the request and maps errors to HTTP responses. The service enforces confirmability and idempotency, then emits `booking.confirmed` on `deps.events`; the notifications feature listens with its own payload DTO, so neither feature imports the other. The repository file exists because the project already uses that pattern. Do not add an API client because the controller already owns this transport boundary. Add the route inside the feature's existing `register` (a brand-new feature would also get one `register` call in `src/app.ts`), update request fixtures and the controller, service, and repository tests. Verify not-found, invalid-state, persistence-failure, already-confirmed, and success behavior.
 </decision>
 
 ## Example 3: Small local UI feature
@@ -64,7 +65,7 @@ The setting is not persisted, shared, or synchronized with the server. The exist
 </anchors>
 
 <decision>
-Keep the change in the panel feature and use local component state. Do not create `store.ts`, `service.ts`, `api.ts`, or `dto.ts`. Loading, error, and empty are not new states for the synchronous toggle; verify compact and comfortable rendering plus keyboard interaction. Update the panel test and any shared type only if the change actually depends on one.
+Keep the change in the panel feature and use local component state. Do not create a store, service, API client, or DTO. Loading, error, and empty are not new states for the synchronous toggle; verify compact and comfortable rendering plus keyboard interaction. Update the panel test and any shared type only if the change actually depends on one.
 </decision>
 
 ## Example 4: Existing architecture conflicts with a preferred library
