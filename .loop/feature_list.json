@@ -213,8 +213,11 @@
       "ui": false,
       "description": "Existing test suite stays green: tests/autoloop-guard.test.sh and tests/autoloop-loop.test.sh unchanged and passing, plus the new structure test.",
       "verify": "`bash .loop/verify.sh` passes (runs every tests/*.test.sh). `git diff <config.base> -- tests/autoloop-guard.test.sh tests/autoloop-loop.test.sh` is empty.",
-      "passes": false,
-      "evidence": null
+      "passes": true,
+      "evidence": {
+        "commit": "6aa4c72",
+        "ran": "bash .loop/verify.sh passed: autoloop-guard 27 ok, autoloop-loop ok, skills-structure 59 ok, all exit 0 under /bin/bash 3.2.57; git diff c253de1 -- tests/autoloop-guard.test.sh tests/autoloop-loop.test.sh is empty (0 lines)"
+      }
     },
     {
       "id": "R2",

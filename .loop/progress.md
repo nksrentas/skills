@@ -106,3 +106,8 @@ Next: E5
 Did: verified max_turns is 15 in both negative cases and 20 in all eight trigger cases; all evals/ folder names (including gitignored results/) are kebab-case; bash tests/skills-structure.test.sh exits 0 with evals/ present. The kebab-case check only scans bussin-*/ and tests/ (line 47), so fixture files like order.schema.ts are out of scope. No code change, so no implementation commit and no review subagent; evidence points at 460d91d.
 Learned: nothing in the structure test checks eval folder names or max_turns; this item is a one-off verification, not an ongoing guard.
 Next: R1
+
+## Session 18 · R1 · 2026-10-18
+Did: ran bash .loop/verify.sh: passed; autoloop-guard.test.sh 27 ok, autoloop-loop.test.sh ok, skills-structure.test.sh 59 ok, each exit 0 under /bin/bash 3.2.57. `git diff c253de1 -- tests/autoloop-guard.test.sh tests/autoloop-loop.test.sh` is empty. No code change, so no implementation commit and no review subagent; evidence points at 6aa4c72.
+Learned: the json formatting of feature_list.json round-trips cleanly through python json.dumps(indent=2), so marking via script keeps the diff to the one item.
+Next: R2
