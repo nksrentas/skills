@@ -64,8 +64,9 @@ commit_now "mark F1"
 
 jq '.features[0].depends_on = ["F0"] | .features[0].touches = ["src/**"]' .loop/feature_list.json > .loop/f.tmp && mv .loop/f.tmp .loop/feature_list.json
 mkdir -p .loop/results && echo '{"id":"F1","passes":true}' > .loop/results/F1.json
-expect 0 "editing depends_on and touches and writing a result file need no new verify" "git commit -m schedule"
-git checkout -q .loop/feature_list.json && rm -rf .loop/results
+echo '{"item":"F1"}' > .loop/usage.jsonl && echo '{"state":"running"}' > .loop/live.json
+expect 0 "editing depends_on and touches and writing result, usage and live files need no new verify" "git commit -m schedule"
+git checkout -q .loop/feature_list.json && rm -rf .loop/results .loop/usage.jsonl .loop/live.json
 
 jq '.features[0].description = "something easier"' .loop/feature_list.json > .loop/f.tmp && mv .loop/f.tmp .loop/feature_list.json
 bash .loop/verify.sh >/dev/null

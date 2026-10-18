@@ -25,7 +25,8 @@ loop_fingerprint() {
   GIT_INDEX_FILE="$index" git read-tree "$(git write-tree)"
   GIT_INDEX_FILE="$index" git add -A -- .
   GIT_INDEX_FILE="$index" git rm -r -q --cached --ignore-unmatch -- \
-    .loop/tests-passed .loop/feature_list.json .loop/progress.md .loop/retro.md .loop/results
+    .loop/tests-passed .loop/feature_list.json .loop/progress.md .loop/retro.md .loop/results \
+    .loop/usage.jsonl .loop/live.json .loop/live.json.tmp
   GIT_INDEX_FILE="$index" git write-tree
   rm -f "$index"
 }

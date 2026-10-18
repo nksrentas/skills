@@ -100,7 +100,20 @@ bash ~/.claude/skills/bussin-autoloop/scripts/loop.sh
 
 To run independent items at the same time, each in its own git worktree, set a cap: `LOOP_WORKERS=3 bash ~/.claude/skills/bussin-autoloop/scripts/loop.sh`. Init works out which items depend on which and what files each touches; you can edit both in `.loop/feature_list.json`.
 
-For UI work add `bussin-ui` and `review:review-animations` to `--skills`. See [bussin-autoloop](./bussin-autoloop/SKILL.md) for modes, gates and running unattended safely.
+For UI work add `bussin-ui` and `review:review-animations` to `--skills`.
+
+### Watching a run
+
+The `bussin-loop-status` mod puts the run in your status line and, through `/autoloop-status`, in a pane. It shows:
+- progress and what each worker is running
+- elapsed time and the estimated finish
+- input, output and cache tokens
+- cost, per model and per session
+
+```bash
+claude plugin marketplace add nksrentas/skills
+claude plugin install bussin-loop-status@bussin
+``` See [bussin-autoloop](./bussin-autoloop/SKILL.md) for modes, gates and running unattended safely.
 
 ## Tests and evals
 
