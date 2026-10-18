@@ -27,6 +27,10 @@ sleep 2
 target="\$(jq -r --arg id "\$id" '.features[] | select(.id == \$id) | .writes' .loop/feature_list.json)"
 mkdir -p "\$(dirname "\$target")"
 echo "\$id" > "\$target"
+case "\$(jq -r --arg id "\$id" '.features[] | select(.id == \$id) | .tamper // ""' .loop/feature_list.json)" in
+  flip) jq '.features |= map(.passes = true)' .loop/feature_list.json > .loop/f.tmp && mv .loop/f.tmp .loop/feature_list.json ;;
+  script) echo 'exit 0' >> .loop/verify.sh ;;
+esac
 git add -A && git commit -qm "feat: \$id"
 sha="\$(git rev-parse --short HEAD)"
 mkdir -p .loop/results
@@ -97,6 +101,17 @@ make_project "$bare" true '{"features": [{"id": "N", "passes": false, "evidence"
 bare_status=0
 run_loop "$bare" LOOP_WORKERS=2 LOOP_ITEM_ATTEMPTS=1 || bare_status=$?
 check "a pass reported without evidence is not merged" '[ "$bare_status" != 0 ] && [ ! -e "$bare/src/n.txt" ] && [ "$(jq -r ".features[0].passes" "$bare/.loop/feature_list.json")" = false ]'
+
+tamper="$tmp/tamper"
+make_project "$tamper" true '{"features": [
+  {"id": "T1", "passes": false, "evidence": null, "tamper": "flip", "touches": ["src/t1.txt"], "writes": "src/t1.txt"},
+  {"id": "T2", "passes": false, "evidence": null, "depends_on": ["T1"], "touches": ["src/t2.txt"], "writes": "src/t2.txt"},
+  {"id": "T3", "passes": false, "evidence": null, "tamper": "script", "touches": ["src/t3.txt"], "writes": "src/t3.txt"}
+]}'
+tamper_status=0
+run_loop "$tamper" LOOP_WORKERS=2 LOOP_ITEM_ATTEMPTS=1 || tamper_status=$?
+check "a worker cannot mark other items as passing" '[ "$(grep -c "^start T2$" "$tamper/events")" = 1 ] && [ -f "$tamper/src/t2.txt" ]'
+check "a worker that edits loop scripts is not merged" '[ "$tamper_status" != 0 ] && [ ! -e "$tamper/src/t3.txt" ] && grep -q "T3 changed the loop config or scripts" "$tamper/out" && [ "$(git -C "$tamper" show HEAD:.loop/verify.sh | tail -1)" != "exit 0" ]'
 
 cap="$tmp/cap"
 make_project "$cap" true '{"features": [{"id": "A", "passes": false, "evidence": null, "writes": "src/a.txt"}]}'

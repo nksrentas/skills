@@ -96,6 +96,18 @@ mark() {
   git commit -q -m "chore(loop): mark $id"
 }
 
+restore_bookkeeping() {
+  local file
+  for file in "$list" .loop/progress.md; do
+    if git cat-file -e "HEAD:$file" 2>/dev/null; then
+      git checkout -q HEAD -- "$file"
+    else
+      git rm -q -f --cached --ignore-unmatch -- "$file"
+      rm -f "$file"
+    fi
+  done
+}
+
 merge_item() {
   local id="$1" branch="$2" slot="$3"
   if ! git merge --no-ff --no-commit "$branch" >> "$state_dir/merge.log" 2>&1; then
@@ -103,6 +115,12 @@ merge_item() {
     log "$id conflicts with work merged meanwhile; it runs again on top of it"
     return
   fi
+  if ! git diff --cached --quiet HEAD -- .loop/config.json '.loop/*.sh'; then
+    git merge --abort >/dev/null 2>&1 || true
+    log "$id changed the loop config or scripts, which workers may not do; not merged"
+    return
+  fi
+  restore_bookkeeping
   if ! bash .loop/verify.sh >> "$state_dir/merge.log" 2>&1; then
     git merge --abort >/dev/null 2>&1 || true
     log "$id failed the gate once merged with the latest work; it runs again on top of it"
