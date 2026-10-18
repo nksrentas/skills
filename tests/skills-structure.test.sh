@@ -39,6 +39,23 @@ kebab_file_names() {
   return 1
 }
 
+retired_names='bussin-code-feature|ts-feature-architecture|drizzle-data-access|edefy-ui'
+pocock='(tdd|code-review|test-audit|retro)'
+before='(^|[^A-Za-z0-9_.-])'
+after='([^A-Za-z0-9_.-]|$)'
+pocock_refs="$before/$pocock$after|$before\`?$pocock\`?[[:space:]]+skill|$before(invoke|invokes|invoking|load|loads|use|uses|run|runs)[[:space:]]+(the[[:space:]]+)?\`?$pocock\`?$after"
+
+no_retired_skill_refs() {
+  local bad
+  [ -d "$root" ] || return 1
+  bad="$(cd "$root" && find . \( -path ./.git -o -path ./.loop -o -path ./evals/results \) -prune -o \
+    -type f ! -path ./tests/skills-structure.test.sh -print0 |
+    xargs -0 grep -lIE "$retired_names|$pocock_refs" 2>/dev/null || true)"
+  [ -n "$bad" ] || return 0
+  printf '%s\n' "$bad" | sed 's|^\./|     retired skill reference: |'
+  return 1
+}
+
 valid_json() { jq empty "$1" 2>/dev/null; }
 listed_in() { "$2" | grep -xF "$1" >/dev/null; }
 exists_on_disk() { [ -d "$root/$1" ]; }
@@ -65,5 +82,6 @@ while IFS= read -r entry; do
 done < <(readme_skills)
 
 check "file names under bussin-*/ and tests/ are kebab-case" kebab_file_names
+check "no references to retired skills" no_retired_skill_refs
 
 [ "$failures" = 0 ]
