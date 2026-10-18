@@ -15,7 +15,7 @@ Two prompts over one harness. `init` runs once and leaves artifacts in `.loop/`.
 | `/bussin-autoloop init <task> [flags]` | `references/init.md` | Research or scaffold, write `.loop/`, checkpoint with the user, commit |
 | `/bussin-autoloop run` | `references/run.md` | One item: implement, pass the gates, mark passing with evidence, commit, stop |
 | `/bussin-autoloop run --item <id>` | `references/run.md` | Worker mode for the parallel driver: that one item in its own worktree, result written to `.loop/results/<id>.json` |
-| `/bussin-autoloop status` | nothing | Print items still `passes:false` and the last 20 lines of `.loop/progress.md` |
+| `/bussin-autoloop status` | nothing | Print items still `passes:false`, the totals from `.loop/usage.jsonl` (sessions, input and output tokens, cost, models), and the last 20 lines of `.loop/progress.md` |
 | `/bussin-autoloop <text>` with no `.loop/` | `references/init.md` | Treat the text as the task |
 
 Installed as the `bussin` plugin, the command is `/bussin:bussin-autoloop`; everything else is the same.
@@ -36,6 +36,14 @@ Each worker gets a git worktree next to the repo (`<repo>.loop-workers/w<n>`, ov
 
 The speed-up depends on the list's shape, not on the cap. Items that all edit one file run one after another whatever the cap is, while portable feature folders (`bussin-ts-architecture`) parallelise well. Every worker is a full session, so usage goes N times faster. `init.sh` has to give each worker its own port and test database, using `LOOP_WORKER`.
 
+### Status view
+
+The `bussin-loop-status` mod shows a run as it happens. Install it with `claude plugin marketplace add nksrentas/skills` and `claude plugin install bussin-loop-status@bussin`.
+- **Status line:** while a loop exists in the project, it shows something like `autoloop 12/19 done · 2 running · ETA 1h 05m · $14.32`.
+- **Pane:** `/autoloop-status` opens it, and it opens by itself when a session starts during a run. It shows progress, elapsed time and ETA, input, output and cache tokens, cost per session and per model, what each worker is running, every item's state, and the latest progress notes.
+
+It only reads `.loop/`, so it works for any project's loop.
+
 ### Running unattended
 
 Each session runs headless, so it gets only the tools the driver passes in `--allowedTools`: the file tools, `Skill`, `Agent`, `TodoWrite`, `bash .loop/init.sh`, `bash .loop/verify.sh`, the read and commit subset of git, and every command in `config.commands`. Any other shell command is denied rather than run, and Edit and Write are denied on `.loop/*.sh`, `.loop/config.json`, `.claude/` and `.git/`. Add tools with a comma-separated `LOOP_EXTRA_TOOLS`, most often the browser MCP server that browser verification needs, for example `LOOP_EXTRA_TOOLS=mcp__plugin_playwright_playwright`.
@@ -52,6 +60,8 @@ The guard and `verify.sh` read the loop scripts and config from the last commit,
 | `verify.sh` | init copies from `assets/` | Runs tests, then Stryker on changed files when enabled, then writes the code's fingerprint to `.loop/tests-passed` |
 | `guard-commit.sh` | init copies from `assets/` | PreToolUse hook, always run from the committed copy (`git show HEAD:`), that blocks any `git commit` unless the marker matches the current code, items are unchanged apart from `passes` and `evidence`, and the loop config and scripts are untouched |
 | `progress.md` | run, or the driver in parallel mode | What each session did, learned about the codebase, and what is next |
+| `usage.jsonl` | the driver | One line per session: item, worker, outcome, duration, input, output and cache tokens, cost, and a per-model breakdown |
+| `live.json` | the driver | Whether the loop is running, its mode and workers, when it started, and which items are running now |
 | `results/<id>.json` | a parallel worker | One item's outcome, merged and then folded into `feature_list.json` and `progress.md` by the driver |
 | `retro.md` | run, thorough mode | Proposed environment improvements, never applied by the loop |
 

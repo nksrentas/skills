@@ -12,6 +12,7 @@ launched=0
 pause_after_poll=0
 slot_pid=()
 slot_item=()
+slot_started=()
 
 ready_query='
 def prefix: sub("[*?\\[{].*$"; "");
@@ -78,10 +79,12 @@ launch() {
   set_attempts "$id" $(($(attempts_of "$id") + 1))
   log "worker $slot started $id (attempt $(attempts_of "$id") of $item_attempts)"
   (cd "$dir" && LOOP_WORKER="$slot" LOOP_MAIN_DIR="$main_dir" exec perl -e 'setpgrp(0, 0); exec @ARGV' \
-    claude -p "$skill_command run --item $id" --allowedTools "${allowed_tools[@]}" --disallowedTools "${denied_tools[@]}") \
-    > "$state_dir/w$slot.log" 2>&1 < /dev/null &
+    claude -p "$skill_command run --item $id" --output-format json \
+    --allowedTools "${allowed_tools[@]}" --disallowedTools "${denied_tools[@]}") \
+    > "$state_dir/w$slot.json" 2> "$state_dir/w$slot.log" < /dev/null &
   slot_pid[$slot]=$!
   slot_item[$slot]="$id"
+  slot_started[$slot]="$(date +%s)"
   launched=$((launched + 1))
 }
 
@@ -113,18 +116,18 @@ merge_item() {
   if ! git merge --no-ff --no-commit "$branch" >> "$state_dir/merge.log" 2>&1; then
     git merge --abort >/dev/null 2>&1 || true
     log "$id conflicts with work merged meanwhile; it runs again on top of it"
-    return
+    return 1
   fi
   restore_bookkeeping
   if git diff --cached --name-only HEAD -- ':(icase).loop' ':(icase).claude' | grep -qvx ".loop/results/$id.json"; then
     git merge --abort >/dev/null 2>&1 || true
     log "$id changed files under .loop or .claude other than its own result, which workers may not do; not merged"
-    return
+    return 1
   fi
   if ! bash <(git show HEAD:.loop/verify.sh) >> "$state_dir/merge.log" 2>&1; then
     git merge --abort >/dev/null 2>&1 || true
     log "$id failed the gate once merged with the latest work; it runs again on top of it"
-    return
+    return 1
   fi
   git commit -q -m "merge(loop): $id"
   mark "$id" "$slot"
@@ -133,8 +136,8 @@ merge_item() {
 }
 
 finish() {
-  local slot="$1" id="${slot_item[$1]}" status=0
-  local branch="loop/$id" output="$state_dir/w$1.log"
+  local slot="$1" id="${slot_item[$1]}" started="${slot_started[$1]}" status=0 outcome
+  local branch="loop/$id" output="$state_dir/w$1.log" result="$state_dir/w$1.json"
   wait "${slot_pid[$slot]}" || status=$?
   kill -- -"${slot_pid[$slot]}" 2>/dev/null || true
   slot_pid[$slot]=""
@@ -142,16 +145,28 @@ finish() {
   git worktree remove --force "$worker_root/w$slot" >/dev/null 2>&1 || true
   if git show "$branch:.loop/results/$id.json" 2>/dev/null \
     | jq -e --arg id "$id" '.passes == true and .id == $id and (.evidence | type) == "object"' >/dev/null 2>&1; then
-    merge_item "$id" "$branch" "$slot"
-  elif [ "$status" -ne 0 ] && grep -qiE "$limit_pattern" "$output"; then
+    if merge_item "$id" "$branch" "$slot"; then outcome=merged; else outcome="not merged"; fi
+  elif [ "$status" -ne 0 ] && grep -qiE "$limit_pattern" "$output" "$result"; then
+    outcome=limit
     set_attempts "$id" $(($(attempts_of "$id") - 1))
     launched=$((launched - 1))
     pause_after_poll=1
     log "worker $slot hit a usage limit on $id; it runs again after a ${limit_wait}s pause"
   else
+    outcome=failed
     log "worker $slot did not pass $id (exit $status):"
     tail -n 5 "$output" | sed 's/^/    /'
   fi
+  record_usage "$id" "$slot" "$started" "$result" "$outcome"
+}
+
+running_json() {
+  local i
+  for ((i = 1; i <= workers; i++)); do
+    if [ -n "${slot_item[$i]}" ]; then
+      printf '{"item":"%s","worker":%s,"started_at":%s}\n' "${slot_item[$i]}" "$i" "${slot_started[$i]}"
+    fi
+  done | jq -s -c .
 }
 
 stop_workers() {
@@ -164,6 +179,7 @@ stop_workers() {
   git worktree prune
   rmdir "$worker_root" 2>/dev/null || true
   rm -rf "$state_dir"
+  write_live "$(closing_state)" parallel "$workers" "[]"
 }
 
 busy_workers() {
@@ -199,6 +215,7 @@ run_parallel() {
   for ((i = 1; i <= workers; i++)); do
     slot_pid[$i]=""
     slot_item[$i]=""
+    slot_started[$i]=""
   done
   trap stop_workers EXIT
   trap 'exit 130' INT TERM
@@ -224,6 +241,7 @@ run_parallel() {
       [ -n "$id" ] || break
       launch "$i" "$id"
     done
+    write_live running parallel "$workers" "$(running_json)"
     if [ "$(busy_workers)" -eq 0 ]; then
       report_blocked
       exit 1

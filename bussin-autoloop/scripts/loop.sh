@@ -41,6 +41,8 @@ fi
 remaining() { jq '[.features[] | select(.passes == false)] | length' "$list"; }
 snapshot() { echo "$(remaining)@$(git rev-parse HEAD)"; }
 
+source "$script_dir/telemetry.sh"
+
 if [ "${LOOP_WORKERS:-1}" -gt 1 ]; then
   source "$script_dir/parallel.sh"
   run_parallel
@@ -48,7 +50,9 @@ if [ "${LOOP_WORKERS:-1}" -gt 1 ]; then
 fi
 
 session_output="$(mktemp)"
-trap 'rm -f "$session_output"' EXIT
+session_errors="$(mktemp)"
+trap 'rm -f "$session_output" "$session_errors"; write_live "$(closing_state)" sequential 1 "[]"' EXIT
+write_live running sequential 1 "[]"
 
 iteration=0
 stalls=0
@@ -60,11 +64,29 @@ while [ "$(remaining)" -gt 0 ]; do
   fi
   echo "autoloop: iteration $iteration, $(remaining) items remaining"
   before="$(snapshot)"
+  item="$(jq -r '[.features[] | select(.passes == false)][0].id' "$list")"
+  started="$(date +%s)"
+  write_live running sequential 1 "$(jq -n -c --arg item "$item" --argjson started "$started" '[{item: $item, worker: 0, started_at: $started}]')"
   status=0
-  claude -p "$skill_command run" --allowedTools "${allowed_tools[@]}" --disallowedTools "${denied_tools[@]}" 2>&1 | tee "$session_output" || status=$?
-  [ "$status" -eq 0 ] || echo "autoloop: session exited non-zero" >&2
+  claude -p "$skill_command run" --output-format json --allowedTools "${allowed_tools[@]}" --disallowedTools "${denied_tools[@]}" \
+    > "$session_output" 2> "$session_errors" < /dev/null || status=$?
   after="$(snapshot)"
-  if [ "$before" = "$after" ] && [ "$status" -ne 0 ] && grep -qiE "$limit_pattern" "$session_output"; then
+  hit_limit=false
+  if [ "$status" -ne 0 ] && grep -qiE "$limit_pattern" "$session_output" "$session_errors"; then hit_limit=true; fi
+  if [ "$(jq -r --arg item "$item" '.features[] | select(.id == $item) | .passes' "$list")" = true ]; then
+    outcome=passed
+  elif [ "$hit_limit" = true ]; then
+    outcome=limit
+  elif [ "$status" -ne 0 ]; then
+    outcome=error
+    echo "autoloop: session exited non-zero" >&2
+    tail -n 5 "$session_errors" | sed 's/^/    /' >&2
+  else
+    outcome=failed
+  fi
+  record_usage "$item" 0 "$started" "$session_output" "$outcome"
+  write_live running sequential 1 "[]"
+  if [ "$before" = "$after" ] && [ "$hit_limit" = true ]; then
     iteration=$((iteration - 1))
     echo "autoloop: usage limit hit, retrying in ${limit_wait}s" >&2
     sleep "$limit_wait"

@@ -41,6 +41,7 @@ else
 fi
 git add -A && git commit -qm "chore(loop): result \$id"
 echo "end \$id" >> "$dir/events"
+printf '{"type":"result","duration_ms":120000,"num_turns":9,"total_cost_usd":0.5,"usage":{"input_tokens":1,"output_tokens":1},"modelUsage":{"claude-opus-5-5":{"inputTokens":1000,"outputTokens":200,"cacheReadInputTokens":5000,"cacheCreationInputTokens":300,"costUSD":0.5}}}\n'
 EOF
   chmod +x "$dir/bin/claude"
   git -C "$dir" init -q
@@ -73,6 +74,9 @@ check "every item is marked passing with evidence" '[ "$(jq "[.features[] | sele
 check "all work is merged into the main branch" '[ -f "$happy/src/a/a.txt" ] && [ -f "$happy/src/a/c.txt" ] && [ -f "$happy/src/b/b.txt" ] && [ -f "$happy/src/b/d.txt" ]'
 check "progress gets one entry per item" '[ "$(grep -c "^## " "$happy/.loop/progress.md")" = 4 ]'
 check "result files are cleaned up" '[ ! -d "$happy/.loop/results" ] || [ -z "$(ls -A "$happy/.loop/results")" ]'
+check "every session is recorded with tokens, cost and model" '[ "$(wc -l < "$happy/.loop/usage.jsonl" | tr -d " ")" = 4 ] && [ "$(jq -s "map(.input_tokens) | add" "$happy/.loop/usage.jsonl")" = 4000 ] && [ "$(jq -s "map(.cost_usd) | add" "$happy/.loop/usage.jsonl")" = 2 ] && [ "$(jq -s -r "map(.models | keys[]) | unique | join(\",\")" "$happy/.loop/usage.jsonl")" = claude-opus-5-5 ]'
+check "merged sessions are recorded as merged with their worker" '[ "$(jq -s "map(select(.outcome == \"merged\" and .worker >= 1)) | length" "$happy/.loop/usage.jsonl")" = 4 ]'
+check "live state ends as finished with nothing running" '[ "$(jq -r ".state" "$happy/.loop/live.json")" = finished ] && [ "$(jq ".running | length" "$happy/.loop/live.json")" = 0 ] && [ "$(jq -r ".mode" "$happy/.loop/live.json")" = parallel ]'
 check "worktrees and branches are cleaned up" '[ "$(git -C "$happy" worktree list | wc -l | tr -d " ")" = 1 ] && [ -z "$(git -C "$happy" branch --list "loop/*")" ]'
 
 cycle="$tmp/cycle"
@@ -82,6 +86,7 @@ make_project "$cycle" true '{"features": [
 ]}'
 cycle_status=0
 run_loop "$cycle" LOOP_WORKERS=2 || cycle_status=$?
+check "a blocked run leaves the live state as stopped" '[ "$(jq -r ".state" "$cycle/.loop/live.json")" = stopped ]'
 check "a dependency cycle stops with a report" '[ "$cycle_status" != 0 ] && grep -q "X: waiting for Y" "$cycle/out" && grep -q "Z (unknown id)" "$cycle/out"'
 check "nothing runs when every item is blocked" '[ ! -f "$cycle/events" ]'
 
@@ -112,6 +117,26 @@ tamper_status=0
 run_loop "$tamper" LOOP_WORKERS=2 LOOP_ITEM_ATTEMPTS=1 || tamper_status=$?
 check "a worker cannot mark other items as passing" '[ "$(grep -c "^start T2$" "$tamper/events")" = 1 ] && [ -f "$tamper/src/t2.txt" ]'
 check "a worker that edits loop scripts is not merged" '[ "$tamper_status" != 0 ] && [ ! -e "$tamper/src/t3.txt" ] && grep -q "T3 changed files under .loop or .claude" "$tamper/out" && [ "$(git -C "$tamper" show HEAD:.loop/verify.sh | tail -1)" != "exit 0" ]'
+
+seq="$tmp/sequential"
+make_project "$seq" true '{"features": [
+  {"id": "S1", "passes": false, "evidence": null, "writes": "src/s1.txt"},
+  {"id": "S2", "passes": false, "evidence": null, "writes": "src/s2.txt"}
+]}'
+cat > "$seq/bin/claude" <<EOF
+#!/usr/bin/env bash
+id="\$(jq -r '[.features[] | select(.passes == false)][0].id' .loop/feature_list.json)"
+echo "\$id" > "src/\$id.txt"
+jq --arg id "\$id" '(.features[] | select(.id == \$id)) |= (.passes = true | .evidence = {commit: "x"})' .loop/feature_list.json > .loop/f.tmp && mv .loop/f.tmp .loop/feature_list.json
+git add -A && git commit -qm "feat: \$id"
+printf '{"type":"result","duration_ms":60000,"num_turns":4,"total_cost_usd":0.25,"modelUsage":{"claude-sonnet-5-5":{"inputTokens":700,"outputTokens":90,"cacheReadInputTokens":0,"cacheCreationInputTokens":0,"costUSD":0.25}}}\n'
+EOF
+chmod +x "$seq/bin/claude"
+seq_status=0
+run_loop "$seq" LOOP_WORKERS=1 || seq_status=$?
+check "the sequential loop records each session as passed" '[ "$seq_status" = 0 ] && [ "$(jq -s -r "map(.item + \":\" + .outcome) | join(\",\")" "$seq/.loop/usage.jsonl")" = "S1:passed,S2:passed" ]'
+check "the sequential loop records tokens, cost and model" '[ "$(jq -s "map(.output_tokens) | add" "$seq/.loop/usage.jsonl")" = 180 ] && [ "$(jq -s "map(.cost_usd) | add" "$seq/.loop/usage.jsonl")" = 0.5 ] && [ "$(jq -r ".state" "$seq/.loop/live.json")" = finished ]'
+check "the sequential loop prints a summary per session" 'grep -q "autoloop: S1 passed after 1m, \$0.25, 700 in / 90 out tokens" "$seq/out"'
 
 cap="$tmp/cap"
 make_project "$cap" true '{"features": [{"id": "A", "passes": false, "evidence": null, "writes": "src/a.txt"}]}'

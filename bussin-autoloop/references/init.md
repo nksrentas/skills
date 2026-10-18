@@ -44,7 +44,7 @@ chmod +x .loop/verify.sh .loop/guard-commit.sh
 - `config.json`: start from the preset, apply `--skills`, fill `commands`, `mutation_paths` (where the implementation code lives, excluding tests), `task`, `new_project`, `checkpoint`, and `base`: the `--base` value if given, otherwise `git rev-parse HEAD` now, before the init commit, or git's empty tree `4b825dc642cb6eb9a060e54bf8d69288fbee4904` in a repo with no commits yet. The config is fixed once committed, so `base` has to be in it before then. Every command in `commands` is pre-approved for the unattended sessions, so list only commands the loop needs.
 - `init.sh`: installs dependencies if needed, starts the dev server in the background, prints the URL, waits until it answers. Reuse the project's own scripts; a session should be able to run `bash .loop/init.sh` and get a working app. It must also work in a fresh git worktree, for parallel workers: when `LOOP_WORKER` is set, copy untracked files the app needs (`.env` and the like) from `$LOOP_MAIN_DIR`, and offset the dev-server port and any test database name by the worker number so workers never share them.
 - `progress.md`: heading with the task, the baseline, and the conventions you learned that are not obvious from the code (where filters live, how auth is checked, naming patterns).
-- Add to `.gitignore`: `.loop/tests-passed`, `.stryker-tmp/`, `reports/mutation/`.
+- Add to `.gitignore`: `.loop/tests-passed`, `.loop/usage.jsonl`, `.loop/live.json`, `.loop/live.json.tmp`, `.stryker-tmp/`, `reports/mutation/`. The driver writes the usage and live files while sessions run; they feed the status view and are never committed.
 
 ## 5. Hooks
 
@@ -129,4 +129,4 @@ Tell the user they can change `depends_on` and `touches` at any time by editing 
 bash "$SKILL_DIR/scripts/loop.sh"
 ```
 
-with `$SKILL_DIR` written out as the real base directory, because the user's shell does not have that variable. When two or more items could run at once, also show the parallel form, `LOOP_WORKERS=3 bash "$SKILL_DIR/scripts/loop.sh"`, and say that it runs up to that many sessions at once, each in its own worktree, and uses usage that many times faster. Add that a single iteration can be run by hand with `/bussin-autoloop run`, or `/bussin:bussin-autoloop run` when the skill came from the `bussin` plugin.
+with `$SKILL_DIR` written out as the real base directory, because the user's shell does not have that variable. When two or more items could run at once, also show the parallel form, `LOOP_WORKERS=3 bash "$SKILL_DIR/scripts/loop.sh"`, and say that it runs up to that many sessions at once, each in its own worktree, and uses usage that many times faster. Mention that `/autoloop-status`, from the `bussin-loop-status` mod, shows progress, ETA, tokens and cost while it runs. Add that a single iteration can be run by hand with `/bussin-autoloop run`, or `/bussin:bussin-autoloop run` when the skill came from the `bussin` plugin.
