@@ -1,6 +1,7 @@
 ---
 name: bussin-autoloop
 description: Autonomous build loop for one feature or a whole new project. `/bussin-autoloop init <task>` researches the codebase (or scaffolds a new project), expands the task into `.loop/feature_list.json` with functional, edge-case and regression items, installs verify gates and a commit guard, then `/bussin-autoloop run` completes ONE item per fresh session until every item passes with evidence. Use it whenever the user wants something built autonomously, "in a loop", "without back and forth", "until it's done", "overnight", "with proof it works end-to-end", or mentions autoloop, feature_list, Ralph-style loops or long-running agent harnesses. Also use it when they want the loop faster or more thorough (modes fast, standard, thorough) or want specific skills plugged into one feature.
+argument-hint: "init <task> [--mode fast|standard|thorough] [--skills a,b,review:c] [--no-checkpoint] [--new] [--stack <text>] [--base <ref>] | run | status"
 ---
 
 # bussin-autoloop
@@ -13,6 +14,7 @@ Two prompts over one harness. `init` runs once and leaves artifacts in `.loop/`.
 |---|---|---|
 | `/bussin-autoloop init <task> [flags]` | `references/init.md` | Research or scaffold, write `.loop/`, checkpoint with the user, commit |
 | `/bussin-autoloop run` | `references/run.md` | One item: implement, pass the gates, mark passing with evidence, commit, stop |
+| `/bussin-autoloop run --item <id>` | `references/run.md` | Worker mode for the parallel driver: that one item in its own worktree, result written to `.loop/results/<id>.json` |
 | `/bussin-autoloop status` | nothing | Print items still `passes:false` and the last 20 lines of `.loop/progress.md` |
 | `/bussin-autoloop <text>` with no `.loop/` | `references/init.md` | Treat the text as the task |
 
@@ -25,6 +27,14 @@ bash <skill directory>/scripts/loop.sh
 ```
 
 Init prints the exact path for the current install, for example `~/.claude/skills/bussin-autoloop/scripts/loop.sh`.
+
+### Parallel workers
+
+`LOOP_WORKERS=3 bash <skill directory>/scripts/loop.sh` runs up to three sessions at once. The cap is whatever you set, up to 8, and the default of 1 keeps the sequential loop. Init writes two scheduling fields on every item: `depends_on`, the items that must pass first, and `touches`, the paths it will change. An item starts when its dependencies pass and its `touches` overlap no running item. Edit either field in `.loop/feature_list.json` at any time; the driver re-reads them before each launch, and the commit guard ignores them.
+
+Each worker gets a git worktree next to the repo (`<repo>.loop-workers/w<n>`, override with `LOOP_WORKER_ROOT`) on branch `loop/<id>`, and runs `run --item <id>`. When it reports a pass, the driver merges the branch into the current branch one item at a time and runs `verify.sh` on the merged result, because two items that pass alone can still break together. A conflict or a red gate sends the item back to run again on top of the latest work, up to `LOOP_ITEM_ATTEMPTS` (default 3). When nothing can start (a dependency cycle, an unknown id, or an item out of attempts), the driver stops and lists what each item is waiting for.
+
+The speed-up depends on the list's shape, not on the cap. Items that all edit one file run one after another whatever the cap is, while portable feature folders (`bussin-ts-architecture`) parallelise well. Every worker is a full session, so usage goes N times faster. `init.sh` has to give each worker its own port and test database, using `LOOP_WORKER`.
 
 ### Running unattended
 
@@ -41,7 +51,8 @@ The guard and `verify.sh` read the loop scripts and config from the last commit,
 | `init.sh` | init | Boots the environment so no session rediscovers how |
 | `verify.sh` | init copies from `assets/` | Runs tests, then Stryker on changed files when enabled, then writes the code's fingerprint to `.loop/tests-passed` |
 | `guard-commit.sh` | init copies from `assets/` | PreToolUse hook, always run from the committed copy (`git show HEAD:`), that blocks any `git commit` unless the marker matches the current code, items are unchanged apart from `passes` and `evidence`, and the loop config and scripts are untouched |
-| `progress.md` | run | What each session did, learned about the codebase, and what is next |
+| `progress.md` | run, or the driver in parallel mode | What each session did, learned about the codebase, and what is next |
+| `results/<id>.json` | a parallel worker | One item's outcome, merged and then folded into `feature_list.json` and `progress.md` by the driver |
 | `retro.md` | run, thorough mode | Proposed environment improvements, never applied by the loop |
 
 Items are never removed or reworded by `run`. Deleting an item to make the list green is the exact failure this harness exists to prevent, so a run that believes an item is wrong records that in `progress.md` and leaves it `false` for a human. The guard enforces this rather than trusting it.

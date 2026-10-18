@@ -7,6 +7,11 @@
       "ui": true,
       "description": "Export button on /invoices, visible only to role=admin",
       "verify": "Login as admin, open /invoices, button present. Login as staff, button absent.",
+      "depends_on": [],
+      "touches": [
+        "src/features/invoices/components/export-button.tsx",
+        "src/features/invoices/invoices-page.tsx"
+      ],
       "passes": false,
       "evidence": null
     },
@@ -16,6 +21,12 @@
       "ui": true,
       "description": "Export downloads invoices.csv honouring the active filters",
       "verify": "Filter status=paid, click export, open the file, only paid rows present, column order matches the table.",
+      "depends_on": [],
+      "touches": [
+        "src/features/invoices/invoice-export.controller.ts",
+        "src/features/invoices/invoice-export.service.ts",
+        "src/features/invoices/index.ts"
+      ],
       "passes": false,
       "evidence": null
     },
@@ -25,6 +36,12 @@
       "ui": false,
       "description": "Empty result set exports the header row only",
       "verify": "Filter to zero results, export, file has exactly one line.",
+      "depends_on": [
+        "F2"
+      ],
+      "touches": [
+        "src/features/invoices/invoice-export.service.ts"
+      ],
       "passes": false,
       "evidence": null
     },
@@ -34,6 +51,12 @@
       "ui": false,
       "description": "Commas, quotes and newlines in customer names are escaped per RFC 4180",
       "verify": "Property test with fast-check over arbitrary strings round-trips through a CSV parser.",
+      "depends_on": [
+        "F2"
+      ],
+      "touches": [
+        "src/features/invoices/csv.ts"
+      ],
       "passes": false,
       "evidence": null
     },
@@ -43,6 +66,12 @@
       "ui": false,
       "description": "10k invoices export streams without timeout",
       "verify": "Seed 10k rows, export completes under 10 seconds, memory stays flat.",
+      "depends_on": [
+        "F2"
+      ],
+      "touches": [
+        "src/features/invoices/invoice-export.controller.ts"
+      ],
       "passes": false,
       "evidence": null
     },
@@ -52,6 +81,10 @@
       "ui": false,
       "description": "Existing invoice filters and pagination unchanged",
       "verify": "invoices.spec.ts green, baseline test count unchanged.",
+      "depends_on": [],
+      "touches": [
+        "src/features/invoices/invoice.service.test.ts"
+      ],
       "passes": false,
       "evidence": null
     },
@@ -61,6 +94,12 @@
       "ui": false,
       "description": "Non-admin gets 403 from GET /api/invoices/export",
       "verify": "Request as staff user, expect 403 and no file.",
+      "depends_on": [
+        "F2"
+      ],
+      "touches": [
+        "src/features/invoices/invoice-export.controller.test.ts"
+      ],
       "passes": false,
       "evidence": null
     }

@@ -1,6 +1,7 @@
 ---
 name: bussin-write-like-a-human
 description: "Check a draft for the narrative choices that make writing read as AI-generated, then revise it to read human. Built on StoryScope (arXiv 2604.03136v6): 61,608 human vs AI stories, 30 core features with measured rates, plus fingerprints for Claude, GPT, Gemini, DeepSeek and Kimi. Catches the structural tells that word-level edits miss: stated morals, emotion shown through the body instead of named, smell-heavy description, weather mirroring mood, tidy single-track plots, hero-choice and acceptance endings, vague allusions instead of named references, strict chronology, no reader address. Use whenever the user wants a story, chapter, scene, personal essay or other narrative to sound more human or less like AI, asks why a draft feels AI-written or generic, wants to humanize or de-AI their writing, or is planning fiction with an AI and wants to dodge its defaults. For word-level tells in LinkedIn posts, use linkedin-humanizer."
+argument-hint: "<draft text or path to the draft>"
 ---
 
 # Write like a human

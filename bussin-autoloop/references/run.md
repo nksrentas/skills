@@ -2,6 +2,21 @@
 
 One iteration. You start with no memory of earlier sessions; the artifacts are your memory. Finish one item and stop, even if the next one looks trivial. Stopping is what keeps the next session's picture accurate.
 
+## Worker mode: `run --item <id>`
+
+The parallel driver starts sessions as `run --item <id>`, each in its own git worktree on branch `loop/<id>`, with `LOOP_WORKER` (the worker's number) and `LOOP_MAIN_DIR` (the main checkout) in the environment. Follow the steps below with these differences:
+
+- Work on exactly that item, even if earlier items are still failing; the driver already checked its dependencies.
+- `bash .loop/init.sh` gets `LOOP_WORKER`, so it can pick a free port and database name and copy untracked files such as `.env` from `LOOP_MAIN_DIR`.
+- Do not edit `.loop/feature_list.json` or `.loop/progress.md`; other workers run at the same time, and the driver is their only writer.
+- In step 7, commit the implementation as usual. Then, in place of marking the item and writing progress, write `.loop/results/<id>.json` and commit it as `chore(loop): result <id>`:
+
+```json
+{ "id": "F7", "passes": true, "evidence": { "commit": "<sha>", "ran": "npm test" }, "notes": "Did: ...\nLearned: ..." }
+```
+
+  When the item cannot pass, write the same file with `"passes": false` and the reason in `notes`. The driver merges a passing branch into the main branch, runs the gate again on the merged result, then marks the item and copies `notes` into `progress.md`.
+
 ## 1. Orient (under two minutes)
 
 Read `.loop/config.json`, `.loop/progress.md`, `.loop/feature_list.json` and `git log --oneline -20`. Run `bash .loop/init.sh`. Do a sixty-second smoke check of the app (the home page loads, login works if there is one). If the previous session left it broken, fixing that is this session's item: record it in `progress.md` and proceed as if it were an item.

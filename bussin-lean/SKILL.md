@@ -1,6 +1,7 @@
 ---
 name: bussin-lean
 description: Keep code lean while writing it, then run a mandatory cleanup pass on the diff before calling the work done - no speculative abstractions, layers, options or dependencies, no leftovers from earlier implementations (dead code, unused exports, files, flags, dependencies, debug logs, commented-out code), no wasteful allocation or data access (copies in loops, N+1 queries, loading whole tables, unbounded caches), and a structure check. Use whenever writing, changing or refactoring code, before reporting any code work as finished, when bussin-feature or bussin-autoloop reaches its cleanup step, and when the user asks to simplify, de-bloat, remove leftovers or check for over-engineering.
+argument-hint: "[path, file or commit range to clean up]"
 ---
 
 # Lean code
