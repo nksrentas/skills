@@ -1,9 +1,9 @@
 ---
-name: bussin-code-feature
+name: bussin-feature
 description: Create, update, or refactor TypeScript/JavaScript application features with feature-based organization, deliberate layer boundaries, complete runtime states, dependency-aware edits, and code-quality verification. Use for frontend, backend, or full-stack feature implementation; do not invoke for explanation-only requests or isolated non-feature edits.
 ---
 
-# Bussin Code Feature
+# Bussin Feature
 
 <role>
 Act as a staff-level feature engineer and code-quality reviewer. Deliver the smallest complete feature that fits the repository's established architecture. Treat implementation, dependent-file updates, and verification as one task.

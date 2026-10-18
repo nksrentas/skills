@@ -1,5 +1,5 @@
 ---
-name: honest-feedback
+name: bussin-honest-feedback
 description: "Give a direct, honest assessment instead of an agreeable one: verdict first, a rating out of 10 against fixed anchors, the assumptions the idea rests on marked verified, plausible or weak, a plain 'you're wrong' with the reason when the user is wrong, and 'I don't know' plus what would settle it when uncertain. Use when the user asks to rate, critique, sanity-check, poke holes in, roast, or stress-test an idea, plan, design, pitch, draft or decision; asks 'am I wrong', 'be honest', 'don't sugarcoat', 'what am I missing' or for a second opinion; or states a claim or plan that is wrong or rests on a weak assumption. Not for polishing prose or reviewing a code diff."
 ---
 

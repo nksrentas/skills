@@ -1,0 +1,68 @@
+{
+  "task": "Export invoices to CSV",
+  "features": [
+    {
+      "id": "F1",
+      "category": "functional",
+      "ui": true,
+      "description": "Export button on /invoices, visible only to role=admin",
+      "verify": "Login as admin, open /invoices, button present. Login as staff, button absent.",
+      "passes": false,
+      "evidence": null
+    },
+    {
+      "id": "F2",
+      "category": "functional",
+      "ui": true,
+      "description": "Export downloads invoices.csv honouring the active filters",
+      "verify": "Filter status=paid, click export, open the file, only paid rows present, column order matches the table.",
+      "passes": false,
+      "evidence": null
+    },
+    {
+      "id": "E1",
+      "category": "edge",
+      "ui": false,
+      "description": "Empty result set exports the header row only",
+      "verify": "Filter to zero results, export, file has exactly one line.",
+      "passes": false,
+      "evidence": null
+    },
+    {
+      "id": "E2",
+      "category": "edge",
+      "ui": false,
+      "description": "Commas, quotes and newlines in customer names are escaped per RFC 4180",
+      "verify": "Property test with fast-check over arbitrary strings round-trips through a CSV parser.",
+      "passes": false,
+      "evidence": null
+    },
+    {
+      "id": "E3",
+      "category": "edge",
+      "ui": false,
+      "description": "10k invoices export streams without timeout",
+      "verify": "Seed 10k rows, export completes under 10 seconds, memory stays flat.",
+      "passes": false,
+      "evidence": null
+    },
+    {
+      "id": "R1",
+      "category": "regression",
+      "ui": false,
+      "description": "Existing invoice filters and pagination unchanged",
+      "verify": "invoices.spec.ts green, baseline test count unchanged.",
+      "passes": false,
+      "evidence": null
+    },
+    {
+      "id": "R2",
+      "category": "regression",
+      "ui": false,
+      "description": "Non-admin gets 403 from GET /api/invoices/export",
+      "verify": "Request as staff user, expect 403 and no file.",
+      "passes": false,
+      "evidence": null
+    }
+  ]
+}
