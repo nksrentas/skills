@@ -1,7 +1,7 @@
 {
   "name": "bussin",
   "version": "1.0.0",
-  "description": "Eight bussin- skills: an autonomous build loop, a feature build workflow, lean code with a mandatory cleanup pass, portable TypeScript feature architecture, Drizzle data access, the house UI system, honest feedback and human-sounding writing, plus short aliases such as /autoloop.",
+  "description": "Eleven bussin- skills: an autonomous build loop, a feature build workflow, lean code with a mandatory cleanup pass, portable TypeScript feature architecture, Drizzle data access, the house UI system, accessibility, SEO and JSON-LD, honest feedback and human-sounding writing, plus short aliases such as /autoloop.",
   "author": {
     "name": "nrentas"
   },
@@ -12,6 +12,9 @@
     "./bussin-ts-architecture",
     "./bussin-drizzle",
     "./bussin-ui",
+    "./bussin-a11y",
+    "./bussin-seo",
+    "./bussin-schema",
     "./bussin-honest-feedback",
     "./bussin-write-like-a-human",
     "./aliases/autoloop",
@@ -21,6 +24,9 @@
     "./aliases/drizzle",
     "./aliases/ui",
     "./aliases/honest",
-    "./aliases/humanize"
+    "./aliases/humanize",
+    "./aliases/a11y",
+    "./aliases/seo",
+    "./aliases/schema"
   ]
 }
