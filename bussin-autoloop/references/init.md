@@ -117,7 +117,7 @@ On a re-init over an earlier loop, the guard blocks this commit because `config.
 Then tell the user how to start:
 
 ```bash
-bash ~/.claude/skills/bussin-autoloop/scripts/loop.sh
+bash "$SKILL_DIR/scripts/loop.sh"
 ```
 
-and that a single iteration can be run by hand with `/bussin-autoloop run`.
+with `$SKILL_DIR` written out as the real base directory, because the user's shell does not have that variable. Add that a single iteration can be run by hand with `/bussin-autoloop run`, or `/bussin:bussin-autoloop run` when the skill came from the `bussin` plugin.

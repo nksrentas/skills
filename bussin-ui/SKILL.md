@@ -64,6 +64,31 @@ Read the one that matches the work before writing markup:
 - `references/motion.md`: every animation with exact duration, easing, distance, trigger and delay rules, plus Lenis and reduced-motion handling.
 - `references/dashboard.md`: how the same language becomes an app shell, data cards, tables, forms and charts without turning a dashboard into a landing page.
 
+## Animation skills
+
+Motion craft comes from Emil Kowalski's skills ([emilkowalski/skills](https://github.com/emilkowalski/skills), MIT). Install them once:
+
+```bash
+npx skills add emilkowalski/skills --skill emil-design-eng --skill animate --skill find-animation-opportunities --skill improve-animations --skill review-animations --skill animation-performance --skill animation-vocabulary --skill apple-design
+```
+
+| Job | Skill |
+|---|---|
+| Decide whether something should move at all, and how polish should feel | `emil-design-eng` |
+| Build a new animation: purpose, properties, curve, duration | `animate` |
+| Find places that should animate and do not | `find-animation-opportunities` |
+| Audit the motion a project already has and plan fixes | `improve-animations` |
+| Review new animation code before calling it done | `review-animations` |
+| Keep animations inside the frame budget, including GSAP | `animation-performance` |
+| Turn "the bouncy thing" into the exact term | `animation-vocabulary` |
+| Springs, drag, swipe and sheet gestures | `apple-design` |
+
+These skills decide whether and how something moves. This skill decides what the house motion is. When they disagree, this skill wins on:
+- the stack: GSAP for anything scroll-driven, sequenced or timed, CSS transitions for hover and focus, and no Motion/Framer Motion
+- the exact values in `references/motion.md`
+
+Emil's skills win on everything this skill does not pin down. When they are not installed, follow `references/motion.md` alone.
+
 ## Rules that make it look right
 
 - One accent. Sun `#f9b000` is for the primary action and small highlights; everything else is ink, canvas, cream and the warm neutrals. Two yellow buttons side by side is already one too many.
@@ -80,7 +105,7 @@ Use the system, not Edefy's content: write your own copy, use your own photograp
 
 ## Review checklist
 
-When bussin-autoloop loads this skill, copy this list into `CODING_STANDARDS.md` so the review stage enforces it:
+When bussin-autoloop loads this skill, copy this list into `CODING_STANDARDS.md` so the review stage enforces it, and add `review:review-animations` to the loop's skills when `review-animations` is installed:
 
 - Colours, radii, spacing and type come from the theme tokens and utilities; no raw hex values or arbitrary pixel sizes in components.
 - Only one sun-yellow primary action per view.

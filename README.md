@@ -13,7 +13,7 @@
 ## Included skills
 
 - [bussin-autoloop](./bussin-autoloop): Autonomous build loop. `init` expands a task into a feature list with verify gates and a commit guard, then `run` finishes one item per fresh session until every item passes with evidence.
-- [bussin-feature](./bussin-feature): Build and refactor TypeScript/JavaScript features with clean layers, complete runtime states, dependent-file updates, and verification.
+- [bussin-feature](./bussin-feature): The workflow for building a feature end to end: ground it in the repo, cover loading, error, empty and success states, update every dependent file, keep the folder portable, and verify.
 - [bussin-ts-architecture](./bussin-ts-architecture): Feature-based folders for TypeScript backends and Next.js apps, where every feature folder is portable: it imports nothing from other features and works when copied into another project.
 - [bussin-drizzle](./bussin-drizzle): Drizzle ORM data access with schemas per feature, drizzle-kit migrations, typed queries inside services, and tests against a real database.
 - [bussin-ui](./bussin-ui): House UI system for landing pages and dashboards in Next.js, Tailwind CSS v4, GSAP and Lenis.
@@ -22,27 +22,65 @@
 
 ## Install
 
-This repository follows the open Agent Skills format and works with the `skills` CLI.
+### As a Claude Code plugin
 
-Install globally and choose from the AI tools detected on your machine:
-
-```bash
-npx skills add nksrentas/skills --skill bussin-feature -g
-```
-
-Install globally for specific tools:
+One install gives you all seven skills:
 
 ```bash
-npx skills add nksrentas/skills --skill bussin-feature -g -a codex -a claude-code -a cursor -a gemini-cli -a github-copilot
+claude plugin marketplace add nksrentas/skills
+claude plugin install bussin@bussin
 ```
 
-Install every skill in this repository for every supported agent:
+Plugin skills are namespaced, so the loop command becomes `/bussin:bussin-autoloop`.
+
+### With the skills CLI
+
+The repository follows the open Agent Skills format, so it works with Claude Code, Codex, Cursor, Gemini CLI, GitHub Copilot and the other tools the `skills` CLI supports.
+
+Install everything:
 
 ```bash
 npx skills add nksrentas/skills -g --all
 ```
 
-Omit `-g` for a project-local installation. Use `npx skills update bussin-feature -g` to pull future updates.
+Or one skill:
+
+```bash
+npx skills add nksrentas/skills --skill bussin-autoloop -g
+```
+
+Omit `-g` for a project-local installation. `npx skills update -g` pulls updates.
+
+### Animation skills for bussin-ui
+
+`bussin-ui` hands motion craft to Emil Kowalski's skills. Install them next to it:
+
+```bash
+npx skills add emilkowalski/skills --skill emil-design-eng --skill animate --skill find-animation-opportunities --skill improve-animations --skill review-animations --skill animation-performance --skill animation-vocabulary --skill apple-design
+```
+
+## Quick start: an autonomous feature loop
+
+```text
+/bussin-autoloop init "Invoice reminders" --skills bussin-ts-architecture,bussin-drizzle
+```
+
+Init researches the codebase and writes `.loop/`. That holds the feature list (functional, edge-case and regression items), a verify gate, and a commit guard that only allows commits of code that passed the gate. Init then shows you the list to confirm, and prints the command that runs one fresh session per item until every item passes:
+
+```bash
+bash ~/.claude/skills/bussin-autoloop/scripts/loop.sh
+```
+
+For UI work add `bussin-ui` and `review:review-animations` to `--skills`. See [bussin-autoloop](./bussin-autoloop/SKILL.md) for modes, gates and running unattended safely.
+
+## Tests
+
+The autoloop scripts have shell tests:
+
+```bash
+bash tests/autoloop-guard.test.sh
+bash tests/autoloop-loop.test.sh
+```
 
 ## Compatibility
 
