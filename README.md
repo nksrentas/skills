@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./bussin-feature/assets/Bussin-logo.svg" alt="Bussin" width="360">
+  <img src="./bussin-feature/assets/bussin-logo.svg" alt="Bussin" width="360">
 </p>
 
 <h1 align="center">Skills</h1>
@@ -14,7 +14,7 @@
 
 - [bussin-autoloop](./bussin-autoloop): Autonomous build loop. `init` expands a task into a feature list with verify gates and a commit guard, then `run` finishes one item per fresh session until every item passes with evidence.
 - [bussin-feature](./bussin-feature): Build and refactor TypeScript/JavaScript features with clean layers, complete runtime states, dependent-file updates, and verification.
-- [bussin-ts-architecture](./bussin-ts-architecture): Feature-based folders for TypeScript backends, where each feature owns its controller, service, DTOs and jobs.
+- [bussin-ts-architecture](./bussin-ts-architecture): Feature-based folders for TypeScript backends and Next.js apps, where every feature folder is portable: it imports nothing from other features and works when copied into another project.
 - [bussin-drizzle](./bussin-drizzle): Drizzle ORM data access with schemas per feature, drizzle-kit migrations, typed queries inside services, and tests against a real database.
 - [bussin-ui](./bussin-ui): House UI system for landing pages and dashboards in Next.js, Tailwind CSS v4, GSAP and Lenis.
 - [bussin-honest-feedback](./bussin-honest-feedback): Direct assessments instead of agreeable ones: verdict first, a rating out of 10 against fixed anchors, weak assumptions named, "you're wrong" with the reason, and "I don't know" when that is the truth.

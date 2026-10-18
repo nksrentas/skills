@@ -1,6 +1,6 @@
 ---
 name: bussin-feature
-description: Create, update, or refactor TypeScript/JavaScript application features with feature-based organization, deliberate layer boundaries, complete runtime states, dependency-aware edits, and code-quality verification. Use for frontend, backend, or full-stack feature implementation; do not invoke for explanation-only requests or isolated non-feature edits.
+description: Workflow for creating, updating, or refactoring a TypeScript/JavaScript application feature end to end - ground the change in the repository, implement every runtime state (loading, error, empty, success), update every dependent file and registration, keep the feature folder portable, and verify with the project's checks before calling it done. Use for frontend, backend, or full-stack feature implementation; folder layout, file roles and the portability rule come from bussin-ts-architecture. Do not invoke for explanation-only requests or isolated non-feature edits.
 ---
 
 # Bussin Feature
@@ -22,27 +22,11 @@ Repository evidence outranks the examples in this skill. Preserve established na
 
 <implementation_contract>
 
-## Organize by feature
+## Follow the house structure
 
-- Place feature-owned code under one feature root.
-- Keep relative directory depth at three or fewer below that root. The feature root is depth 0; `components/forms/fields/` is depth 3.
-- Prefer a few cohesive files over deep nesting or one-file-per-function fragmentation.
-- Do not reorganize unrelated code merely to make the repository match this skill.
+Load `bussin-ts-architecture` before choosing files. It owns the folder layout, the file roles, and the portability rule: a feature folder keeps working when copied into another project with the same layout, imports nothing from other features, and needs nothing outside it except app-shell wiring (a `register(app, deps)` call, or a thin Next.js route file and navigation entry). If that skill is not installed, follow the layout of the nearest existing feature and still keep the feature free of imports from other features.
 
-## Create only justified layers
-
-Choose files from actual responsibilities, not from a mandatory template:
-
-- `dto.ts`: boundary types, schemas, parsing, and validation.
-- `api.ts`: transport calls and wire-format mapping; no business rules.
-- `service.ts`: use cases, domain rules, and orchestration.
-- `controller.ts`: HTTP, RPC, CLI, or framework request/response adaptation.
-- `repository.ts`: persistence access and persistence mapping.
-- `hooks.ts`: UI-facing orchestration and reusable framework hooks.
-- `store.ts`: shared client state only when local state or server-state caching is insufficient.
-- Components/views: rendering and user interaction, not transport or domain logic.
-
-Omit layers that would only forward arguments. Split mixed responsibilities already touched by the change when doing so is necessary for quality, while keeping unrelated refactors out of scope.
+Choose files from actual responsibilities, not from a template, and omit layers that would only forward arguments. Split mixed responsibilities already touched by the change when quality needs it; keep unrelated refactors and reorganizations out of scope.
 
 ## Keep code self-explanatory
 
@@ -73,26 +57,28 @@ For mutations, also provide appropriate pending protection and success/failure f
 
 ## Propagate the change
 
-Trace the affected dependency graph and update every required consumer: imports, exports, barrel files, route registration, navigation, schemas, API contracts, dependency injection, persistence mappings, callers, tests, mocks, fixtures, and user-facing copy. Search for old names and contracts after the edit to find missed consumers.
+Trace the affected dependency graph and update every required consumer: imports, exports, route registration, navigation, schemas, API contracts, the composition root, persistence mappings, callers, tests, mocks, fixtures, and user-facing copy. Search for old names and contracts after the edit to find missed consumers.
+
+Consumers outside the feature folder should only be the composition root, thin route files and navigation entries. When the change seems to need an edit inside another feature, that is a boundary crossing: emit an event or declare a port instead.
 
 </implementation_contract>
 
 <workflow>
 
 1. Ground the change in repository evidence and identify the feature boundary.
-2. Choose the minimum justified files and layers; keep directory depth within the limit.
+2. Choose the minimum justified files and roles from `bussin-ts-architecture`.
 3. Implement end-to-end behavior, including applicable loading, error, empty, and success paths.
 4. Update the complete dependent-file set and remove obsolete paths created by the change.
-5. Run focused tests first, then relevant type-check, lint, broader tests, and build commands available in the repository.
-6. Inspect the final diff for accidental scope growth, comments, duplicated contracts, unnecessary abstractions, and missed consumers.
+5. Run focused tests first, then the import-boundary check, type-check, lint, broader tests, and build commands available in the repository.
+6. Inspect the final diff for accidental scope growth, imports from other features, comments, duplicated contracts, unnecessary abstractions, and missed consumers.
 
 </workflow>
 
 <quality_gate>
 Do not call the feature complete until the relevant checks pass or their failure is reported:
 
-- Feature ownership is clear and nesting is no deeper than three directories below the feature root.
-- Each file has one coherent layer responsibility; no pass-through layers exist.
+- The feature folder is portable: no imports from other features, dependencies arrive through `register(app, deps)` or `getKernel()`, and the boundary check passes or its absence is reported.
+- Each file has one coherent role; no pass-through layers exist.
 - External data is validated or safely mapped at the boundary when needed.
 - All applicable runtime/UI states are implemented and distinguishable.
 - New application code is comment-free except for required exceptions.
@@ -104,7 +90,7 @@ Do not call the feature complete until the relevant checks pass or their failure
 <auditable_reasoning>
 Keep private chain-of-thought private. Make the work auditable through concrete evidence instead. In the final response, report:
 
-- The feature boundary and layers created, omitted, or changed.
+- The feature boundary and layers created, omitted, or changed, and any events or ports used to reach other features.
 - Repository anchors that drove non-obvious choices.
 - Loading/error/empty/success coverage, including any state that was not applicable.
 - Dependent files or registrations updated.

@@ -26,12 +26,14 @@ Copy from `assets/` into the app, keeping kebab-case names:
 
 | Asset | Goes to | What it gives you |
 |---|---|---|
-| `theme.css` | `app/globals.css` (merge) | Colours, radii, breakpoints, type utilities, reveal pre-state |
-| `smooth-scroll.tsx` | `components/motion/` | Lenis root synced with ScrollTrigger, respects reduced motion |
-| `motion-root.tsx` | `components/motion/` | One client boundary that animates every `data-reveal`, `data-split-color` and `data-marquee` inside it |
-| `components/roll-button.tsx` | `components/ui/` | The pill button with rolling label and sliding arrow |
-| `components/eyebrow.tsx` | `components/ui/` | Small uppercase section label with its mark |
-| `components/tray-card.tsx` | `components/ui/` | Beige frame around a canvas card |
+| `theme.css` | `src/app/globals.css` (merge) | Colours, radii, breakpoints, type utilities, reveal pre-state |
+| `smooth-scroll.tsx` | `src/shared/motion/` | Lenis root synced with ScrollTrigger, respects reduced motion |
+| `motion-root.tsx` | `src/shared/motion/` | One client boundary that animates every `data-reveal`, `data-split-color` and `data-marquee` inside it |
+| `components/roll-button.tsx` | `src/shared/ui/` | The pill button with rolling label and sliding arrow |
+| `components/eyebrow.tsx` | `src/shared/ui/` | Small uppercase section label with its mark |
+| `components/tray-card.tsx` | `src/shared/ui/` | Beige frame around a canvas card |
+
+These are the shared kit from `bussin-ts-architecture`. Sections, pages and components that belong to one feature live in that feature's folder and import only from `src/shared/`, never from another feature.
 
 Install: `gsap @gsap/react lenis` and Tailwind v4 (`tailwindcss @tailwindcss/postcss`). In the root layout load the font and wrap the body:
 
