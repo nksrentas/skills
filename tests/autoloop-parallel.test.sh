@@ -30,6 +30,7 @@ echo "\$id" > "\$target"
 case "\$(jq -r --arg id "\$id" '.features[] | select(.id == \$id) | .tamper // ""' .loop/feature_list.json)" in
   flip) jq '.features |= map(.passes = true)' .loop/feature_list.json > .loop/f.tmp && mv .loop/f.tmp .loop/feature_list.json ;;
   script) echo 'exit 0' >> .loop/verify.sh ;;
+  redirect) echo "\$(pwd)/elsewhere" > "\$(git rev-parse --absolute-git-dir)/gitdir" ;;
 esac
 bash .loop/verify.sh > /dev/null 2>&1 || true
 bypass=()
@@ -120,6 +121,12 @@ tamper_status=0
 run_loop "$tamper" LOOP_WORKERS=2 LOOP_ITEM_ATTEMPTS=1 || tamper_status=$?
 check "a worker cannot mark other items as passing" '[ "$(grep -c "^start T2$" "$tamper/events")" = 1 ] && [ -f "$tamper/src/t2.txt" ]'
 check "a worker that edits loop scripts is not merged" '[ "$tamper_status" != 0 ] && [ ! -e "$tamper/src/t3.txt" ] && grep -q "T3 changed files under .loop or .claude" "$tamper/out" && [ "$(git -C "$tamper" show HEAD:.loop/verify.sh | tail -1)" != "exit 0" ]'
+
+redirect="$tmp/redirect"
+make_project "$redirect" true '{"features": [{"id": "R", "passes": false, "evidence": null, "tamper": "redirect", "writes": "src/r.txt"}]}'
+redirect_status=0
+run_loop "$redirect" LOOP_WORKERS=2 || redirect_status=$?
+check "a worker that rewrites its worktree pointers stops the loop" '[ "$redirect_status" != 0 ] && grep -q "changed its worktree" "$redirect/out" && [ "$(jq -r ".features[0].passes" "$redirect/.loop/feature_list.json")" = false ]'
 
 seq="$tmp/sequential"
 make_project "$seq" true '{"features": [
