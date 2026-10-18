@@ -42,10 +42,14 @@ const parseLines = (text: string | undefined): Usage[] =>
     .map(line => parseJson<Usage>(line.trim()))
     .filter((row): row is Usage => row !== undefined && typeof row.item === 'string')
 
+const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f-\u009f]/g
+
+const clean = (text: unknown) => String(text ?? '').replace(CONTROL_CHARACTERS, '')
+
 const sum = (rows: Usage[], pick: (row: Usage) => number | undefined) =>
   rows.reduce((total, row) => total + (pick(row) ?? 0), 0)
 
-const title = (feature: Feature | undefined) => feature?.description ?? ''
+const title = (feature: Feature | undefined) => clean(feature?.description)
 
 const loopStateOf = (live: Live | undefined, done: number, total: number): LoopSnapshot['loopState'] => {
   if (live?.state === 'running' || live?.state === 'finished' || live?.state === 'stopped') return live.state
@@ -56,9 +60,10 @@ const modelRows = (usage: Usage[]): ModelRow[] => {
   const byName = new Map<string, ModelRow>()
   for (const row of usage) {
     for (const [name, model] of Object.entries(row.models ?? {})) {
-      const seen = byName.get(name) ?? { name, costUsd: 0, inputTokens: 0, outputTokens: 0 }
-      byName.set(name, {
-        name,
+      const label = clean(name)
+      const seen = byName.get(label) ?? { name: label, costUsd: 0, inputTokens: 0, outputTokens: 0 }
+      byName.set(label, {
+        name: label,
         costUsd: seen.costUsd + (model.cost_usd ?? 0),
         inputTokens: seen.inputTokens + (model.input_tokens ?? 0),
         outputTokens: seen.outputTokens + (model.output_tokens ?? 0),
@@ -91,12 +96,17 @@ const itemRow = (feature: Feature, passed: Set<string>, running: Map<string, num
 }
 
 export const compute = (files: LoopFiles): LoopSnapshot | null => {
-  const features = parseJson<{ features?: Feature[] }>(files.features)?.features
-  if (!Array.isArray(features)) return null
-  const usage = parseLines(files.usage)
+  const parsed = parseJson<{ features?: Feature[] }>(files.features)?.features
+  if (!Array.isArray(parsed)) return null
+  const features = parsed.map(feature => ({
+    ...feature,
+    id: clean(feature.id),
+    depends_on: (feature.depends_on ?? []).map(clean),
+  }))
+  const usage = parseLines(files.usage).map(row => ({ ...row, item: clean(row.item) }))
   const live = parseJson<Live>(files.live)
   const passed = new Set(features.filter(feature => feature.passes).map(feature => feature.id))
-  const runningList = live?.state === 'running' ? (live.running ?? []) : []
+  const runningList = (live?.state === 'running' ? (live.running ?? []) : []).map(row => ({ ...row, item: clean(row.item) }))
   const running = new Map(runningList.map(row => [row.item, row.worker]))
   const items = features.map(feature => itemRow(feature, passed, running, usage))
   const total = features.length
@@ -121,10 +131,10 @@ export const compute = (files: LoopFiles): LoopSnapshot | null => {
     .split('\n')
     .filter(line => line.startsWith('## '))
     .slice(-3)
-    .map(line => line.slice(3).trim())
+    .map(line => clean(line.slice(3)).trim())
   return {
     loopState,
-    mode,
+    mode: clean(mode),
     workers,
     total,
     done,

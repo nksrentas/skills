@@ -86,6 +86,20 @@ test('ignores a broken feature list and broken usage lines', async () => {
   expect(snapshot?.sessions).toBe(2)
 })
 
+test('strips terminal control characters from everything read out of the repo', async () => {
+  const hostile = JSON.stringify({ features: [{ id: 'F\u001b[2J1', description: 'Title\u001b]0;pwned\u0007 here', passes: false, depends_on: ['X\u0007'] }] })
+  const hostileLive = JSON.stringify({ state: 'running', mode: 'par\u001ballel', started_at: 1, updated_at: 2, running: [] })
+  const hostileUsage = JSON.stringify({ item: 'F\u001b1', outcome: 'failed', models: { 'evil\u001b[31m': { cost_usd: 1 } } })
+  const snapshot = compute({ features: hostile, usage: hostileUsage, live: hostileLive, progress: '## note\u001b[2J here', now: NOW })
+  const shown = JSON.stringify(snapshot)
+  expect(/[\u0000-\u001f\u007f-\u009f]/.test(shown.replace(/\\u00[0-9a-f]{2}/g, ''))).toBe(false)
+  expect(shown).not.toContain('\\u001b')
+  expect(snapshot?.items[0]?.id).toBe('F[2J1')
+  expect(snapshot?.items[0]?.note).toBe('waiting for X')
+  expect(snapshot?.models[0]?.name).toBe('evil[31m')
+  expect(snapshot?.recent).toEqual(['note[2J here'])
+})
+
 test('formats durations, tokens and the status line', async () => {
   expect(formatDuration(45)).toBe('45s')
   expect(formatDuration(1350)).toBe('22m')
