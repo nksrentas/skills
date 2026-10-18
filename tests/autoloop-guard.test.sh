@@ -91,6 +91,12 @@ echo 'export const a = 4' > src/a.ts
 expect 2 "a gutted guard in the working tree is ignored" "git commit -m x"
 git checkout -q .loop/guard-commit.sh
 
+echo '*.conf' >> .gitignore && echo 'mode=safe' > app.conf && git add -f app.conf .gitignore && git commit -qm "track an ignored config" --no-verify
+bash .loop/verify.sh >/dev/null
+echo 'mode=unsafe' > app.conf
+expect 2 "an edit to a tracked file that matches an ignore rule is blocked" "git commit -am x"
+git checkout -q app.conf
+
 echo 'export const a = 5' > src/a.ts
 bash .loop/verify.sh >/dev/null
 echo 'export const a = "unverified"' > src/a.ts && git add src/a.ts && echo 'export const a = 5' > src/a.ts
