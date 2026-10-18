@@ -43,8 +43,11 @@
       "ui": false,
       "description": "The structure test checks that every file under bussin-*/ and tests/ has a kebab-case lowercase file name (letters, digits, dots, hyphens), except SKILL.md.",
       "verify": "Run `bash tests/skills-structure.test.sh`: ok line for file names. In a scratchpad fixture containing bussin-good/references/BadName.md and bussin-good/references/snake_case.md: FAIL naming both files, non-zero exit.",
-      "passes": false,
-      "evidence": null
+      "passes": true,
+      "evidence": {
+        "commit": "0044b8d",
+        "ran": "bash .loop/verify.sh (3 test files pass); structure test on repo: ok file names under bussin-*/ and tests/ are kebab-case, exit 0; scratchpad fixture with references/BadName.md and snake_case.md: both named as not kebab-case, FAIL, exit 1; .DS_Store-only fixture: ok; /nonexistent root: FAIL; review subagents: first flagged .DS_Store (fixed), second flagged silent pass on bad root and locale ranges (fixed), spec/lean clean"
+      }
     },
     {
       "id": "F5",

@@ -36,3 +36,8 @@ Next: F3
 Did: added `valid_json` (`jq empty`) and a `check "marketplace.json is valid JSON"` before the per-skill loop. Trailing-comma fixture prints the FAIL and keeps running the other checks. Commit 6c12e17.
 Learned: `check` wraps the predicate in `if`, so a failing predicate never trips set -e; new checks just need a predicate function. With invalid JSON the per-skill "listed in marketplace.json" checks also FAIL (marketplace_skills yields nothing), which is expected noise.
 Next: F4
+
+## Session 4 · F4 · 2026-10-18
+Did: added `kebab_file_names` (find over bussin-* and tests, excluding SKILL.md and .DS_Store, `LC_ALL=C grep -v '/[a-z0-9.-]*$'`), which prints `     not kebab-case: <path>` per offender before one FAIL. A missing root fails the check rather than passing it. Commit 0044b8d.
+Learned: Finder writes .DS_Store into folders (the repo root has one and it is not gitignored), so filesystem scans must skip it. Set `LC_ALL=C` on bracket ranges so macOS and Linux agree. The scan already covers only bussin-*/ and tests/, so E4's .git/, evals/results/ and .loop/ exclusions hold for file names, and paths with spaces print whole (one line per path). E4 still needs its fixture proof. F5's retired-name scan is a different walk (all tracked files) and does need those exclusions.
+Next: F5
