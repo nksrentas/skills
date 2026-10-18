@@ -37,7 +37,7 @@ while IFS= read -r -d '' path; do
   git --literal-pathspecs diff --quiet -- "$path" || block "$path has staged changes that differ from the working tree. Stage exactly what was verified."
 done < <(git diff --cached --name-only -z --no-renames "$head")
 
-infra=(.loop/config.json .loop/verify.sh .loop/guard-commit.sh)
+infra=(.loop/config.json .loop/verify.sh .loop/guard-commit.sh .loop/init.sh)
 for file in "${infra[@]}"; do
   git cat-file -e "HEAD:$file" 2>/dev/null || continue
   git diff --quiet HEAD -- "$file" || block "$file changed since the last commit. Loop config and scripts are fixed by init; a human changes them."

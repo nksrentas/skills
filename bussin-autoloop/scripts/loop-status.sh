@@ -118,10 +118,11 @@ render() {
 
 loop_dirs() {
   if [ -n "$target" ]; then
-    (cd "$target" && git rev-parse --show-toplevel 2> /dev/null || pwd)
+    (cd "$target" || exit 1; git rev-parse --show-toplevel 2> /dev/null || pwd)
     return
   fi
-  git worktree list --porcelain 2> /dev/null | sed -n 's/^worktree //p' || true
+  git worktree list --porcelain 2> /dev/null \
+    | awk '/^worktree /{path = substr($0, 10)} /^branch refs\/heads\/loop\//{path = ""} /^$/{if (path != "") print path; path = ""} END{if (path != "") print path}' || true
   git rev-parse --show-toplevel 2> /dev/null || pwd
 }
 

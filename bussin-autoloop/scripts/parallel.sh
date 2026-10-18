@@ -146,7 +146,7 @@ finish() {
   if git show "$branch:.loop/results/$id.json" 2>/dev/null \
     | jq -e --arg id "$id" '.passes == true and .id == $id and (.evidence | type) == "object"' >/dev/null 2>&1; then
     if merge_item "$id" "$branch" "$slot"; then outcome=merged; else outcome="not merged"; fi
-  elif [ "$status" -ne 0 ] && grep -qiE "$limit_pattern" "$output" "$result"; then
+  elif [ "$status" -ne 0 ] && session_tail "$result" "$output" | grep -iE "$limit_pattern" > /dev/null; then
     outcome=limit
     set_attempts "$id" $(($(attempts_of "$id") - 1))
     launched=$((launched - 1))
@@ -219,8 +219,18 @@ run_parallel() {
   done
   trap stop_workers EXIT
   trap 'exit 130' INT TERM
+  install_commit_hook
+  remember_git_controls
   log "running up to $workers workers on $integration, $(remaining) items remaining"
   while :; do
+    if git_controls_changed; then
+      for ((i = 1; i <= workers; i++)); do
+        if [ -n "${slot_pid[$i]}" ]; then kill -- -"${slot_pid[$i]}" 2>/dev/null || true; fi
+      done
+      trap - EXIT
+      write_live stopped parallel "$workers" "[]"
+      exit 1
+    fi
     for ((i = 1; i <= workers; i++)); do
       if [ -n "${slot_pid[$i]}" ] && ! kill -0 "${slot_pid[$i]}" 2>/dev/null; then finish "$i"; fi
     done

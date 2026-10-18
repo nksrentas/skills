@@ -18,7 +18,7 @@ make_project() {
   jq -n --arg test "$test_command" '{commands: {test: $test, lint: "npm run lint"}, gates: {mutation: false}}' > "$dir/.loop/config.json"
   echo '{"features":[{"id":"A1","description":"first","passes":false,"evidence":null},{"id":"A2","description":"second","passes":false,"evidence":null}]}' \
     | jq . > "$dir/.loop/feature_list.json"
-  printf '.loop/tests-passed\n' > "$dir/.gitignore"
+  printf '.loop/tests-passed\nout\nargv\nhook-said\nchained\n' > "$dir/.gitignore"
   git -C "$dir" init -q
   git -C "$dir" add -A
   git -C "$dir" commit -qm init
@@ -42,6 +42,11 @@ case "${MOCK_BEHAVIOUR:-honest}" in
     jq --arg id "$id" "(.features[] | select(.id == \$id)) |= (.passes = true | .evidence = {commit: \"x\"})" .loop/feature_list.json > .loop/f.tmp
     mv .loop/f.tmp .loop/feature_list.json
     git add -A && git commit -qm "feat: $id" --no-verify ;;
+  flip-only)
+    jq "(.features[] | select(.id == \"$id\")) |= (.passes = true)" .loop/feature_list.json > .loop/f.tmp
+    mv .loop/f.tmp .loop/feature_list.json ;;
+  fsmonitor)
+    git config core.fsmonitor "touch $PROJECT/pwned; false" ;;
   reword)
     jq ".features[1].description = \"easier\"" .loop/feature_list.json > .loop/f.tmp
     mv .loop/f.tmp .loop/feature_list.json
@@ -90,7 +95,7 @@ copilot_status=0
 run_loop "$copilot" LOOP_AGENT=copilot || copilot_status=$?
 check "a copilot loop finishes every item" '[ "$copilot_status" = 0 ]'
 check "copilot gets the slash command and json output" '[ "$(sed -n 1,2p "$copilot/argv" | tr "\n" " ")" = "-p /bussin-autoloop run " ] && grep -qx json "$copilot/argv"'
-check "copilot may run the gate, git and the project commands" 'grep -qxF "shell(bash)" "$copilot/argv" && grep -qxF "shell(git commit)" "$copilot/argv" && grep -qxF "shell(npm run)" "$copilot/argv" && ! grep -qxF "shell(git push)" "$copilot/argv"'
+check "copilot may run the gate, git and the project commands" 'grep -qxF "shell(.loop/verify.sh)" "$copilot/argv" && grep -qxF "shell(git commit)" "$copilot/argv" && grep -qxF "shell(npm run)" "$copilot/argv" && ! grep -qxF "shell(bash)" "$copilot/argv" && ! grep -qxF "shell(npm)" "$copilot/argv" && ! grep -qxF "shell(git push)" "$copilot/argv"'
 check "copilot may not write the loop scripts or config" 'grep -qxF "write(.loop/verify.sh)" "$copilot/argv" && grep -qxF "write(.loop/config.json)" "$copilot/argv"'
 check "copilot sessions record model, turns and premium requests" '[ "$(jq -s -r "map((.models | keys[0]) + \":\" + (.turns | tostring) + \":\" + (.premium_requests | tostring)) | unique | join(\",\")" "$copilot/.loop/usage.jsonl")" = "gpt-5.6-terra:2:2" ]'
 
@@ -122,6 +127,20 @@ write_agent "$reword" copilot "$copilot_output"
 reword_status=0
 run_loop "$reword" LOOP_AGENT=copilot MOCK_BEHAVIOUR=reword || reword_status=$?
 check "a commit that rewords items stops the loop" '[ "$reword_status" != 0 ] && grep -q "reworded items" "$reword/out"'
+
+flip="$tmp/flip"
+make_project "$flip" false
+write_agent "$flip" codex "$codex_output"
+flip_status=0
+run_loop "$flip" LOOP_AGENT=codex MOCK_BEHAVIOUR=flip-only || flip_status=$?
+check "an uncommitted pass does not count and is discarded" '[ "$flip_status" != 0 ] && ! grep -q "all items passing" "$flip/out" && grep -q "only committed marks count" "$flip/out" && [ "$(jq -r ".features[0].passes" "$flip/.loop/feature_list.json")" = false ]'
+
+tamper="$tmp/tamper"
+make_project "$tamper" true
+write_agent "$tamper" codex "$codex_output"
+tamper_status=0
+run_loop "$tamper" LOOP_AGENT=codex MOCK_BEHAVIOUR=fsmonitor || tamper_status=$?
+check "a session that changes git config stops the loop before git runs again" '[ "$tamper_status" != 0 ] && grep -q "changed git config or hooks" "$tamper/out" && [ ! -e "$tamper/pwned" ]'
 
 unknown="$tmp/unknown"
 make_project "$unknown" true

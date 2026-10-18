@@ -44,7 +44,7 @@ Edge items get at least one example test each. Parsing, escaping, money, dates a
 bash .loop/verify.sh
 ```
 
-It runs the test command, then Stryker on the changed files when `gates.mutation` is on, and creates `.loop/tests-passed` only if everything held. If mutants survive, add the tests that kill them. Do not touch thresholds, do not exclude files. After three attempts on the same item, write what survived into `progress.md`, leave the item `false`, and stop; a human reads it next.
+Under Copilot, whose allowlist names the loop scripts by path, run them as `.loop/verify.sh` and `.loop/init.sh` without `bash`. It runs the test command, then Stryker on the changed files when `gates.mutation` is on, and creates `.loop/tests-passed` only if everything held. If mutants survive, add the tests that kill them. Do not touch thresholds, do not exclude files. After three attempts on the same item, write what survived into `progress.md`, leave the item `false`, and stop; a human reads it next.
 
 ## 5. Review
 

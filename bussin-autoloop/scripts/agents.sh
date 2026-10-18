@@ -56,14 +56,16 @@ claude_flags() {
 
 copilot_flags() {
   local command words tool path
-  agent_flags=(--output-format json --no-ask-user --add-dir "$(pwd)" --allow-tool write --allow-tool "shell(bash)")
+  agent_flags=(--output-format json --no-ask-user --add-dir "$(pwd)" --allow-tool write)
+  for path in .loop/init.sh .loop/verify.sh; do
+    agent_flags+=(--allow-tool "shell($path)" --allow-tool "shell(./$path)")
+  done
   for command in status diff log show add commit rev-parse; do
     agent_flags+=(--allow-tool "shell(git $command)")
   done
   for command in ${project_commands[@]+"${project_commands[@]}"}; do
     read -r -a words <<< "$command"
-    agent_flags+=(--allow-tool "shell(${words[0]})")
-    [ "${#words[@]}" -lt 2 ] || agent_flags+=(--allow-tool "shell(${words[0]} ${words[1]})")
+    agent_flags+=(--allow-tool "shell(${words[*]:0:2})")
   done
   for tool in ${extra_tools[@]+"${extra_tools[@]}"}; do
     agent_flags+=(--allow-tool "$tool")

@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 
 hook_marker="# bussin-autoloop commit guard"
-guarded_files=(.loop/config.json .loop/verify.sh .loop/guard-commit.sh)
 item_text='del(.features[]?.passes, .features[]?.evidence, .features[]?.depends_on, .features[]?.touches)'
 hook_warned=0
 
@@ -15,7 +14,7 @@ install_commit_hook() {
   hook="$(git rev-parse --git-common-dir)/hooks/pre-commit"
   mkdir -p "$(dirname "$hook")"
   if [ -e "$hook" ] && ! grep -qF "$hook_marker" "$hook"; then mv "$hook" "$hook.before-autoloop"; fi
-  cat > "$hook" <<HOOK
+  cat > "$hook.tmp.$$" <<HOOK
 #!/usr/bin/env bash
 $hook_marker
 if [ -n "\${AUTOLOOP_SESSION:-}" ]; then
@@ -27,10 +26,32 @@ fi
 chained="\$(dirname "\$0")/pre-commit.before-autoloop"
 if [ -x "\$chained" ]; then exec "\$chained" "\$@"; fi
 HOOK
-  chmod +x "$hook"
+  chmod +x "$hook.tmp.$$"
+  if cmp -s "$hook.tmp.$$" "$hook" && [ -x "$hook" ]; then rm -f "$hook.tmp.$$"; else mv "$hook.tmp.$$" "$hook"; fi
 }
 
-passing_at() { git show "$1:$list" | jq '[.features[] | select(.passes == true)] | length'; }
+restore_uncommitted_list() {
+  git diff --quiet HEAD -- "$list" && return 0
+  echo "autoloop: a session left uncommitted changes in $list; only committed marks count, so they were discarded" >&2
+  git checkout -q HEAD -- "$list"
+}
+
+git_controls() {
+  (
+    cd "$(git rev-parse --git-common-dir)" || exit 1
+    find . -path ./objects -prune -o -type f \( -path ./config -o -path './hooks/*' -o -name config.worktree \) -print \
+      | LC_ALL=C sort | while IFS= read -r file; do echo "$file"; cat "$file"; done | cksum
+  )
+}
+
+remember_git_controls() { git_controls_known="$(git_controls)"; }
+
+git_controls_changed() {
+  [ "$(git_controls)" != "$git_controls_known" ] || return 1
+  echo "autoloop: stopped, because a session changed git config or hooks, which can run code outside the agent's sandbox. Inspect $(git rev-parse --git-common-dir)/config and its hooks before running git here again." >&2
+}
+
+passing_at() { git show "$1:$list" | jq -c '[.features[] | select(.passes == true) | .id] | sort'; }
 
 audit_failed() {
   echo "autoloop: stopped, because since ${1:0:7} $2. Inspect it with: git log --stat ${1:0:7}..HEAD" >&2
@@ -39,7 +60,7 @@ audit_failed() {
 audit_session() {
   local from="$1" file gate_log
   [ "$(git rev-parse HEAD)" != "$from" ] || return 0
-  for file in "${guarded_files[@]}"; do
+  for file in "${protected_files[@]}"; do
     if [ "$(git rev-parse -q --verify "$from:$file" || true)" != "$(git rev-parse -q --verify "HEAD:$file" || true)" ]; then
       audit_failed "$from" "a session committed a change to $file"
       return 1
@@ -50,8 +71,12 @@ audit_session() {
     return 1
   fi
   [ "$agent" != claude ] || return 0
-  [ "$(passing_at HEAD)" -gt "$(passing_at "$from")" ] || return 0
+  [ "$(passing_at HEAD)" != "$(passing_at "$from")" ] || return 0
   git cat-file -e HEAD:.loop/verify.sh 2> /dev/null || return 0
+  if ! git diff --quiet HEAD; then
+    audit_failed "$from" "an item was marked passing while tracked files still have uncommitted changes, so the gate cannot judge the committed code"
+    return 1
+  fi
   echo "autoloop: re-running the gate on the new passing items, because $agent has no tool-level commit guard"
   gate_log="$(mktemp)"
   if ! bash <(git show HEAD:.loop/verify.sh) > "$gate_log" 2>&1; then

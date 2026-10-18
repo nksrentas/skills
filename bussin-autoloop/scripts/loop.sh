@@ -8,14 +8,15 @@ list=.loop/feature_list.json
 max_iterations="${MAX_ITERATIONS:-40}"
 max_stalls="${MAX_STALLS:-3}"
 limit_wait="${LIMIT_WAIT:-600}"
-limit_pattern="hit your .*limit|usage limit reached|rate limit|exceeded your .*(quota|allowance)"
+limit_pattern="hit your .*limit|usage limit reached"
 
 source "$script_dir/agents.sh"
 skill_command="${LOOP_SKILL_COMMAND:-$(default_skill_command "$0")}"
 
-[ -f "$list" ] || { echo "autoloop: $list not found, run $skill_command init first" >&2; exit 1; }
+git cat-file -e "HEAD:$list" 2> /dev/null || { echo "autoloop: $list is not committed, run $skill_command init first" >&2; exit 1; }
 
-remaining() { jq '[.features[] | select(.passes == false)] | length' "$list"; }
+remaining() { git show "HEAD:$list" | jq '[.features[] | select(.passes == false)] | length'; }
+session_tail() { tail -n 5 "$1"; cat "$2"; }
 snapshot() { echo "$(remaining)@$(git rev-parse HEAD)"; }
 
 source "$script_dir/telemetry.sh"
@@ -48,12 +49,15 @@ while [ "$(remaining)" -gt 0 ]; do
   write_live running sequential 1 "$(jq -n -c --arg item "$item" --argjson started "$started" '[{item: $item, worker: 0, started_at: $started}]')"
   status=0
   install_commit_hook
+  remember_git_controls
   agent_command "$skill_command run"
   AUTOLOOP_SESSION=1 "${agent_cmd[@]}" > "$session_output" 2> "$session_errors" < /dev/null || status=$?
+  if git_controls_changed; then exit 1; fi
+  restore_uncommitted_list
   after="$(snapshot)"
   hit_limit=false
-  if [ "$status" -ne 0 ] && grep -qiE "$limit_pattern" "$session_output" "$session_errors"; then hit_limit=true; fi
-  if [ "$(jq -r --arg item "$item" '.features[] | select(.id == $item) | .passes' "$list")" = true ]; then
+  if [ "$status" -ne 0 ] && session_tail "$session_output" "$session_errors" | grep -iE "$limit_pattern" > /dev/null; then hit_limit=true; fi
+  if [ "$(git show "HEAD:$list" | jq -r --arg item "$item" '.features[] | select(.id == $item) | .passes')" = true ]; then
     outcome=passed
   elif [ "$hit_limit" = true ]; then
     outcome=limit
