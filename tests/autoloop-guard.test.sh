@@ -13,7 +13,7 @@ mkdir -p .loop src
 cp "$assets/verify.sh" "$assets/guard-commit.sh" .loop/
 echo '{"commands":{"test":"true"},"gates":{"mutation":false}}' > .loop/config.json
 echo '{"features":[{"id":"F1","description":"export csv","passes":false,"evidence":null}]}' > .loop/feature_list.json
-echo '.loop/tests-passed' > .gitignore
+printf '.loop/tests-passed\n.guard-stderr\n' > .gitignore
 echo 'export const a = 1' > src/a.ts
 git add -A
 git commit -qm init
@@ -22,12 +22,17 @@ failures=0
 hook_command="$(jq -r '.hooks.PreToolUse[0].hooks[0].command' "$assets/hooks.json")"
 guard() {
   printf '{"tool_input":{"command":%s}}' "$(jq -Rn --arg c "$1" '$c')" \
-    | CLAUDE_PROJECT_DIR="$repo" bash -c "$hook_command" 2>/dev/null
+    | CLAUDE_PROJECT_DIR="$repo" bash -c "$hook_command" 2>"$repo/.guard-stderr"
 }
 expect() {
   local want="$1" label="$2" command="$3" got=0
   guard "$command" || got=$?
-  if [ "$got" = "$want" ]; then echo "ok   $label"; else echo "FAIL $label (exit $got, want $want)"; failures=$((failures + 1)); fi
+  if [ "$got" = "$want" ]; then
+    echo "ok   $label"
+  else
+    echo "FAIL $label (exit $got, want $want): $(cat "$repo/.guard-stderr")"
+    failures=$((failures + 1))
+  fi
 }
 commit_now() { git add -A && git commit -qm "$1"; }
 
@@ -85,6 +90,12 @@ printf '#!/usr/bin/env bash\nexit 0\n' > .loop/guard-commit.sh
 echo 'export const a = 4' > src/a.ts
 expect 2 "a gutted guard in the working tree is ignored" "git commit -m x"
 git checkout -q .loop/guard-commit.sh
+
+echo '*.conf' >> .gitignore && echo 'mode=safe' > app.conf && git add -f app.conf .gitignore && git commit -qm "track an ignored config" --no-verify
+bash .loop/verify.sh >/dev/null
+echo 'mode=unsafe' > app.conf
+expect 2 "an edit to a tracked file that matches an ignore rule is blocked" "git commit -am x"
+git checkout -q app.conf
 
 echo 'export const a = 5' > src/a.ts
 bash .loop/verify.sh >/dev/null

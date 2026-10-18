@@ -21,7 +21,8 @@ head="$(git rev-parse -q --verify HEAD || echo "$empty_tree")"
 loop_fingerprint() {
   local index
   index="$(mktemp)"
-  cp "$(git rev-parse --git-path index)" "$index" 2>/dev/null || rm -f "$index"
+  rm -f "$index"
+  GIT_INDEX_FILE="$index" git read-tree "$(git write-tree)"
   GIT_INDEX_FILE="$index" git add -A -- .
   GIT_INDEX_FILE="$index" git rm -r -q --cached --ignore-unmatch -- \
     .loop/tests-passed .loop/feature_list.json .loop/progress.md .loop/retro.md .loop/results
