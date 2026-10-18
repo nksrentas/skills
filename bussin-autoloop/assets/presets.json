@@ -5,10 +5,10 @@
   },
   "standard": {
     "gates": { "tests": true, "mutation": false, "browser": true },
-    "skills": { "context": [], "implement": ["tdd"], "review": ["code-review"], "end": [] }
+    "skills": { "context": [], "implement": [], "review": [], "end": [] }
   },
   "thorough": {
     "gates": { "tests": true, "mutation": true, "browser": true },
-    "skills": { "context": [], "implement": ["tdd"], "review": ["code-review", "test-audit"], "end": ["retro"] }
+    "skills": { "context": [], "implement": [], "review": [], "end": [] }
   }
 }

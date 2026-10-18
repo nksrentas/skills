@@ -16,11 +16,17 @@ Two prompts over one harness. `init` runs once and leaves artifacts in `.loop/`.
 | `/bussin-autoloop status` | nothing | Print items still `passes:false` and the last 20 lines of `.loop/progress.md` |
 | `/bussin-autoloop <text>` with no `.loop/` | `references/init.md` | Treat the text as the task |
 
-The driver `scripts/loop.sh` calls `claude -p "/bussin-autoloop run"` until no item has `passes:false`, with a stall guard. Start it from the project root:
+The driver `scripts/loop.sh` calls `claude -p "/bussin-autoloop run"` until no item has `passes:false`, with a stall guard. A session that exits on a usage limit is not a stall: the driver waits `LIMIT_WAIT` seconds (default 600) and retries. Start it from the project root:
 
 ```bash
 bash ~/.claude/skills/bussin-autoloop/scripts/loop.sh
 ```
+
+### Running unattended
+
+Each session runs headless, so it gets only the tools the driver passes in `--allowedTools`: the file tools, `Skill`, `Agent`, `TodoWrite`, `bash .loop/init.sh`, `bash .loop/verify.sh`, the read and commit subset of git, and every command in `config.commands`. Any other shell command is denied rather than run. Add tools with a comma-separated `LOOP_EXTRA_TOOLS`, most often the browser MCP server that browser verification needs, for example `LOOP_EXTRA_TOOLS=mcp__plugin_playwright_playwright`.
+
+The allowlist and the commit guard stop the loop from shortcutting its own gates. They are not a sandbox against hostile code: a project's test command runs whatever the repo says. For an overnight run, use Claude Code's sandbox or a devcontainer with no production credentials and limited network access.
 
 ## Artifacts in `.loop/`
 
@@ -29,12 +35,13 @@ bash ~/.claude/skills/bussin-autoloop/scripts/loop.sh
 | `config.json` | init | Mode, gates, skills per stage, commands, base commit |
 | `feature_list.json` | init writes items; run touches only `passes` and `evidence` | The contract and the final proof |
 | `init.sh` | init | Boots the environment so no session rediscovers how |
-| `verify.sh` | init copies from `assets/` | Runs tests, then Stryker on changed files when enabled, then creates `.loop/tests-passed` |
-| `guard-commit.sh` | init copies from `assets/` | PreToolUse hook that blocks `git commit` while `tests-passed` is missing |
+| `verify.sh` | init copies from `assets/` | Runs tests, then Stryker on changed files when enabled, then writes the code's fingerprint to `.loop/tests-passed` |
+| `fingerprint.sh` | init copies from `assets/` | Hashes the working tree, leaving out the bookkeeping files, so the marker is tied to the exact code that passed |
+| `guard-commit.sh` | init copies from `assets/` | PreToolUse hook that blocks any `git commit` unless the marker matches the current code, items are unchanged apart from `passes` and `evidence`, and the loop config and scripts are untouched |
 | `progress.md` | run | What each session did, learned about the codebase, and what is next |
 | `retro.md` | run, thorough mode | Proposed environment improvements, never applied by the loop |
 
-Items are never removed or reworded by `run`. Deleting an item to make the list green is the exact failure this harness exists to prevent, so a run that believes an item is wrong records that in `progress.md` and leaves it `false` for a human.
+Items are never removed or reworded by `run`. Deleting an item to make the list green is the exact failure this harness exists to prevent, so a run that believes an item is wrong records that in `progress.md` and leaves it `false` for a human. The guard enforces this rather than trusting it.
 
 ## Modes
 
@@ -43,17 +50,17 @@ Presets live in `assets/presets.json`. Choose with `--mode`; the default is `sta
 | | fast | standard | thorough |
 |---|---|---|---|
 | Tests gate | yes | yes | yes |
-| Implement stage | tests after code, inline | `tdd` | `tdd` |
-| Review stage | none | `code-review` | `code-review` + `test-audit` |
+| Implement stage | tests after code | test-first | test-first |
+| Review stage | none | spec and standards review | spec and standards review, plus test audit |
 | Mutation gate (Stryker) | no | no | yes |
 | Browser verification | only when the item's `verify` says so | UI items | UI items |
-| End stage | none | none | `retro` |
+| End stage | none | none | retro note in `retro.md` |
 
 Fast suits throwaway or low-risk work. Standard suits normal features. Thorough is for when the proof matters more than the hours: mutation testing is the only objective check that the tests exercise edge cases instead of happy paths.
 
 ## Per-feature skills
 
-`--skills a,b,review:c` adds skills to `config.skills`. A bare name lands in the `context` stage, which run reads before implementing (design systems, framework conventions, house style). `stage:name` targets `context`, `implement`, `review` or `end`. Run invokes each configured skill at its stage with the Skill tool. When a skill is not installed, run applies the inline fallback in `references/run.md` and notes the fallback in `progress.md`.
+`--skills a,b,review:c` adds skills to `config.skills`. A bare name lands in the `context` stage, which run reads before implementing (design systems, framework conventions, house style). `stage:name` targets `context`, `implement`, `review` or `end`. Run invokes each configured skill at its stage with the Skill tool, after its own built-in work for that stage. Test-first implementation, review and retro are built into `references/run.md`, so no outside skill is required. When a configured skill is not installed, run skips it and notes that in `progress.md`.
 
 House context skills, opt-in per feature:
 
@@ -65,12 +72,6 @@ House context skills, opt-in per feature:
 
 Example: `/bussin-autoloop init "Invoice reminders" --skills bussin-ts-architecture,bussin-drizzle`. Init copies each one's review checklist into `CODING_STANDARDS.md`, so the review stage enforces it.
 
-Matt Pocock's `tdd`, `code-review` and `retro` install with:
-
-```bash
-npx skills@latest add mattpocock/skills
-```
-
 ## Config shape
 
 ```json
@@ -78,11 +79,11 @@ npx skills@latest add mattpocock/skills
   "task": "Export invoices to CSV",
   "mode": "standard",
   "new_project": false,
-  "base": "<sha of the init commit>",
+  "base": "<HEAD before the init commit>",
   "commands": { "test": "npm test", "dev": "npm run dev" },
   "mutation_paths": ["src/**/*.ts", "src/**/*.tsx"],
   "gates": { "tests": true, "mutation": false, "browser": true },
-  "skills": { "context": [], "implement": ["tdd"], "review": ["code-review"], "end": [] },
+  "skills": { "context": [], "implement": [], "review": [], "end": [] },
   "checkpoint": true
 }
 ```
