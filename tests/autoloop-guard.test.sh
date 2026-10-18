@@ -82,6 +82,38 @@ echo 'export const a = 4' > src/a.ts
 expect 2 "a gutted guard and fingerprint in the working tree are ignored" "git commit -m x"
 git checkout -q .loop/guard-commit.sh .loop/fingerprint.sh
 
+echo 'export const a = 5' > src/a.ts
+bash .loop/verify.sh >/dev/null
+echo 'export const a = "unverified"' > src/a.ts && git add src/a.ts && echo 'export const a = 5' > src/a.ts
+expect 2 "staged code that differs from the verified working tree is blocked" "git commit -m x"
+git reset -q src/a.ts
+
+echo 'exit 0' >> .loop/verify.sh && git add .loop/verify.sh && git show HEAD:.loop/verify.sh > .loop/verify.sh
+expect 2 "a staged loop-script edit hidden behind a clean working tree is blocked" "git commit -m x"
+git reset -q .loop/verify.sh
+git checkout -q src/a.ts
+
+if printf '{"tool_input":{"command":"git commit -m x"}}' | CLAUDE_PROJECT_DIR="$repo/missing" bash -c "$hook_command" 2>/dev/null; then
+  echo "FAIL a guard that cannot run lets the commit through"; failures=$((failures + 1))
+else
+  echo "ok   a guard that cannot run blocks the commit"
+fi
+
+fresh="$(mktemp -d)"
+(
+  cd "$fresh" && git init -q && mkdir .loop
+  cp "$assets/verify.sh" "$assets/guard-commit.sh" "$assets/fingerprint.sh" .loop/
+  echo '{"commands":{"test":"true"},"gates":{"mutation":false}}' > .loop/config.json
+  echo '{"features":[]}' > .loop/feature_list.json
+  echo '.loop/tests-passed' > .gitignore
+  git add -A
+)
+fresh_guard() { printf '{"tool_input":{"command":"git commit -m init"}}' | CLAUDE_PROJECT_DIR="$fresh" bash -c "$hook_command" 2>/dev/null; }
+if fresh_guard; then echo "FAIL init commit in a repo with no commits passed without verify"; failures=$((failures + 1)); else echo "ok   init commit in a repo with no commits needs verify"; fi
+(cd "$fresh" && bash .loop/verify.sh >/dev/null)
+if fresh_guard; then echo "ok   init commit passes after verify"; else echo "FAIL init commit blocked after verify"; failures=$((failures + 1)); fi
+rm -rf "$fresh"
+
 jq '.commands.test = "exit 1"' .loop/config.json > .loop/c.tmp && mv .loop/c.tmp .loop/config.json
 rm -f .loop/tests-passed
 bash .loop/verify.sh >/dev/null 2>&1 && echo "ok   verify runs the committed test command, not the working-tree one" || { echo "FAIL verify used the working-tree config"; failures=$((failures + 1)); }
