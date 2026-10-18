@@ -91,3 +91,8 @@ Next: E2
 Did: rewrote `field` in tests/skills-structure.test.sh as one awk program: plain values get surrounding quotes stripped as before; a `>`/`|` block indicator (with optional `-`/`+`) returns the first non-blank indented line, so `description: |` with no body now FAILs (previously the literal `|` counted as non-empty). Blank lines before block content are skipped. Commit c392d2c.
 Learned: no leading ---, empty `description:`, `""`, body-only name and missing SKILL.md already failed before this change; only empty block scalars slipped through. The fixture build lives in the scratchpad only; there is no committed fixture test for the structure test itself.
 Next: E3
+
+## Session 15 · E3 · 2026-10-18
+Did: verified readme_skills only reads list lines under "## Included skills" (awk toggles on every "## " heading). Scratchpad fixture: bussin-good in marketplace.json and on disk, README mentions it under ## Install as a `- [bussin-good](...)` line and in a code span, and under ## Quick start, but not under ## Included skills: FAIL "bussin-good: listed in README Included skills", exit 1. No code change, so no implementation commit and no review subagent; evidence points at 49639f5.
+Learned: "### " subheadings inside Included skills would not end the section (only "## " does), which is the intended behaviour since the real README has none there.
+Next: E4

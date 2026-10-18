@@ -177,8 +177,11 @@
       "ui": false,
       "description": "README coverage only counts the 'Included skills' list: a bussin skill mentioned elsewhere in the README (install examples, quick start) but missing from that list is a FAIL.",
       "verify": "Scratchpad fixture whose README mentions bussin-good in the Install section but not under '## Included skills': FAIL naming bussin-good, non-zero exit.",
-      "passes": false,
-      "evidence": null
+      "passes": true,
+      "evidence": {
+        "commit": "49639f5",
+        "ran": "bash .loop/verify.sh passed; bash tests/skills-structure.test.sh <scratchpad fixture>: README mentions bussin-good under ## Install (as a - [bussin-good] list line and in a code span) and ## Quick start but not under ## Included skills -> FAIL bussin-good: listed in README Included skills, exit 1 (with and without a second dangling Included entry)"
+      }
     },
     {
       "id": "E4",
