@@ -5,6 +5,7 @@ import type { ItemState, LoopSnapshot, LoopView } from '../types'
 import {
   baseName,
   commonDirFromGitFile,
+  compactLine,
   compute,
   formatClock,
   formatCost,
@@ -13,6 +14,7 @@ import {
   orderLoops,
   parentDir,
   progressBar,
+  shortName,
   statusLine,
 } from './snapshot'
 
@@ -40,12 +42,17 @@ function primaryLoop(loops: LoopView[], selected: string | null) {
   return loops.find(loop => loop.path === selected) ?? loops[0]
 }
 
+function runningLoops(loops: LoopView[]) {
+  return loops.filter(loop => loop.snapshot.loopState === 'running')
+}
+
 function statusText(loops: LoopView[]) {
   const primary = loops[0]
   if (primary === undefined) return undefined
   if (loops.length === 1) return statusLine(primary.snapshot)
-  const otherRunning = loops.slice(1).filter(loop => loop.snapshot.loopState === 'running').length
-  return [`${primary.name}: ${statusLine(primary.snapshot)}`, otherRunning > 0 ? `+${otherRunning} more running` : ''].filter(Boolean).join(' · ')
+  const running = runningLoops(loops)
+  if (running.length === 0) return `${primary.name}: ${statusLine(primary.snapshot)}`
+  return `autoloop ${running.map(loop => compactLine(loop.name, loop.snapshot)).join(' │ ')}`
 }
 
 async function readOptional($: EngineInterface, path: string) {
@@ -71,6 +78,7 @@ async function loopDirs($: EngineInterface) {
   const root = await $.session.root()
   const dirs = [root]
   const common = await gitCommonDir($, root)
+  const repoName = common !== undefined && common.endsWith('/.git') ? baseName(parentDir(common)) : baseName(root)
   if (common !== undefined) {
     if (common.endsWith('/.git')) dirs.push(parentDir(common))
     try {
@@ -79,13 +87,13 @@ async function loopDirs($: EngineInterface) {
         if (typeof gitdir === 'string' && gitdir.trim() !== '') dirs.push(parentDir(gitdir.trim()))
       }
     } catch {
-      return [...new Set(dirs)]
+      return { dirs: [...new Set(dirs)], repoName }
     }
   }
-  return [...new Set(dirs)]
+  return { dirs: [...new Set(dirs)], repoName }
 }
 
-async function loadLoop($: EngineInterface, dir: string, now: number) {
+async function loadLoop($: EngineInterface, dir: string, repoName: string, now: number) {
   const features = await readOptional($, `${dir}/.loop/feature_list.json`)
   if (typeof features !== 'string') return null
   const snapshot = compute({
@@ -95,14 +103,15 @@ async function loadLoop($: EngineInterface, dir: string, now: number) {
     progress: await readOptional($, `${dir}/.loop/progress.md`),
     now,
   })
-  return snapshot === null ? null : { name: baseName(dir), path: dir, snapshot }
+  return snapshot === null ? null : { name: shortName(baseName(dir), repoName), path: dir, snapshot }
 }
 
 async function loadLoops($: EngineInterface) {
   const now = Math.floor((await $.clock.now()) / 1000)
   const views: LoopView[] = []
-  for (const dir of await loopDirs($)) {
-    const view = await loadLoop($, dir, now)
+  const { dirs, repoName } = await loopDirs($)
+  for (const dir of dirs) {
+    const view = await loadLoop($, dir, repoName, now)
     if (view !== null) views.push(view)
   }
   return orderLoops(views)
@@ -134,6 +143,44 @@ export const register: Register = on => {
     if (loops.length === 0) return { text: 'No .loop/feature_list.json in this repository or its worktrees. Start one with /bussin-autoloop init.' }
     await openPane($)
     return { text: statusText(loops) ?? '' }
+  })
+
+  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    const running = runningLoops(await read($, loopsAtom))
+    if (e.props.hasSurvey || running.length === 0) return next(e)
+    const { Box, Button, Text } = $.ui.resolve(e)
+    const room = Math.max(1, e.props.maxRows)
+    if (running.length > room && room === 1) {
+      return (
+        <Text color="claude" wrap="truncate-end">
+          autoloop {running.map(loop => compactLine(loop.name, loop.snapshot)).join(' │ ')}
+        </Text>
+      )
+    }
+    const shown = running.length > room ? running.slice(0, room - 1) : running
+    return (
+      <Box flexDirection="column">
+        {shown.map(loop => (
+          <Box key={`band-${loop.path}`} flexDirection="row" gap={1}>
+            <Text color="claude" wrap="truncate-end">
+              ▶ {loop.name} {progressBar(loop.snapshot.done, loop.snapshot.total, 10)} {loop.snapshot.done}/{loop.snapshot.total}
+              {loop.snapshot.runningRows.length > 0 ? ` · on ${loop.snapshot.runningRows.map(row => row.item).join(', ')}` : ''} ·{' '}
+              {loop.snapshot.etaSec === null ? 'ETA after first item' : `ETA ${formatDuration(loop.snapshot.etaSec)}`}
+              {loop.snapshot.sessions > loop.snapshot.unpricedSessions ? ` · ${formatCost(loop.snapshot.costUsd)}` : ''}
+            </Text>
+            <Button
+              key={`details-${loop.name}`}
+              label="Details"
+              onPress={async () => {
+                await update($, selectedAtom, () => loop.path)
+                await openPane($)
+              }}
+            />
+          </Box>
+        ))}
+        {running.length > shown.length && <Text dimColor>+{running.length - shown.length} more running · /autoloop-status</Text>}
+      </Box>
+    )
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {

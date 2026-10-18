@@ -2,7 +2,7 @@ import type { On } from 'claude-code'
 import { expect, test } from 'claude-code/testing'
 
 import { PANE } from './register'
-import { commonDirFromGitFile, compute, formatDuration, formatTokens, statusLine } from './snapshot'
+import { commonDirFromGitFile, compute, formatDuration, formatTokens, shortName, statusLine } from './snapshot'
 
 const NOW = 4000
 
@@ -234,6 +234,10 @@ const REPO_FILES: Record<string, string> = {
   '/repo/.loop/feature_list.json': FINISHED,
   '/repo/.git/worktrees/wt-a/gitdir': '/elsewhere/wt-a/.git\n',
   '/repo/.git/worktrees/wt-b/gitdir': '/elsewhere/wt-b/.git\n',
+  '/repo/.git/worktrees/wt-c/gitdir': '/elsewhere/wt-c/.git\n',
+  '/elsewhere/wt-c/.loop/feature_list.json': FEATURES,
+  '/elsewhere/wt-c/.loop/usage.jsonl': USAGE,
+  '/elsewhere/wt-c/.loop/live.json': LIVE,
   '/elsewhere/wt-a/.git': 'gitdir: /repo/.git/worktrees/wt-a\n',
   '/elsewhere/wt-a/.loop/feature_list.json': FEATURES,
   '/elsewhere/wt-a/.loop/usage.jsonl': USAGE,
@@ -256,7 +260,7 @@ function answerRepo(on: On, root: string, statuses: (string | undefined)[]) {
   })
   on('fs.list', async (_, e) =>
     e.path === '/repo/.git/worktrees'
-      ? { value: [{ ...ENTRY, name: 'wt-a' }, { ...ENTRY, name: 'wt-b' }] }
+      ? { value: [{ ...ENTRY, name: 'wt-a' }, { ...ENTRY, name: 'wt-b' }, { ...ENTRY, name: 'wt-c' }] }
       : { deny: `ENOENT: ${e.path}` },
   )
   on('ui.status', async (_, e) => {
@@ -280,7 +284,7 @@ test('finds loops in every worktree from the main checkout, running ones first',
   const statuses: (string | undefined)[] = []
   answerRepo(on, '/repo', statuses)
   const ran = await $.command.run(RUN_COMMAND)
-  expect(ran).toMatchObject({ text: 'wt-a: autoloop 1/4 done · 1 running · ETA 22m · $2.00' })
+  expect(ran).toMatchObject({ text: 'autoloop ▶ wt-a 1/4 · ETA 22m · $2.00 │ ▶ wt-c 1/4 · ETA 22m · $2.00' })
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ ...PANE_TARGET, surface })
     expect(await ui.find({ key: 'select-wt-a' })).toBeDefined()
@@ -300,8 +304,75 @@ test('finds the same loops from inside a worktree', async ($, on) => {
   const statuses: (string | undefined)[] = []
   answerRepo(on, '/elsewhere/wt-a', statuses)
   const ran = await $.command.run(RUN_COMMAND)
-  expect(ran).toMatchObject({ text: 'wt-a: autoloop 1/4 done · 1 running · ETA 22m · $2.00' })
+  expect(ran).toMatchObject({ text: 'autoloop ▶ wt-a 1/4 · ETA 22m · $2.00 │ ▶ wt-c 1/4 · ETA 22m · $2.00' })
   const ui = await $.ui.mount({ ...PANE_TARGET, surface: 'terminal' })
   expect(await ui.find({ key: 'select-repo' })).toBeDefined()
   await ui.unmount()
+})
+
+const BAND_TARGET = {
+  plugin: 'bussin-loop-status',
+  component: 'AbovePrompt',
+  props: {
+    hasSurvey: false,
+    isWorking: false,
+    maxRows: 4,
+    bodyColumns: 120,
+    scroll: { offset: 0, bodyRows: 4 },
+    view: {},
+  },
+} as const
+
+test('the band above the prompt shows every running loop, and Details opens it in the pane', async ($, on) => {
+  const statuses: (string | undefined)[] = []
+  answerRepo(on, '/repo', statuses)
+  await $.command.run(RUN_COMMAND)
+  expect(statuses.at(-1)).toBe('autoloop ▶ wt-a 1/4 · ETA 22m · $2.00 │ ▶ wt-c 1/4 · ETA 22m · $2.00')
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const band = await $.ui.mount({ ...BAND_TARGET, surface })
+    expect(await band.find({ type: 'Text', text: /▶ wt-a [█░]{10} 1\/4 · on F2 · ETA 22m · \$2\.00/ })).toBeDefined()
+    expect(await band.find({ type: 'Text', text: /▶ wt-c [█░]{10} 1\/4/ })).toBeDefined()
+    expect(await band.find({ type: 'Text', text: /repo/ })).toBeUndefined()
+    await band.press({ key: 'details-wt-c' })
+    await band.unmount()
+    const pane = await $.ui.mount({ ...PANE_TARGET, surface })
+    expect(await pane.find({ type: 'Text', text: /wt-c · running · parallel × 2/ })).toBeDefined()
+    await pane.unmount()
+  }
+})
+
+test('the band folds extra loops into one line when it has little room, and stays out of a survey', async ($, on) => {
+  answerRepo(on, '/repo', [])
+  on('ui.render', { component: 'AbovePrompt' }, async ($, e) => {
+    const { Text } = $.ui.resolve(e)
+    return <Text>engine band</Text>
+  })
+  await $.command.run(RUN_COMMAND)
+  const tight = await $.ui.mount({ ...BAND_TARGET, surface: 'terminal', props: { ...BAND_TARGET.props, maxRows: 1 } })
+  expect(await tight.find({ type: 'Text', text: /^autoloop ▶ wt-a 1\/4 · ETA 22m · \$2\.00 │ ▶ wt-c 1\/4/ })).toBeDefined()
+  expect(await tight.find({ key: 'details-wt-a' })).toBeUndefined()
+  await tight.unmount()
+  const survey = await $.ui.mount({ ...BAND_TARGET, surface: 'terminal', props: { ...BAND_TARGET.props, hasSurvey: true } })
+  expect(await survey.find({ key: 'details-wt-a' })).toBeUndefined()
+  expect(await survey.find({ type: 'Text', text: /engine band/ })).toBeDefined()
+  await survey.unmount()
+})
+
+test('worktree names drop the repository prefix', async () => {
+  expect(shortName('get.offer-stage1-auth-site', 'get.offer')).toBe('stage1-auth-site')
+  expect(shortName('nextjs-stage1-00c1f6', 'get.offer')).toBe('nextjs-stage1-00c1f6')
+  expect(shortName('get.offer', 'get.offer')).toBe('get.offer')
+})
+
+test('the ETA only counts items this loop finished, not ones done before it started', async () => {
+  const features = JSON.stringify({
+    features: [
+      ...Array.from({ length: 10 }, (_, i) => ({ id: `OLD${i}`, passes: true })),
+      { id: 'NEW', passes: true },
+      ...Array.from({ length: 5 }, (_, i) => ({ id: `TODO${i}`, passes: false })),
+    ],
+  })
+  const usage = JSON.stringify({ item: 'NEW', outcome: 'passed', duration_ms: 600000, cost_usd: 1, started_at: 1000, ended_at: 1600 })
+  const live = JSON.stringify({ state: 'running', mode: 'sequential', workers: 1, started_at: 1000, updated_at: 1600, running: [] })
+  expect(compute({ features, usage, live, now: NOW })?.etaSec).toBe(3000)
 })

@@ -104,7 +104,7 @@ For UI work add `bussin-ui` and `review:review-animations` to `--skills`.
 
 ### Watching a run
 
-The `bussin-loop-status` mod puts the run in your status line and, through `/autoloop-status`, in a pane. It shows:
+The `bussin-loop-status` mod puts every running loop in your status line and in a band above the prompt, one row per loop, including loops in git worktrees. `/autoloop-status`, or a row's Details button, opens a pane. It shows:
 - progress and what each worker is running
 - elapsed time and the estimated finish
 - input, output and cache tokens
