@@ -86,3 +86,8 @@ Next: E1
 Did: verified tests/skills-structure.test.sh under local /bin/bash 3.2.57: exit 0, the item's grep finds nothing, and an extra scan for other bash 4+ features (case modification, `[[ -v`, namerefs, coproc, `wait -n`, globstar, `;&`) finds nothing. No code change, so no implementation commit and no review subagent; evidence points at 34d3d2a.
 Learned: the test was written 3.2-safe from F1 on; CI's macOS `/bin/bash` step (F7) is the ongoing guard once pushed.
 Next: E2
+
+## Session 14 · E2 · 2026-10-18
+Did: rewrote `field` in tests/skills-structure.test.sh as one awk program: plain values get surrounding quotes stripped as before; a `>`/`|` block indicator (with optional `-`/`+`) returns the first non-blank indented line, so `description: |` with no body now FAILs (previously the literal `|` counted as non-empty). Blank lines before block content are skipped. Commit c392d2c.
+Learned: no leading ---, empty `description:`, `""`, body-only name and missing SKILL.md already failed before this change; only empty block scalars slipped through. The fixture build lives in the scratchpad only; there is no committed fixture test for the structure test itself.
+Next: E3

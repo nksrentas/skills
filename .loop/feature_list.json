@@ -153,7 +153,10 @@
       "description": "The structure test runs on macOS bash 3.2: no bash 4+ features.",
       "verify": "`bash --version` reports 3.2 locally; `bash tests/skills-structure.test.sh` exits 0. `grep -nE 'mapfile|readarray|declare -A|\\$\\{[a-zA-Z_]+,,|\\|&|&>>|grep -P|readlink -f|sed -i ' tests/skills-structure.test.sh` finds nothing.",
       "passes": true,
-      "evidence": { "commit": "34d3d2a", "ran": "bash --version: 3.2.57; bash tests/skills-structure.test.sh exit 0; item grep found nothing; extra scan for ${v^^}/${v,}, [[ -v, local -n, coproc, wait -n, globstar, ;& found nothing; bash .loop/verify.sh passed" }
+      "evidence": {
+        "commit": "34d3d2a",
+        "ran": "bash --version: 3.2.57; bash tests/skills-structure.test.sh exit 0; item grep found nothing; extra scan for ${v^^}/${v,}, [[ -v, local -n, coproc, wait -n, globstar, ;& found nothing; bash .loop/verify.sh passed"
+      }
     },
     {
       "id": "E2",
@@ -161,8 +164,12 @@
       "ui": false,
       "description": "Frontmatter edge cases: a SKILL.md missing the leading ---, one with `description:` present but empty, one with name/description only appearing below the closing --- are all reported as FAIL; names and descriptions that are quoted or use YAML folded (>) or literal (|) blocks are accepted.",
       "verify": "Scratchpad fixture with four bad skills (no leading ---, empty description, name only in body, missing SKILL.md) and two good ones (quoted name, `description: >` with text on the next line): FAIL for each bad one by name, ok for the good ones, non-zero exit.",
-      "passes": false,
-      "evidence": null
+      "passes": true,
+      "evidence": {
+        "commit": "c392d2c",
+        "ran": "bash .loop/verify.sh passed; /bin/bash 3.2 tests/skills-structure.test.sh <scratchpad fixture> exit 1: FAIL for bussin-noopen (no leading ---), bussin-emptydesc, bussin-bodyonly (name/description below ---), bussin-nofile, plus bussin-emptyfold (description: | with no body) and bussin-emptyquoted (\"\"); ok for bussin-quoted, bussin-folded (description: > next-line text), bussin-blankfirst; repo run exit 0",
+        "review": "code-reviewer subagent: Spec none, Standards none, Lean none"
+      }
     },
     {
       "id": "E3",
