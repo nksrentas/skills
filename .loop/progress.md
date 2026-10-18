@@ -101,3 +101,8 @@ Next: E4
 Did: verified with a scratchpad copy of the repo passed as the test's root arg: "bussin-lean/references/my notes.md" FAILs kebab-case and prints the full path on one line; a references file with retro.md, "a code review pass", tdd_mode and "test audit" gets no retired-name FAIL; "invoke the tdd skill; bussin-code-feature" in .git/, .loop/ and evals/results/ is ignored, while the same text in "dir with space/file with space.md" is flagged by full path (find -print0 | xargs -0). No code change, so no implementation commit and no review subagent; evidence points at fac4633.
 Learned: tests/skills-structure.test.sh takes an optional root as $1, which makes fixture checks a copy-and-run with no edits to the test.
 Next: E5
+
+## Session 17 · E5 · 2026-10-18
+Did: verified max_turns is 15 in both negative cases and 20 in all eight trigger cases; all evals/ folder names (including gitignored results/) are kebab-case; bash tests/skills-structure.test.sh exits 0 with evals/ present. The kebab-case check only scans bussin-*/ and tests/ (line 47), so fixture files like order.schema.ts are out of scope. No code change, so no implementation commit and no review subagent; evidence points at 460d91d.
+Learned: nothing in the structure test checks eval folder names or max_turns; this item is a one-off verification, not an ongoing guard.
+Next: R1

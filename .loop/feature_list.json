@@ -201,8 +201,11 @@
       "ui": false,
       "description": "Every eval case has max_turns >= 15 and kebab-case folder names; fixture files outside the bussin-*/ and tests/ scope are not flagged by the kebab-case check (order.schema.ts is fine).",
       "verify": "`grep -rn max_turns evals/*/prompt.md` shows every value >= 15. `bash tests/skills-structure.test.sh` exits 0 with evals/ present.",
-      "passes": false,
-      "evidence": null
+      "passes": true,
+      "evidence": {
+        "commit": "460d91d",
+        "ran": "grep -rn max_turns evals/*/prompt.md: 15 (2 negative cases), 20 (8 trigger cases); all 11 evals/ folders kebab-case; bash tests/skills-structure.test.sh exit 0 with evals/ present, kebab-case check scoped to bussin-*/ and tests/ so evals/*/fixture/src/features/orders/order.schema.ts is not flagged"
+      }
     },
     {
       "id": "R1",
