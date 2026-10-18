@@ -110,10 +110,12 @@ const modelRows = (usage: Usage[]): ModelRow[] => {
   for (const row of usage) {
     for (const [name, model] of Object.entries(row.models ?? {})) {
       const label = name
-      const seen = byName.get(label) ?? { name: label, costUsd: 0, inputTokens: 0, outputTokens: 0 }
+      const seen = byName.get(label) ?? { name: label, costUsd: 0, priced: false, inputTokens: 0, outputTokens: 0 }
+      const priced = row.cost_usd !== undefined
       byName.set(label, {
         name: label,
-        costUsd: seen.costUsd + (model.cost_usd ?? 0),
+        costUsd: seen.costUsd + (priced ? (model.cost_usd ?? 0) : 0),
+        priced: seen.priced || priced,
         inputTokens: seen.inputTokens + (model.input_tokens ?? 0),
         outputTokens: seen.outputTokens + (model.output_tokens ?? 0),
       })
@@ -278,3 +280,11 @@ export const compactLine = (name: string, snapshot: LoopSnapshot) => {
   const eta = snapshot.etaSec === null ? 'ETA after first item' : `ETA ${formatDuration(snapshot.etaSec)}`
   return [`▶ ${name} ${snapshot.done}/${snapshot.total}`, eta, pricedCost(snapshot)].filter(Boolean).join(' · ')
 }
+
+export const shortTitle = (text: string, max = 64) => {
+  const head = text.split(/:\s/)[0]?.trim() ?? text
+  const title = head.length > 0 && head.length <= max ? head : text
+  return title.length > max ? `${title.slice(0, max - 1).trimEnd()}…` : title
+}
+
+export const shortModel = (name: string) => name.replace(/^claude-/, '')

@@ -14,7 +14,9 @@ import {
   orderLoops,
   parentDir,
   progressBar,
+  shortModel,
   shortName,
+  shortTitle,
   statusLine,
 } from './snapshot'
 
@@ -25,17 +27,15 @@ export const PANE = 'autoloop-status'
 export const loopsAtom = atom({ plugin: 'bussin-loop-status', key: 'loops' } as const, [] as LoopView[])
 export const selectedAtom = atom({ plugin: 'bussin-loop-status', key: 'selected' } as const, null as string | null)
 
-const STATE_MARK: Record<ItemState, string> = { done: '✓', running: '▶', waiting: '…', failing: '✗', ready: '·' }
 const STATE_COLOR: Record<ItemState, string> = { done: 'success', running: 'claude', waiting: 'subtle', failing: 'error', ready: 'text' }
 const LOOP_COLOR: Record<LoopSnapshot['loopState'], string> = { running: 'claude', finished: 'success', stopped: 'warning', idle: 'subtle' }
 
 function costSummary(snapshot: LoopSnapshot) {
   const priced = snapshot.sessions - snapshot.unpricedSessions
   if (snapshot.sessions === 0) return 'no sessions recorded yet'
-  if (priced === 0) return `unknown for ${snapshot.sessions} sessions recovered from transcripts`
-  const perSession = formatCost(snapshot.costUsd / priced)
-  const base = `${formatCost(snapshot.costUsd)} over ${priced} sessions · ${perSession} per session`
-  return snapshot.unpricedSessions > 0 ? `${base} · ${snapshot.unpricedSessions} older sessions have no cost data` : base
+  if (priced === 0) return `unknown · ${snapshot.sessions} sessions recovered from transcripts`
+  const base = `${formatCost(snapshot.costUsd)} · ${priced} priced sessions · ${formatCost(snapshot.costUsd / priced)} each`
+  return snapshot.unpricedSessions > 0 ? `${base} · ${snapshot.unpricedSessions} earlier sessions unpriced` : base
 }
 
 function primaryLoop(loops: LoopView[], selected: string | null) {
@@ -46,13 +46,17 @@ function runningLoops(loops: LoopView[]) {
   return loops.filter(loop => loop.snapshot.loopState === 'running')
 }
 
-function statusText(loops: LoopView[]) {
+function summaryText(loops: LoopView[]) {
   const primary = loops[0]
   if (primary === undefined) return undefined
   if (loops.length === 1) return statusLine(primary.snapshot)
   const running = runningLoops(loops)
   if (running.length === 0) return `${primary.name}: ${statusLine(primary.snapshot)}`
   return `autoloop ${running.map(loop => compactLine(loop.name, loop.snapshot)).join(' │ ')}`
+}
+
+function statusText(loops: LoopView[]) {
+  return runningLoops(loops).length > 0 ? undefined : summaryText(loops)
 }
 
 async function readOptional($: EngineInterface, path: string) {
@@ -142,7 +146,7 @@ export const register: Register = on => {
     $.ui.status(statusText(loops))
     if (loops.length === 0) return { text: 'No .loop/feature_list.json in this repository or its worktrees. Start one with /bussin-autoloop init.' }
     await openPane($)
-    return { text: statusText(loops) ?? '' }
+    return { text: summaryText(loops) ?? '' }
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
@@ -214,18 +218,49 @@ export const register: Register = on => {
       </Box>
     )
 
-    const room = Math.max(3, (e.viewport?.rows ?? 30) - 16 - snapshot.runningRows.length - snapshot.models.length - (loops.length > 1 ? loops.length + 2 : 0))
-    const shown = [
-      ...snapshot.items.filter(row => row.state !== 'done'),
-      ...snapshot.items.filter(row => row.state === 'done').reverse(),
-    ].slice(0, room)
+    const label = (text: string) => (
+      <Box width={9}>
+        <Text bold>{text}</Text>
+      </Box>
+    )
+    const line = (key: string, heading: string, id: string, title: string, note: string, color: string) => (
+      <Box key={key} flexDirection="row">
+        {label(heading)}
+        <Box width={6}>
+          <Text color={color}>{id}</Text>
+        </Box>
+        <Box flexGrow={1} flexShrink={1}>
+          <Text color={color} wrap="truncate-end">
+            {title}
+          </Text>
+        </Box>
+        <Text dimColor> {note}</Text>
+      </Box>
+    )
+    const fact = (key: string, heading: string, text: string) => (
+      <Box key={key} flexDirection="row">
+        {label(heading)}
+        <Box flexGrow={1} flexShrink={1}>
+          <Text wrap="truncate-end">{text}</Text>
+        </Box>
+      </Box>
+    )
+    const runningIds = new Set(snapshot.runningRows.map(row => row.item))
+    const open = snapshot.items.filter(row => row.state !== 'done' && !runningIds.has(row.id))
+    const done = snapshot.items.filter(row => row.state === 'done').reverse()
+    const spare = Math.max(4, (e.viewport?.rows ?? 30) - 18 - snapshot.runningRows.length - (loops.length > 1 ? loops.length + 2 : 0))
+    const nextShown = open.slice(0, Math.max(2, Math.min(6, Math.ceil(spare * 0.6))))
+    const doneShown = done.slice(0, Math.max(1, Math.min(4, spare - nextShown.length)))
     const eta =
       snapshot.etaSec === null || snapshot.finishAt === null
         ? snapshot.loopState === 'running'
-          ? 'after the first item passes'
-          : '—'
-        : `~${formatDuration(snapshot.etaSec)} (around ${formatClock(snapshot.finishAt)})`
+          ? 'ETA after the first item this loop finishes'
+          : null
+        : `ETA ~${formatDuration(snapshot.etaSec)} (around ${formatClock(snapshot.finishAt)})`
+    const spent = snapshot.sessions > snapshot.unpricedSessions ? `${formatCost(snapshot.costUsd)} so far` : null
+    const elapsed = snapshot.elapsedSec > 0 ? `elapsed ${formatDuration(snapshot.elapsedSec)}` : null
     const mode = snapshot.mode === 'parallel' ? `parallel × ${snapshot.workers}` : 'sequential'
+    const models = snapshot.models.map(model => `${shortModel(model.name)} ${model.priced ? formatCost(model.costUsd) : 'unpriced'}`).join(' · ')
     return (
       <Box flexDirection="column" gap={1}>
         {overview}
@@ -236,65 +271,30 @@ export const register: Register = on => {
             </Text>
             <Text dimColor>{snapshot.updatedAgoSec === null ? '' : `updated ${formatDuration(snapshot.updatedAgoSec)} ago`}</Text>
           </Box>
+          <Text>
+            {progressBar(snapshot.done, snapshot.total, 30)} {snapshot.done}/{snapshot.total} done · {snapshot.running} running ·{' '}
+            {snapshot.total - snapshot.done} to go
+          </Text>
+          <Text color={LOOP_COLOR[snapshot.loopState]}>{[eta, elapsed, spent].filter(Boolean).join(' · ') || ' '}</Text>
           {!snapshot.hasLiveData && (
             <Text color="warning">No live data yet: restart this loop with the latest bussin-autoloop to see what is running and the ETA.</Text>
           )}
-          <Text>
-            {progressBar(snapshot.done, snapshot.total, 24)} {snapshot.done}/{snapshot.total} done · {snapshot.running} running ·{' '}
-            {snapshot.waiting} waiting · {snapshot.failing} failing
-          </Text>
         </Box>
         <Box flexDirection="column">
-          <Text>
-            <Text bold>Time   </Text>
-            elapsed {snapshot.elapsedSec > 0 ? formatDuration(snapshot.elapsedSec) : '—'} · ETA {eta}
-          </Text>
-          <Text>
-            <Text bold>Tokens </Text>
-            in {formatTokens(snapshot.inputTokens)} · out {formatTokens(snapshot.outputTokens)} · cache read{' '}
-            {formatTokens(snapshot.cacheReadTokens)} · cache write {formatTokens(snapshot.cacheWriteTokens)}
-          </Text>
-          <Text>
-            <Text bold>Cost   </Text>
-            {costSummary(snapshot)}
-          </Text>
-          {snapshot.models.map(model => (
-            <Text>
-              <Text bold>Model  </Text>
-              {model.name} · {formatCost(model.costUsd)} · in {formatTokens(model.inputTokens)} · out{' '}
-              {formatTokens(model.outputTokens)}
-            </Text>
-          ))}
+          {snapshot.runningRows.map((row, index) =>
+            line(`now-${row.item}`, index === 0 ? 'Now' : '', row.item, shortTitle(row.title), `${row.worker > 0 ? `w${row.worker} · ` : ''}${formatDuration(row.seconds)}`, 'claude'),
+          )}
+          {nextShown.map((row, index) => line(`next-${row.id}`, index === 0 ? 'Next' : '', row.id, shortTitle(row.title), row.note, STATE_COLOR[row.state]))}
+          {open.length > nextShown.length && fact('next-more', '', `… ${open.length - nextShown.length} more to go`)}
+          {doneShown.map((row, index) => line(`done-${row.id}`, index === 0 ? 'Done' : '', row.id, shortTitle(row.title), row.note, 'success'))}
+          {done.length > doneShown.length && fact('done-more', '', `… ${done.length - doneShown.length} more done`)}
         </Box>
-        {snapshot.runningRows.length > 0 && (
-          <Box flexDirection="column">
-            <Text bold>Running</Text>
-            {snapshot.runningRows.map(row => (
-              <Text color="claude" wrap="truncate-end">
-                {row.worker > 0 ? `w${row.worker}` : '  '} {row.item} {row.title} · {formatDuration(row.seconds)}
-              </Text>
-            ))}
-          </Box>
-        )}
         <Box flexDirection="column">
-          <Text bold>Items</Text>
-          {shown.map(row => (
-            <Text color={STATE_COLOR[row.state]} wrap="truncate-end">
-              {STATE_MARK[row.state]} {row.id} {row.title} · {row.note}
-            </Text>
-          ))}
-          {snapshot.items.length > shown.length && <Text dimColor>… {snapshot.items.length - shown.length} more</Text>}
+          {fact('cost', 'Cost', costSummary(snapshot))}
+          {fact('tokens', 'Tokens', `out ${formatTokens(snapshot.outputTokens)} · in ${formatTokens(snapshot.inputTokens)} · cache read ${formatTokens(snapshot.cacheReadTokens)} · cache write ${formatTokens(snapshot.cacheWriteTokens)}`)}
+          {models !== '' && fact('models', 'Models', models)}
+          {snapshot.recent.map((entry, index) => fact(`recent-${index}`, index === 0 ? 'Recent' : '', entry))}
         </Box>
-        {snapshot.recent.length > 0 && (
-          <Box flexDirection="column">
-            <Text bold>Recent</Text>
-            {snapshot.recent.map(line => (
-              <Text dimColor wrap="truncate-end">
-                {line}
-              </Text>
-            ))}
-          </Box>
-        )}
       </Box>
     )
   })
