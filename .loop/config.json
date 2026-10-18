@@ -1,0 +1,16 @@
+{
+  "task": "Make the bussin skillset proofs repeatable: structure test, CI on ubuntu and macOS, claude plugin eval trigger suite, README Tests and evals section",
+  "mode": "standard",
+  "new_project": false,
+  "base": "c253de1a8cbb7e30ec54a7c3c332cc61294e8fb8",
+  "commands": {
+    "test": "for t in tests/*.test.sh; do bash \"$t\" || exit 1; done",
+    "structure": "bash tests/skills-structure.test.sh",
+    "validate": "claude plugin validate --strict .",
+    "eval-one": "claude plugin eval . --runs 1 --ablation none --no-publish --trust-plugin --case"
+  },
+  "mutation_paths": [],
+  "gates": { "tests": true, "mutation": false, "browser": false },
+  "skills": { "context": ["bussin-lean"], "implement": [], "review": [], "end": [] },
+  "checkpoint": false
+}

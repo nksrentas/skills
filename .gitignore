@@ -1,0 +1,5 @@
+.loop/tests-passed
+.stryker-tmp/
+reports/mutation/
+.claude/settings.local.json
+evals/results/
