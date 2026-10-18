@@ -152,8 +152,8 @@
       "ui": false,
       "description": "The structure test runs on macOS bash 3.2: no bash 4+ features.",
       "verify": "`bash --version` reports 3.2 locally; `bash tests/skills-structure.test.sh` exits 0. `grep -nE 'mapfile|readarray|declare -A|\\$\\{[a-zA-Z_]+,,|\\|&|&>>|grep -P|readlink -f|sed -i ' tests/skills-structure.test.sh` finds nothing.",
-      "passes": false,
-      "evidence": null
+      "passes": true,
+      "evidence": { "commit": "34d3d2a", "ran": "bash --version: 3.2.57; bash tests/skills-structure.test.sh exit 0; item grep found nothing; extra scan for ${v^^}/${v,}, [[ -v, local -n, coproc, wait -n, globstar, ;& found nothing; bash .loop/verify.sh passed" }
     },
     {
       "id": "E2",

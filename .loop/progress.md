@@ -81,3 +81,8 @@ Next: F12
 Did: replaced README "## Tests" with "## Tests and evals": CI runs every tests/*.test.sh with system bash on ubuntu-latest and macos-latest on PRs and pushes to main, a local loop to run them, the eval suite command `claude plugin eval . --runs 1 --ablation none --no-publish --trust-plugin`, and a note that evals use your own Claude credentials and cost ~$0.06-0.09 per case. Commit 30c882d.
 Learned: cost range comes from 5 results in gitignored evals/results/, so it is a sample, not a measured average over all 10 cases.
 Next: E1
+
+## Session 13 · E1 · 2026-10-18
+Did: verified tests/skills-structure.test.sh under local /bin/bash 3.2.57: exit 0, the item's grep finds nothing, and an extra scan for other bash 4+ features (case modification, `[[ -v`, namerefs, coproc, `wait -n`, globstar, `;&`) finds nothing. No code change, so no implementation commit and no review subagent; evidence points at 34d3d2a.
+Learned: the test was written 3.2-safe from F1 on; CI's macOS `/bin/bash` step (F7) is the ongoing guard once pushed.
+Next: E2
