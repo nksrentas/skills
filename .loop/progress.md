@@ -46,3 +46,8 @@ Next: F5
 Did: added `no_retired_skill_refs`: find from the root pruning ./.git, ./.loop, ./evals/results and skipping the test file, `xargs -0 grep -lIE` for the four retired names anywhere plus Pocock names (tdd, code-review, test-audit, retro) only as `/name`, `` `name` skill`` or verb (invoke/load/use/run) + name, with explicit `before`/`after` boundary classes. Commit e5fda5c.
 Learned: `xargs` with no input exits 0 without running grep on BSD, so test emptiness of the output (`[ -n "$bad" ]`) rather than relying on grep's exit code. ERE has no portable `\b`; use `(^|[^A-Za-z0-9_.-])` / `([^A-Za-z0-9_.-]|$)` on both sides or substrings like `mytdd skill` and `overuse tdd` match. E4's exclusions and space-in-path handling already hold for this scan too (verified with a 'refs dir' fixture); E4 still needs its formal fixture proof.
 Next: F6
+
+## Session 6 · F6 · 2026-10-18
+Did: ran the full structure test on the repo at e57a661: every check ok, exit 0. `git diff c253de1 -- 'bussin-*' .claude-plugin README.md` is empty, so there was nothing to fix and no implementation commit; evidence points at e57a661. Review subagent skipped: the item's diff is empty.
+Learned: the skills, marketplace.json and README were already consistent with every F1-F5 check, so the remaining structure work is the E-item fixture proofs.
+Next: F7

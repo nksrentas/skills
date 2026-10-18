@@ -67,8 +67,8 @@
       "ui": false,
       "description": "Any real problem the structure test finds in the bussin-* skills, marketplace.json or README is fixed in the files themselves, not by loosening the test.",
       "verify": "Run `bash tests/skills-structure.test.sh` on the repo: exit 0. `git diff <config.base> -- 'bussin-*' .claude-plugin README.md` contains only fixes, each listed in .loop/progress.md with the FAIL line that forced it (or no diff at all when nothing was found).",
-      "passes": false,
-      "evidence": null
+      "passes": true,
+      "evidence": { "commit": "e57a661", "ran": "bash tests/skills-structure.test.sh: 59 ok, 0 FAIL, exit 0; bash .loop/verify.sh passed; git diff c253de1 -- bussin-* .claude-plugin README.md: empty (nothing to fix)" }
     },
     {
       "id": "F7",
