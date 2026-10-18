@@ -31,7 +31,7 @@ if [ -f .loop/config.json ]; then
 fi
 denied_tools=()
 for protected in ".loop/*.sh" ".loop/config.json" ".claude/**" ".git/**"; do
-  denied_tools+=("Edit($protected)")
+  denied_tools+=("Edit($protected)" "Write($protected)")
 done
 if [ -n "${LOOP_EXTRA_TOOLS:-}" ]; then
   IFS=',' read -r -a extra_tools <<< "$LOOP_EXTRA_TOOLS"
