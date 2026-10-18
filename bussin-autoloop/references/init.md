@@ -13,7 +13,7 @@ Flags, all optional:
 | `--new` | auto | Force new-project path |
 | `--stack <text>` | ask once | Stack for a new project |
 | `--no-checkpoint` | off | Skip the single human review of the item list |
-| `--base <ref>` | init commit | Only when the loop should diff against another ref |
+| `--base <ref>` | HEAD before init | Only when the loop should diff against another ref |
 
 Everything else in the message is the task text. If it points at a file (`brief.md`, a spec, a PRD), read that file and treat its contents as the task. Detect `new_project` when `--new` is given or the directory has no git history with source files.
 
@@ -35,13 +35,13 @@ Ask for the stack only if `--stack` is missing and the task does not imply one. 
 
 ```bash
 mkdir -p .loop
-cp "$SKILL_DIR/assets/verify.sh" "$SKILL_DIR/assets/guard-commit.sh" .loop/
+cp "$SKILL_DIR/assets/verify.sh" "$SKILL_DIR/assets/guard-commit.sh" "$SKILL_DIR/assets/fingerprint.sh" .loop/
 chmod +x .loop/verify.sh .loop/guard-commit.sh
 ```
 
 `$SKILL_DIR` is the base directory announced when this skill loaded.
 
-- `config.json`: start from the preset, apply `--skills`, fill `commands`, `mutation_paths` (where the implementation code lives, excluding tests), `task`, `new_project`, `checkpoint`.
+- `config.json`: start from the preset, apply `--skills`, fill `commands`, `mutation_paths` (where the implementation code lives, excluding tests), `task`, `new_project`, `checkpoint`, and `base`: the `--base` value if given, otherwise `git rev-parse HEAD` now, before the init commit, or git's empty tree `4b825dc642cb6eb9a060e54bf8d69288fbee4904` in a repo with no commits yet. The config is fixed once committed, so `base` has to be in it before then. Every command in `commands` is pre-approved for the unattended sessions, so list only commands the loop needs.
 - `init.sh`: installs dependencies if needed, starts the dev server in the background, prints the URL, waits until it answers. Reuse the project's own scripts; a session should be able to run `bash .loop/init.sh` and get a working app.
 - `progress.md`: heading with the task, the baseline, and the conventions you learned that are not obvious from the code (where filters live, how auth is checked, naming patterns).
 - Add to `.gitignore`: `.loop/tests-passed`, `.stryker-tmp/`, `reports/mutation/`.
@@ -56,7 +56,7 @@ mkdir -p .claude
 jq -s '.[0] * .[1]' .claude/settings.local.json "$SKILL_DIR/assets/hooks.json" > .claude/settings.tmp && mv .claude/settings.tmp .claude/settings.local.json
 ```
 
-If the file already defines `hooks`, `*` would replace the arrays. In that case append the two entries from `assets/hooks.json` to the existing `PostToolUse` and `PreToolUse` arrays instead.
+If the file already defines `hooks`, `*` would replace the arrays. In that case append the entry from `assets/hooks.json` to the existing `PreToolUse` array instead. Remove any `PostToolUse` entry that deletes `.loop/tests-passed`, left over from older versions of this skill; the fingerprint replaces it.
 
 ## 6. Mutation gate (thorough mode)
 
@@ -82,7 +82,7 @@ Run `npx stryker run --mutate "<one small existing file>"` once so the first loo
 
 ## 7. Standards the review stage reads
 
-Pocock's `code-review` looks for `CODING_STANDARDS.md`. If the repo has none, create a short one from what the research found and from CLAUDE.md: naming, error handling, test placement, what counts as a public interface. Ten specific rules beat a hundred generic ones. If a `GLOSSARY.md` would help (domain terms with two meanings), start it.
+The review subagent in `run` judges conventions only against `CODING_STANDARDS.md`. If the repo has none, create a short one from what the research found and from CLAUDE.md: naming, error handling, test placement, what counts as a public interface. Ten specific rules beat a hundred generic ones. If a `GLOSSARY.md` would help (domain terms with two meanings), start it.
 
 For every skill in `config.skills.context`, read it now. If it has a "Review checklist" section, append that list to `CODING_STANDARDS.md` under a heading with the skill's name, skipping rules already there. The reviewer only knows what this file says, so a house rule that never reaches it is a rule nobody checks. Items the checklist implies (a new feature folder, a migration) also become verify steps on the matching items in step 8.
 
@@ -112,7 +112,9 @@ git commit -m "chore(autoloop): init <short task slug>"
 
 Tell the user the guard applies to every Claude Code session in this repo while `.loop/` exists, including other harnesses, so a commit there needs `bash .loop/verify.sh` first.
 
-Write the resulting sha into `config.base` unless `--base` was given. Then tell the user how to start:
+On a re-init over an earlier loop, the guard blocks this commit because `config.json` and the scripts change. Ask the user to run the commit themselves, in their terminal or with `!` in Claude Code; the guard only checks Claude's own Bash tool.
+
+Then tell the user how to start:
 
 ```bash
 bash ~/.claude/skills/bussin-autoloop/scripts/loop.sh

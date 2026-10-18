@@ -12,11 +12,14 @@ The first item with `passes:false` in list order, unless `progress.md` names a b
 
 ## 3. Implement
 
-If `tdd` is in `config.skills.implement`, invoke it. The item's `verify` steps are the confirmed seam; it does not need to ask anyone. Inline fallback when the skill is missing, or in fast mode after writing the code:
+In `standard` and `thorough` mode, work test-first; in `fast` mode, write the code and then the tests. The item's `verify` steps are the seam to test through; nobody needs to be asked.
 
-- Write the failing test first and watch it fail.
+- Write one failing test for the next behaviour, run it and watch it fail for the reason you expect, then write the least code that passes it. Repeat per behaviour; do not write all tests up front.
 - Test through the public interface; a test that reads a private field or queries the DB directly breaks on refactor without catching a bug.
 - Expected values come from an independent source (the spec, a hand calculation, a fixture), never from re-running the code's own logic.
+- Refactor only with the tests green, and run them again after.
+
+Then invoke any skills in `config.skills.implement`.
 
 Edge items get at least one example test each. Parsing, escaping, money, dates and anything with an input grammar also get a property test with `fast-check`; examples alone miss the input you did not think of.
 
@@ -30,11 +33,16 @@ It runs the test command, then Stryker on the changed files when `gates.mutation
 
 ## 5. Review
 
-Spawn a subagent for each skill in `config.skills.review`, with the item text and `verify` steps as its spec and the diff since `config.base`. Pocock's `code-review` reports on a Standards axis and a Spec axis. Any Spec finding (missing requirement, scope creep, requirement that looks implemented but is not) means the item stays `false`: fix, re-run the gate, re-review. Standards findings are fixed when cheap and otherwise logged.
+Skipped in `fast` mode. Otherwise spawn one review subagent with read-only tools (Read, Glob, Grep). Give it the item's `description` and `verify` steps as the spec, the output of `git diff <config.base> -- . ':(exclude).loop'`, and `CODING_STANDARDS.md`. It writes nothing and returns two lists:
 
-`test-audit` runs on the new tests; delete what it flags as tautological or implementation-coupled, then re-run the gate.
+- **Spec**: a requirement in the item that is missing, only looks implemented (dead code path, hard-coded value, test that never reaches it), or scope beyond the item.
+- **Standards**: each rule in `CODING_STANDARDS.md` the diff breaks, with file and line.
 
-Inline fallback when `code-review` is missing: one subagent, read-only tools, prompt it with the item, the diff, and `CODING_STANDARDS.md`, and ask for two lists: requirements not met and conventions broken. It writes nothing.
+Any Spec finding means the item stays `false`: fix it, re-run the gate, review again with a fresh subagent. Fix Standards findings when cheap and log the rest in `progress.md`.
+
+In `thorough` mode, spawn a second read-only subagent on the tests this item added or changed. It flags tests that are tautological (the expected value is computed by the code under test), coupled to implementation (private fields, mocks of the unit itself, direct DB reads where the public interface would do), or duplicate another test without covering a new case. Rewrite or delete what it flags, then re-run the gate.
+
+Then spawn a subagent for each skill in `config.skills.review`, with the same spec and diff.
 
 ## 6. Browser verification
 
@@ -48,7 +56,9 @@ Set `passes: true` and `evidence` on that one item only:
 "evidence": { "commit": "<sha>", "ran": "npm test, stryker 84%", "browser": "exported paid-only CSV, 12 rows" }
 ```
 
-Commit with a message that names the item id. The commit guard requires `.loop/tests-passed`, which any edit after the gate deletes, so run the gate last.
+Commit in two steps. First commit the implementation with a message that names the item id. Then set `passes` and `evidence` with that commit's sha, append to `progress.md` (step 8), and commit those as `chore(loop): mark <item id>`.
+
+The commit guard allows a commit only when `.loop/tests-passed` holds the fingerprint of the current code, so any code change after the gate, by any tool, means running the gate again. `feature_list.json`, `progress.md` and `retro.md` are outside the fingerprint, so the second commit needs no new gate. The guard also refuses a commit that rewords, adds or removes items, or that changes `.loop/config.json` or the loop scripts.
 
 ## 8. Progress and retro
 
@@ -61,7 +71,7 @@ Learned: anything about the codebase the next session would otherwise rediscover
 Next: <item id>
 ```
 
-If `retro` is in `config.skills.end`, invoke it and append its proposals to `.loop/retro.md` under a dated heading. Never apply them here; the loop is not the place to change its own rules.
+In `thorough` mode, write a short retro: what in this session cost the most time or nearly went wrong, and one concrete change to the environment that would have prevented it (a lint rule, a hook, a missing command in `config.commands`, a line in `CODING_STANDARDS.md`). Append it to `.loop/retro.md` under a dated heading, then invoke any skills in `config.skills.end`. Never apply the proposals here; the loop is not the place to change its own rules.
 
 ## 9. Stop
 

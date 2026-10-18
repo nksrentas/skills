@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+here="$(cd "$(dirname "$0")" && pwd)"
+source "$here/fingerprint.sh"
 cd "$(git rev-parse --show-toplevel)"
 cfg=.loop/config.json
 marker=.loop/tests-passed
@@ -27,5 +29,5 @@ if [ "$(jq -r '.gates.mutation // false' "$cfg")" = "true" ]; then
   fi
 fi
 
-touch "$marker"
+loop_fingerprint > "$marker"
 echo "autoloop: verify passed"
