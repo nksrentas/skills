@@ -51,7 +51,7 @@ const toUsage = (row: Record<string, unknown>): Usage => ({
   item: clean(row.item),
   outcome: clean(row.outcome),
   duration_ms: num(row.duration_ms),
-  cost_usd: num(row.cost_usd),
+  cost_usd: optionalNum(row.cost_usd),
   input_tokens: num(row.input_tokens),
   output_tokens: num(row.output_tokens),
   cache_read_tokens: num(row.cache_read_tokens),
@@ -122,12 +122,19 @@ const modelRows = (usage: Usage[]): ModelRow[] => {
   return [...byName.values()].sort((a, b) => b.costUsd - a.costUsd)
 }
 
+const spend = (sessions: Usage[]) => {
+  const priced = sessions.filter(row => row.cost_usd !== undefined)
+  const minutes = Math.round(sum(sessions, row => row.duration_ms) / 60000)
+  return [
+    priced.length > 0 ? formatCost(sum(priced, row => row.cost_usd)) : sessions.length > 0 ? 'cost unknown' : '',
+    minutes > 0 ? `${minutes}m` : '',
+  ].filter(Boolean)
+}
+
 const itemRow = (feature: Feature, passed: Set<string>, running: Map<string, number>, usage: Usage[]): ItemRow => {
   const sessions = usage.filter(row => row.item === feature.id)
-  const cost = sum(sessions, row => row.cost_usd)
-  const minutes = Math.round(sum(sessions, row => row.duration_ms) / 60000)
   if (feature.passes) {
-    return { id: feature.id, title: title(feature), state: 'done', note: `${formatCost(cost)} · ${minutes}m` }
+    return { id: feature.id, title: title(feature), state: 'done', note: spend(sessions).join(' · ') || 'done' }
   }
   const worker = running.get(feature.id)
   if (worker !== undefined) {
@@ -135,7 +142,7 @@ const itemRow = (feature: Feature, passed: Set<string>, running: Map<string, num
   }
   if (sessions.length > 0) {
     const attempts = sessions.length === 1 ? '1 attempt' : `${sessions.length} attempts`
-    return { id: feature.id, title: title(feature), state: 'failing', note: `${attempts}, ${formatCost(cost)}` }
+    return { id: feature.id, title: title(feature), state: 'failing', note: [attempts, ...spend(sessions)].join(' · ') }
   }
   const waitingFor = (feature.depends_on ?? []).filter(id => !passed.has(id))
   if (waitingFor.length > 0) {
@@ -192,6 +199,8 @@ export const compute = (files: LoopFiles): LoopSnapshot | null => {
     finishAt: etaSec === null ? null : files.now + etaSec,
     updatedAgoSec: live?.updated_at === undefined ? null : Math.max(0, files.now - live.updated_at),
     sessions: usage.length,
+    unpricedSessions: usage.filter(row => row.cost_usd === undefined).length,
+    hasLiveData: live !== undefined,
     costUsd: sum(usage, row => row.cost_usd),
     inputTokens: sum(usage, row => row.input_tokens),
     outputTokens: sum(usage, row => row.output_tokens),
@@ -238,5 +247,5 @@ export const statusLine = (snapshot: LoopSnapshot) => {
   }
   if (snapshot.loopState === 'finished') return `autoloop finished ${progress} · ${formatDuration(snapshot.elapsedSec)} · ${cost}`
   if (snapshot.loopState === 'stopped') return `autoloop stopped at ${progress} · ${cost}`
-  return `autoloop ${progress} done · not running`
+  return snapshot.hasLiveData ? `autoloop ${progress} done · not running` : `autoloop ${progress} done · no live data`
 }

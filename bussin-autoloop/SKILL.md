@@ -42,7 +42,9 @@ The `bussin-loop-status` mod shows a run as it happens. Install it with `claude 
 - **Status line:** while a loop exists in the project, it shows something like `autoloop 12/19 done · 2 running · ETA 1h 05m · $14.32`.
 - **Pane:** `/autoloop-status` opens it, and it opens by itself when a session starts during a run. It shows progress, elapsed time and ETA, input, output and cache tokens, cost per session and per model, what each worker is running, every item's state, and the latest progress notes.
 
-It only reads `.loop/`, so it works for any project's loop.
+It only reads `.loop/`, so it works for any project's loop. A loop started before this telemetry existed has no `usage.jsonl` or `live.json`, so the view shows progress and items only. Two steps fill it in:
+- Run `bash <skill directory>/scripts/backfill-usage.sh` in the project. It rebuilds `usage.jsonl` from Claude Code's own transcripts of past loop sessions: tokens, models, time and item per session. Cost isn't in transcripts, so it shows as unknown.
+- Restart the loop with the current `loop.sh`, which keeps `usage.jsonl` and `live.json` current from then on.
 
 ### Running unattended
 
