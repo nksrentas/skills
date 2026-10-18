@@ -26,3 +26,8 @@ Task: structure test, CI on ubuntu and macOS, `claude plugin eval` trigger suite
 Did: added tests/skills-structure.test.sh with a `check <label> <fn> args...` helper and per-skill frontmatter, name and description checks; optional root argument for fixtures. Commit e7aa7a3.
 Learned: frontmatter is parsed with awk (first line must be ---, stops at the next ---); `field` strips one pair of surrounding quotes, which bussin-honest-feedback and bussin-write-like-a-human need. Folded/literal (`>`/`|`) descriptions are not handled yet: E2 extends `field`/`has_description`. New checks should reuse `check` so the run keeps going after a FAIL (F3 needs that).
 Next: F2
+
+## Session 2 · F2 · 2026-10-18
+Did: structure test now checks each bussin-* dir is in marketplace.json `plugins[].skills` and the README `## Included skills` list, and each entry in either list exists on disk. Commit 7a48ef2.
+Learned: `readme_skills` already scopes to the `## Included skills` section (awk toggles on `## ` headings), so E3 likely only needs its fixture proof. `marketplace_skills` swallows jq errors (empty list), so invalid JSON shows up as "not listed" FAILs until F3 adds an explicit validity check. Use `grep ... >/dev/null`, not `grep -q`, after a producer under pipefail (SIGPIPE).
+Next: F3

@@ -19,8 +19,11 @@
       "ui": false,
       "description": "The structure test checks that every bussin-* directory is listed in .claude-plugin/marketplace.json (plugins[].skills as ./bussin-x) and in the README 'Included skills' list, and that every entry in either list exists on disk.",
       "verify": "Run `bash tests/skills-structure.test.sh`: exit 0 with ok lines for marketplace and README coverage in both directions. In a scratchpad fixture, list ./bussin-ghost in marketplace.json without a directory: FAIL naming bussin-ghost, non-zero exit.",
-      "passes": false,
-      "evidence": null
+      "passes": true,
+      "evidence": {
+        "commit": "7a48ef2",
+        "ran": "bash .loop/verify.sh (3 test files pass); structure test on repo: 40 ok, exit 0; scratchpad fixture with ./bussin-ghost in marketplace.json: FAIL marketplace.json entry bussin-ghost exists on disk, exit 1; reverse fixture (README ghost, skill unlisted): 3 FAIL lines; review subagent: spec/standards/lean clean"
+      }
     },
     {
       "id": "F3",
