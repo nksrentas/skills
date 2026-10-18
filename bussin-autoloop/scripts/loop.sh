@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+script_dir="$(cd "$(dirname "$0")" && pwd)"
 cd "$(git rev-parse --show-toplevel)"
 
 list=.loop/feature_list.json
@@ -39,6 +40,12 @@ fi
 
 remaining() { jq '[.features[] | select(.passes == false)] | length' "$list"; }
 snapshot() { echo "$(remaining)@$(git rev-parse HEAD)"; }
+
+if [ "${LOOP_WORKERS:-1}" -gt 1 ]; then
+  source "$script_dir/parallel.sh"
+  run_parallel
+  exit
+fi
 
 session_output="$(mktemp)"
 trap 'rm -f "$session_output"' EXIT

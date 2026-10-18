@@ -42,7 +42,7 @@ chmod +x .loop/verify.sh .loop/guard-commit.sh
 `$SKILL_DIR` is the base directory announced when this skill loaded.
 
 - `config.json`: start from the preset, apply `--skills`, fill `commands`, `mutation_paths` (where the implementation code lives, excluding tests), `task`, `new_project`, `checkpoint`, and `base`: the `--base` value if given, otherwise `git rev-parse HEAD` now, before the init commit, or git's empty tree `4b825dc642cb6eb9a060e54bf8d69288fbee4904` in a repo with no commits yet. The config is fixed once committed, so `base` has to be in it before then. Every command in `commands` is pre-approved for the unattended sessions, so list only commands the loop needs.
-- `init.sh`: installs dependencies if needed, starts the dev server in the background, prints the URL, waits until it answers. Reuse the project's own scripts; a session should be able to run `bash .loop/init.sh` and get a working app.
+- `init.sh`: installs dependencies if needed, starts the dev server in the background, prints the URL, waits until it answers. Reuse the project's own scripts; a session should be able to run `bash .loop/init.sh` and get a working app. It must also work in a fresh git worktree, for parallel workers: when `LOOP_WORKER` is set, copy untracked files the app needs (`.env` and the like) from `$LOOP_MAIN_DIR`, and offset the dev-server port and any test database name by the worker number so workers never share them.
 - `progress.md`: heading with the task, the baseline, and the conventions you learned that are not obvious from the code (where filters live, how auth is checked, naming patterns).
 - Add to `.gitignore`: `.loop/tests-passed`, `.stryker-tmp/`, `reports/mutation/`.
 
@@ -94,13 +94,20 @@ Write `.loop/feature_list.json` following `assets/feature-list.example.json`. Th
 - **edge**: walk this checklist against every functional item and add what applies: empty or none, boundaries (0, 1, max, off by one), invalid or malformed input, permissions and roles, duplicates and concurrency, time (timezone, DST, past and future), size and performance, encoding and i18n, dependency failure (network, DB, third party), partial state and retries.
 - **regression**: the existing behaviour around the code you will touch, plus "existing test suite stays green".
 
+Give every item two scheduling fields, which the parallel driver uses to run independent items at the same time:
+
+- `depends_on`: the ids of items that must pass first, because this item builds on their code or its `verify` steps need their behaviour. Leave it empty when the item stands alone.
+- `touches`: the paths or globs the item will create or change, as narrow as you can honestly predict (`src/features/invoices/**`, `src/slugify.js`). Include shared files the item edits, such as a route registry, `app.ts` or `package.json`; that correctly keeps two items from editing them at once. Use `["**"]` when you cannot predict it, which makes the item run alone.
+
+Two items run in parallel only when neither depends on the other and their `touches` do not overlap. A wrong guess costs a merge conflict and a rerun, not a wrong result, because every merge is re-gated.
+
 Order the list so that each item's `verify` steps can pass with only that item and the ones before it implemented. A verify example that also needs a later item (an input that only comes out right once trimming exists, for example) pulls that item's work forward and blurs the evidence. Pick a different example or reorder the items.
 
 Mark UI-visible items with `"ui": true` so run knows the browser gate applies. All items start `"passes": false, "evidence": null`.
 
 ## 9. Checkpoint
 
-Unless `checkpoint` is false, show the user the item list as a compact table and the assumptions you made where requirements were silent. Wait for their answer. A wrong line in this list costs more than any amount of verification later. Edit the list on their feedback, then continue.
+Unless `checkpoint` is false, show the user the item list as a compact table with `depends_on` and `touches` as columns, how many items could run at once at the widest point, and the assumptions you made where requirements were silent. Wait for their answer. A wrong line in this list costs more than any amount of verification later. Edit the list on their feedback, then continue.
 
 ## 10. Commit and hand over
 
@@ -116,10 +123,10 @@ Tell the user the guard applies to every Claude Code session in this repo while 
 
 On a re-init over an earlier loop, the guard blocks this commit because `config.json` and the scripts change. Ask the user to run the commit themselves, in their terminal or with `!` in Claude Code; the guard only checks Claude's own Bash tool.
 
-Then tell the user how to start:
+Tell the user they can change `depends_on` and `touches` at any time by editing `.loop/feature_list.json`: the driver re-reads them before every launch, and the commit guard ignores those two fields. Then tell them how to start:
 
 ```bash
 bash "$SKILL_DIR/scripts/loop.sh"
 ```
 
-with `$SKILL_DIR` written out as the real base directory, because the user's shell does not have that variable. Add that a single iteration can be run by hand with `/bussin-autoloop run`, or `/bussin:bussin-autoloop run` when the skill came from the `bussin` plugin.
+with `$SKILL_DIR` written out as the real base directory, because the user's shell does not have that variable. When two or more items could run at once, also show the parallel form, `LOOP_WORKERS=3 bash "$SKILL_DIR/scripts/loop.sh"`, and say that it runs up to that many sessions at once, each in its own worktree, and uses usage that many times faster. Add that a single iteration can be run by hand with `/bussin-autoloop run`, or `/bussin:bussin-autoloop run` when the skill came from the `bussin` plugin.
