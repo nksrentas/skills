@@ -68,7 +68,10 @@
       "description": "Any real problem the structure test finds in the bussin-* skills, marketplace.json or README is fixed in the files themselves, not by loosening the test.",
       "verify": "Run `bash tests/skills-structure.test.sh` on the repo: exit 0. `git diff <config.base> -- 'bussin-*' .claude-plugin README.md` contains only fixes, each listed in .loop/progress.md with the FAIL line that forced it (or no diff at all when nothing was found).",
       "passes": true,
-      "evidence": { "commit": "e57a661", "ran": "bash tests/skills-structure.test.sh: 59 ok, 0 FAIL, exit 0; bash .loop/verify.sh passed; git diff c253de1 -- bussin-* .claude-plugin README.md: empty (nothing to fix)" }
+      "evidence": {
+        "commit": "e57a661",
+        "ran": "bash tests/skills-structure.test.sh: 59 ok, 0 FAIL, exit 0; bash .loop/verify.sh passed; git diff c253de1 -- bussin-* .claude-plugin README.md: empty (nothing to fix)"
+      }
     },
     {
       "id": "F7",
@@ -76,8 +79,11 @@
       "ui": false,
       "description": ".github/workflows/test.yml runs every tests/*.test.sh on pull_request and on push to main, in a matrix over ubuntu-latest and macos-latest, using the runner's default bash (3.2 on macOS). Uses no secrets; every action is pinned to a full version tag (vX.Y.Z). No comments.",
       "verify": "Read the workflow: triggers pull_request and push with branches [main]; strategy.matrix.os is [ubuntu-latest, macos-latest]; a step loops over tests/*.test.sh with bash and fails on the first failure; `grep -n secrets .github/workflows/test.yml` finds nothing; every `uses:` matches @vN.N.N; no line starts with #. `claude plugin validate --strict .` still passes.",
-      "passes": false,
-      "evidence": null
+      "passes": true,
+      "evidence": {
+        "commit": "14a4404",
+        "ran": "bash .loop/verify.sh (3 test files pass); claude plugin validate --strict . passed; read workflow: pull_request + push [main], matrix [ubuntu-latest, macos-latest], loop runs each tests/*.test.sh with /bin/bash (system 3.2 on macOS, Homebrew bash 5 is first on PATH there) and exits on first failure; grep secrets: none; only uses: actions/checkout@v4.2.2; no comment lines; review subagents: 1st flagged redundant shell: bash (removed), 2nd clean"
+      }
     },
     {
       "id": "F8",

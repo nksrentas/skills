@@ -51,3 +51,8 @@ Next: F6
 Did: ran the full structure test on the repo at e57a661: every check ok, exit 0. `git diff c253de1 -- 'bussin-*' .claude-plugin README.md` is empty, so there was nothing to fix and no implementation commit; evidence points at e57a661. Review subagent skipped: the item's diff is empty.
 Learned: the skills, marketplace.json and README were already consistent with every F1-F5 check, so the remaining structure work is the E-item fixture proofs.
 Next: F7
+
+## Session 7 · F7 · 2026-10-18
+Did: added .github/workflows/test.yml: pull_request + push to main, matrix ubuntu-latest/macos-latest, fail-fast off, `permissions: contents: read`, actions/checkout@v4.2.2, one step that prints `/bin/bash --version` then runs each tests/*.test.sh with `/bin/bash`, exiting on the first failure. Commit 14a4404.
+Learned: GitHub macOS runners put Homebrew bash 5 ahead of /bin on PATH, so plain `bash` there would not prove 3.2 compatibility; `/bin/bash` is 3.2 on macOS and bash 5 on Ubuntu. The tests set their own git identity and stub `claude`, so CI needs no setup beyond checkout. Not yet observed running on GitHub (nothing pushed); first push/PR is the real proof.
+Next: F8
