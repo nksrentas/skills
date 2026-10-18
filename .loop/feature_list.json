@@ -116,8 +116,11 @@
       "ui": false,
       "description": "Two negative cases where no bussin skill may fire: 'What does the git rebase --onto flag do?' and 'Rename the variable usr to user in utils.ts.' Each grader fails if any bussin-* skill is loaded. The rename case has a utils.ts to act on.",
       "verify": "Read both case folders: prompts verbatim, max_turns >= 15, graders assert no bussin-* Skill call. `claude plugin validate --strict .` passes.",
-      "passes": false,
-      "evidence": null
+      "passes": true,
+      "evidence": {
+        "commit": "ae8404f",
+        "ran": "claude plugin validate --strict . passed; bash .loop/verify.sh (3 test files pass); read both case folders: prompts verbatim, max_turns 15, graders tool_used Skill input_match bussin- with min 0 max 0, rename case has fixture/utils.ts via case.yaml add_dirs; review subagent: spec/standards/lean clean"
+      }
     },
     {
       "id": "F11",

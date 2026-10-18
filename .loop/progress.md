@@ -66,3 +66,8 @@ Next: F9
 Did: added case.yaml (`schema_version: "1.1"`, name, `context: { add_dirs: [fixture] }`) plus fixture/package.json (next, drizzle-orm, typescript) and fixture/src/features/orders/order.schema.ts (pgTable orders) to the feature, ts-architecture, drizzle and ui cases. Commit a309edb.
 Learned: correction to session 8: docs define `context.add_dirs` as "directories inside the case directory", so one shared evals/fixtures/ is not allowed and each case carries its own byte-identical copy. `claude plugin eval . ... --case trigger-bussin-drizzle` loaded the case fine but printed "Plugin under test: none resolved — cases run against baseline Claude Code" and scored 0.00. The repo root has only .claude-plugin/marketplace.json (plugin `bussin`, source ./) and no plugin.json, so a path target does not resolve the plugin. F11 has to fix that: try target `bussin@<marketplace name>` after installing, or add .claude-plugin/plugin.json, then check validate --strict still passes. Eval results land in gitignored evals/results/.
 Next: F10
+
+## Session 10 · F10 · 2026-10-18
+Did: added evals/negative-git-rebase-onto (prompt only, Read/Glob/Grep/Skill) and evals/negative-rename-variable (case.yaml add_dirs [fixture], fixture/utils.ts with a `usr` param, Edit allowed). Both have graders/no-bussin-skill.md: `type: tool_used`, `tool: Skill`, `input_match: '"skill"\s*:\s*"(?:[\w-]+:)?bussin-'`, `min: 0`, `max: 0`. max_turns 15. Commit ae8404f.
+Learned: not run through `claude plugin eval` yet, so whether min/max 0 parses as expected is unconfirmed until F11 gets the plugin resolving; F11 can run a negative case too as a cheap check of the grader format.
+Next: F11
