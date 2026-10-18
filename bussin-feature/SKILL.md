@@ -47,6 +47,10 @@ For every asynchronous or data-rendering surface, handle each applicable state e
 
 For mutations, also provide appropriate pending protection and success/failure feedback. Do not invent these states for synchronous behavior that cannot enter them.
 
+## Accessible and findable
+
+For any UI, load `bussin-a11y`; for any public page or route, also load `bussin-seo` and `bussin-schema`. Their review checklists are part of this feature's quality gate.
+
 ## Keep it lean
 
 Load `bussin-lean` before writing code and follow its rules while you write: nothing speculative, no abstraction without a second real use, no wasteful allocation or data access. Its cleanup pass is a mandatory step of this workflow (step 6). If that skill is not installed, apply the same cleanup pass by hand: leftovers, over-engineering, structure, allocation.

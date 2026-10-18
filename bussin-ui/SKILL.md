@@ -65,6 +65,10 @@ Read the one that matches the work before writing markup:
 - `references/motion.md`: every animation with exact duration, easing, distance, trigger and delay rules, plus Lenis and reduced-motion handling.
 - `references/dashboard.md`: how the same language becomes an app shell, data cards, tables, forms and charts without turning a dashboard into a landing page.
 
+## Accessibility and SEO
+
+Every page and component built with this skill also follows `bussin-a11y`, and every public page follows `bussin-seo` and `bussin-schema`. Load them alongside this skill; the house look never overrides semantic HTML, contrast, focus or metadata.
+
 ## Animation skills
 
 Motion craft comes from Emil Kowalski's skills ([emilkowalski/skills](https://github.com/emilkowalski/skills), MIT). Install them once:

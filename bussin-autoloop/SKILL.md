@@ -97,10 +97,13 @@ House context skills, opt-in per feature:
 | `bussin-drizzle` | The feature reads or writes a SQL database from TypeScript |
 | `bussin-ui` | Landing pages and dashboards in Next.js + Tailwind v4 + GSAP + Lenis with the house look |
 | `bussin-lean` | Always on: every preset loads it, and the review stage blocks on its findings |
+| `bussin-a11y` | Any UI work: WCAG 2.2 AA, native HTML first |
+| `bussin-seo` | Public pages and routes: metadata, headings, sitemap, Core Web Vitals |
+| `bussin-schema` | Public pages that need JSON-LD |
 
 Example: `/bussin-autoloop init "Invoice reminders" --skills bussin-ts-architecture,bussin-drizzle`. Init copies each one's review checklist into `CODING_STANDARDS.md`, so the review stage enforces it.
 
-For UI work, pair the house look with Emil Kowalski's animation review: `/bussin-autoloop init "Pricing page" --skills bussin-ts-architecture,bussin-ui,review:review-animations`.
+For UI work, add accessibility, SEO and Emil Kowalski's animation review: `/bussin-autoloop init "Pricing page" --skills bussin-ts-architecture,bussin-ui,bussin-a11y,bussin-seo,bussin-schema,review:review-animations`.
 
 ## Config shape
 

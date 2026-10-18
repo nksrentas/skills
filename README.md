@@ -18,6 +18,9 @@
 - [bussin-ts-architecture](./bussin-ts-architecture): Feature-based folders for TypeScript backends and Next.js apps, where every feature folder is portable: it imports nothing from other features and works when copied into another project.
 - [bussin-drizzle](./bussin-drizzle): Drizzle ORM data access with schemas per feature, drizzle-kit migrations, typed queries inside services, and tests against a real database.
 - [bussin-ui](./bussin-ui): House UI system for landing pages and dashboards in Next.js, Tailwind CSS v4, GSAP and Lenis.
+- [bussin-a11y](./bussin-a11y): Build and audit accessible UI to WCAG 2.2 AA, native HTML first and ARIA only where needed. Adapted from addyosmani/web-quality-skills (MIT).
+- [bussin-seo](./bussin-seo): On-page and technical SEO plus Core Web Vitals, with Next.js App Router metadata, sitemap and robots rules. Adapted from addyosmani/web-quality-skills (MIT).
+- [bussin-schema](./bussin-schema): Schema.org JSON-LD that stays eligible for Google rich results, with an up-to-date list of deprecated types. Adapted from AgriciDaniel/claude-seo (MIT).
 - [bussin-honest-feedback](./bussin-honest-feedback): Direct assessments instead of agreeable ones: verdict first, a rating out of 10 against fixed anchors, weak assumptions named, "you're wrong" with the reason, and "I don't know" when that is the truth.
 - [bussin-write-like-a-human](./bussin-write-like-a-human): Check and revise drafts against the narrative choices that separate human from AI fiction, using measured rates from the StoryScope study of 61,608 stories.
 
@@ -35,6 +38,9 @@ Every skill has a short alias that takes the same arguments, and the slash menu 
 | `/ui` | `bussin-ui` | `[page, section or screen to build or restyle]` |
 | `/honest` | `bussin-honest-feedback` | `<idea, plan, draft or decision to assess>` |
 | `/humanize` | `bussin-write-like-a-human` | `<draft text or path to the draft>` |
+| `/a11y` | `bussin-a11y` | `[page, component or URL to build or audit]` |
+| `/seo` | `bussin-seo` | `[page, route or URL]` |
+| `/schema` | `bussin-schema` | `[page, entity or URL]` |
 
 Aliases are user-only: Claude never picks one by itself, so they do not compete with the real skills for triggering. When the skills come from the plugin, the aliases are namespaced too, for example `/bussin:autoloop`.
 
@@ -42,7 +48,7 @@ Aliases are user-only: Claude never picks one by itself, so they do not compete 
 
 ### As a Claude Code plugin
 
-One install gives you all eight skills:
+One install gives you all eleven skills:
 
 ```bash
 claude plugin marketplace add nksrentas/skills

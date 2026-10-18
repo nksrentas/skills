@@ -95,4 +95,15 @@ done < <(readme_skills)
 check "file names under bussin-*/ and tests/ are kebab-case" kebab_file_names
 check "no references to retired skills" no_retired_skill_refs
 
+relative_links_resolve() {
+  local file target missing=0
+  while IFS= read -r -d '' file; do
+    while IFS= read -r target; do
+      [ -e "$(dirname "$file")/$target" ] || { echo "    broken link in $file: $target"; missing=1; }
+    done < <(grep -oE '\]\([^)#[:space:]]+' "$file" | sed 's/^](//' | grep -vE '^(https?:|mailto:)')
+  done < <(find "$root"/bussin-* -name '*.md' -print0)
+  [ "$missing" = 0 ]
+}
+check "relative links in bussin-* markdown resolve" relative_links_resolve
+
 [ "$failures" = 0 ]
