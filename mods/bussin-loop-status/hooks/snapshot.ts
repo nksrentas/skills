@@ -173,7 +173,9 @@ export const compute = (files: LoopFiles): LoopSnapshot | null => {
   const remaining = total - done
   const sessionSec = sum(usage, row => row.duration_ms) / 1000
   const parallelism = mode === 'parallel' ? Math.max(1, Math.min(workers, remaining)) : 1
-  const etaSec = loopState === 'running' && done > 0 && remaining > 0 ? Math.round((remaining * sessionSec) / done / parallelism) : null
+  const doneByLoop = new Set(usage.filter(row => passed.has(row.item)).map(row => row.item)).size
+  const etaSec =
+    loopState === 'running' && doneByLoop > 0 && remaining > 0 ? Math.round((remaining * sessionSec) / doneByLoop / parallelism) : null
   const runningRows: RunningRow[] = runningList.map(row => ({
     item: row.item,
     title: title(features.find(feature => feature.id === row.item)),
@@ -268,3 +270,11 @@ const LOOP_ORDER: Record<LoopSnapshot['loopState'], number> = { running: 0, stop
 
 export const orderLoops = <T extends { name: string; snapshot: LoopSnapshot }>(loops: T[]) =>
   [...loops].sort((a, b) => LOOP_ORDER[a.snapshot.loopState] - LOOP_ORDER[b.snapshot.loopState] || a.name.localeCompare(b.name))
+
+export const shortName = (name: string, repoName: string | undefined) =>
+  repoName !== undefined && name !== repoName && name.startsWith(`${repoName}-`) ? name.slice(repoName.length + 1) : name
+
+export const compactLine = (name: string, snapshot: LoopSnapshot) => {
+  const eta = snapshot.etaSec === null ? 'ETA after first item' : `ETA ${formatDuration(snapshot.etaSec)}`
+  return [`▶ ${name} ${snapshot.done}/${snapshot.total}`, eta, pricedCost(snapshot)].filter(Boolean).join(' · ')
+}

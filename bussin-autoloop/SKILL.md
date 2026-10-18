@@ -40,6 +40,7 @@ The speed-up depends on the list's shape, not on the cap. Items that all edit on
 
 The `bussin-loop-status` mod shows a run as it happens. Install it with `claude plugin marketplace add nksrentas/skills` and `claude plugin install bussin-loop-status@bussin`.
 - **Status line:** while a loop exists in the project, it shows something like `autoloop 12/19 done · 2 running · ETA 1h 05m · $14.32`.
+- **Band above the prompt:** with several loops in the repository, every running one gets its own row, for example `▶ stage1-auth-site ███░░ 36/59 · on F31 · ETA 40m · $6.09`, with a Details button that opens it in the pane. The status line lists them all too.
 - **Pane:** `/autoloop-status` opens it, and it opens by itself when a session starts during a run. It shows progress, elapsed time and ETA, input, output and cache tokens, cost per session and per model, what each worker is running, every item's state, and the latest progress notes.
 
 It reads only `.loop/` folders, and it finds them in the session's project and in every git worktree of the same repository. A session opened in the main checkout therefore sees loops running in worktrees, with buttons to switch between them. A loop started before this telemetry existed has no `usage.jsonl` or `live.json`, so the view shows progress and items only. Two steps fill it in:
