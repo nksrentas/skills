@@ -31,6 +31,14 @@ readme_skills() {
     sed -n 's/^- \[\([^]]*\)\].*/\1/p'
 }
 
+kebab_file_names() {
+  local bad
+  [ -d "$root" ] || return 1
+  bad="$(cd "$root" && { find bussin-* tests -type f ! -name SKILL.md ! -name .DS_Store 2>/dev/null || true; } | LC_ALL=C grep -v '/[a-z0-9.-]*$')" || return 0
+  printf '%s\n' "$bad" | sed 's/^/     not kebab-case: /'
+  return 1
+}
+
 valid_json() { jq empty "$1" 2>/dev/null; }
 listed_in() { "$2" | grep -xF "$1" >/dev/null; }
 exists_on_disk() { [ -d "$root/$1" ]; }
@@ -55,5 +63,7 @@ done < <(marketplace_skills)
 while IFS= read -r entry; do
   check "README Included skills entry $entry exists on disk" exists_on_disk "$entry"
 done < <(readme_skills)
+
+check "file names under bussin-*/ and tests/ are kebab-case" kebab_file_names
 
 [ "$failures" = 0 ]
