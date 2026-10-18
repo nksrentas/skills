@@ -189,8 +189,11 @@
       "ui": false,
       "description": "File-name and retired-name scans ignore .git/, evals/results/ and .loop/, handle paths with spaces, and do not flag legitimate non-skill words (retro.md, 'code review' prose, 'test audit' as plain English, a variable named tdd_mode).",
       "verify": "Scratchpad fixture with a file named 'bussin-good/references/my notes.md' (FAIL as not kebab-case, named correctly in the output, no word splitting), and a SKILL.md mentioning retro.md, 'a code review pass' and tdd_mode: no retired-name FAIL for it.",
-      "passes": false,
-      "evidence": null
+      "passes": true,
+      "evidence": {
+        "commit": "fac4633",
+        "ran": "bash .loop/verify.sh; scratchpad fixture via tests/skills-structure.test.sh <fixture>: 'bussin-lean/references/my notes.md' -> FAIL 'not kebab-case: bussin-lean/references/my notes.md' (one line, no word splitting); SKILL-dir file with retro.md, 'a code review pass', tdd_mode, 'test audit' -> no retired-name FAIL; 'invoke the tdd skill' in .git/, .loop/, evals/results/ ignored; same text in 'dir with space/file with space.md' flagged by full path; fixture with spaced file removed -> 0 FAIL"
+      }
     },
     {
       "id": "E5",

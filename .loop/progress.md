@@ -96,3 +96,8 @@ Next: E3
 Did: verified readme_skills only reads list lines under "## Included skills" (awk toggles on every "## " heading). Scratchpad fixture: bussin-good in marketplace.json and on disk, README mentions it under ## Install as a `- [bussin-good](...)` line and in a code span, and under ## Quick start, but not under ## Included skills: FAIL "bussin-good: listed in README Included skills", exit 1. No code change, so no implementation commit and no review subagent; evidence points at 49639f5.
 Learned: "### " subheadings inside Included skills would not end the section (only "## " does), which is the intended behaviour since the real README has none there.
 Next: E4
+
+## Session 16 · E4 · 2026-10-18
+Did: verified with a scratchpad copy of the repo passed as the test's root arg: "bussin-lean/references/my notes.md" FAILs kebab-case and prints the full path on one line; a references file with retro.md, "a code review pass", tdd_mode and "test audit" gets no retired-name FAIL; "invoke the tdd skill; bussin-code-feature" in .git/, .loop/ and evals/results/ is ignored, while the same text in "dir with space/file with space.md" is flagged by full path (find -print0 | xargs -0). No code change, so no implementation commit and no review subagent; evidence points at fac4633.
+Learned: tests/skills-structure.test.sh takes an optional root as $1, which makes fixture checks a copy-and-run with no edits to the test.
+Next: E5
