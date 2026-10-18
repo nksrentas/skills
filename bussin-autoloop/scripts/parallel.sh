@@ -71,10 +71,12 @@ next_ready() {
 
 launch() {
   local slot="$1" id="$2" dir="$worker_root/w$1" branch="loop/$2"
-  git worktree remove --force "$dir" >/dev/null 2>&1 || true
+  remove_worktree "$slot"
   git branch -D "$branch" >/dev/null 2>&1 || true
   mkdir -p "$worker_root"
   git worktree add -q -b "$branch" "$dir" "$integration"
+  slot_admin[$slot]="$(git -C "$dir" rev-parse --absolute-git-dir)"
+  slot_pointers[$slot]="$(worker_pointers "$slot")"
   if [ -f .claude/settings.local.json ]; then
     mkdir -p "$dir/.claude" && cp .claude/settings.local.json "$dir/.claude/"
   fi
@@ -87,8 +89,6 @@ launch() {
   slot_pid[$slot]=$!
   slot_item[$slot]="$id"
   slot_started[$slot]="$(date +%s)"
-  slot_admin[$slot]="$(git -C "$dir" rev-parse --absolute-git-dir)"
-  slot_pointers[$slot]="$(worker_pointers "$slot")"
   launched=$((launched + 1))
 }
 
@@ -139,6 +139,11 @@ merge_item() {
   log "merged $id"
 }
 
+remove_worktree() {
+  rm -rf "${worker_root:?}/w$1"
+  git worktree prune
+}
+
 worker_pointers() { cat "${slot_admin[$1]}/commondir" "${slot_admin[$1]}/gitdir" 2> /dev/null || true; }
 
 worker_redirected() {
@@ -173,7 +178,7 @@ finish() {
   if worker_redirected "$slot"; then stop_on_tamper; fi
   slot_pid[$slot]=""
   slot_item[$slot]=""
-  git worktree remove --force "$worker_root/w$slot" >/dev/null 2>&1 || true
+  remove_worktree "$slot"
   if git show "$branch:.loop/results/$id.json" 2>/dev/null \
     | jq -e --arg id "$id" '.passes == true and .id == $id and (.evidence | type) == "object"' >/dev/null 2>&1; then
     if merge_item "$id" "$branch" "$slot"; then outcome=merged; else outcome="not merged"; fi
@@ -204,7 +209,7 @@ stop_workers() {
   local i
   for ((i = 1; i <= workers; i++)); do
     if [ -n "${slot_pid[$i]:-}" ]; then kill -- -"${slot_pid[$i]}" 2>/dev/null || true; fi
-    git worktree remove --force "$worker_root/w$i" >/dev/null 2>&1 || true
+    rm -rf "${worker_root:?}/w$i"
   done
   git merge --abort >/dev/null 2>&1 || true
   git worktree prune
