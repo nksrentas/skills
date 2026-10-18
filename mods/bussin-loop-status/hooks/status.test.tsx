@@ -100,6 +100,20 @@ test('strips terminal control characters from everything read out of the repo', 
   expect(snapshot?.recent).toEqual(['note[2J here'])
 })
 
+test('ignores numbers that are not numbers in the loop files', async () => {
+  const live = JSON.stringify({ state: 'running', mode: 'parallel', workers: '\u001b[2J9', started_at: 'soon', updated_at: 2, running: [{ item: 'A', worker: '\u001b1', started_at: 'x' }] })
+  const usage = JSON.stringify({ item: 'A', outcome: 'failed', cost_usd: '\u001b[31m9', input_tokens: '5', duration_ms: null, models: { m: { cost_usd: 'NaN' } } })
+  const features = JSON.stringify({ features: [{ id: 'A', passes: 'yes' }, { id: 'B', passes: true }] })
+  const snapshot = compute({ features, usage, live, now: NOW })
+  expect(snapshot?.workers).toBe(1)
+  expect(snapshot?.costUsd).toBe(0)
+  expect(snapshot?.inputTokens).toBe(0)
+  expect(snapshot?.models[0]?.costUsd).toBe(0)
+  expect(snapshot?.runningRows[0]?.worker).toBe(0)
+  expect(snapshot?.done).toBe(1)
+  expect(JSON.stringify(snapshot)).not.toContain('\\u001b')
+})
+
 test('formats durations, tokens and the status line', async () => {
   expect(formatDuration(45)).toBe('45s')
   expect(formatDuration(1350)).toBe('22m')
