@@ -4,7 +4,7 @@ export type ItemRow = { id: string; title: string; state: ItemState; note: strin
 
 export type RunningRow = { item: string; title: string; worker: number; seconds: number }
 
-export type ModelRow = { name: string; costUsd: number; inputTokens: number; outputTokens: number }
+export type ModelRow = { name: string; costUsd: number; priced: boolean; inputTokens: number; outputTokens: number }
 
 export type LoopSnapshot = {
   loopState: 'running' | 'finished' | 'stopped' | 'idle'

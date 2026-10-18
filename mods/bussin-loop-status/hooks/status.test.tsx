@@ -2,7 +2,7 @@ import type { On } from 'claude-code'
 import { expect, test } from 'claude-code/testing'
 
 import { PANE } from './register'
-import { commonDirFromGitFile, compute, formatDuration, formatTokens, shortName, statusLine } from './snapshot'
+import { commonDirFromGitFile, compute, formatDuration, formatTokens, shortModel, shortName, shortTitle, statusLine } from './snapshot'
 
 const NOW = 4000
 
@@ -194,18 +194,23 @@ test('/autoloop-status reads the loop files, sets the status line and fills the 
   on('fs.stat', async (_, e) => ({ deny: `ENOENT: ${e.path}` }))
   const ran = await $.command.run(RUN_COMMAND)
   expect(ran).toMatchObject({ text: 'autoloop 1/4 done · 1 running · ETA 22m · $2.00' })
-  expect(statuses.at(-1)).toBe('autoloop 1/4 done · 1 running · ETA 22m · $2.00')
+  expect(statuses.at(-1)).toBeUndefined()
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ ...PANE_TARGET, surface })
     expect(await ui.find({ type: 'Text', text: /project · running · parallel × 2/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /1\/4 done · 1 running · 1 waiting · 1 failing/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /elapsed 50m · ETA ~22m \(around \d\d:\d\d\)/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /in 1\.4k · out 250 · cache read 5\.0k · cache write 100/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /\$2\.00 over 2 sessions · \$1\.00 per session/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /claude-opus-5-5 · \$1\.50 · in 1\.0k · out 200/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /w1 F2 CSV download · 5m/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /… E1 Empty export · waiting for F2/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /✓ F1 Export button · \$1\.50 · 10m/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /1\/4 done · 1 running · 3 to go/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^ETA ~22m \(around \d\d:\d\d\) · elapsed 50m · \$2\.00 so far$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^out 250 · in 1\.4k · cache read 5\.0k · cache write 100$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^\$2\.00 · 2 priced sessions · \$1\.00 each$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^opus-5-5 \$1\.50 · haiku-4-5 \$0\.50$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^Now$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^CSV download$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /w1 · 5m/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^Empty export$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /waiting for F2/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^Done$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /\$1\.50 · 10m/ })).toBeDefined()
+    expect(await ui.findAll({ type: 'Text', text: /^CSV download$/ })).toHaveLength(1)
     await ui.unmount()
   }
 })
@@ -294,7 +299,7 @@ test('finds loops in every worktree from the main checkout, running ones first',
     expect(await ui.find({ type: 'Text', text: /^autoloop finished 2\/2$/ })).toBeDefined()
     await ui.press({ key: 'select-repo' })
     expect(await ui.find({ type: 'Text', text: /repo · finished · sequential/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /elapsed — · ETA —/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /elapsed|\$0\.00/ })).toBeUndefined()
     await ui.press({ key: 'select-wt-a' })
     await ui.unmount()
   }
@@ -327,7 +332,7 @@ test('the band above the prompt shows every running loop, and Details opens it i
   const statuses: (string | undefined)[] = []
   answerRepo(on, '/repo', statuses)
   await $.command.run(RUN_COMMAND)
-  expect(statuses.at(-1)).toBe('autoloop ▶ wt-a 1/4 · ETA 22m · $2.00 │ ▶ wt-c 1/4 · ETA 22m · $2.00')
+  expect(statuses.at(-1)).toBeUndefined()
   for (const surface of ['terminal', 'desktop'] as const) {
     const band = await $.ui.mount({ ...BAND_TARGET, surface })
     expect(await band.find({ type: 'Text', text: /▶ wt-a [█░]{10} 1\/4 · on F2 · ETA 22m · \$2\.00/ })).toBeDefined()
@@ -375,4 +380,29 @@ test('the ETA only counts items this loop finished, not ones done before it star
   const usage = JSON.stringify({ item: 'NEW', outcome: 'passed', duration_ms: 600000, cost_usd: 1, started_at: 1000, ended_at: 1600 })
   const live = JSON.stringify({ state: 'running', mode: 'sequential', workers: 1, started_at: 1000, updated_at: 1600, running: [] })
   expect(compute({ features, usage, live, now: NOW })?.etaSec).toBe(3000)
+})
+
+test('the status line only speaks when no loop is running', async ($, on) => {
+  const statuses: (string | undefined)[] = []
+  const files: Record<string, string> = { '/done/.loop/feature_list.json': FINISHED }
+  on('session.root', async () => ({ value: '/done' }))
+  on('clock.now', async () => ({ value: NOW * 1000 }))
+  on('fs.read', async (_, e) => {
+    const text = files[e.path]
+    return text === undefined ? { deny: `ENOENT: ${e.path}` } : { value: text }
+  })
+  on('fs.stat', async (_, e) => ({ deny: `ENOENT: ${e.path}` }))
+  on('ui.status', async (_, e) => {
+    statuses.push(e.text)
+    return { value: undefined }
+  })
+  on('ui.open', async () => ({ value: { isPlaced: true } }))
+  await $.command.run(RUN_COMMAND)
+  expect(statuses.at(-1)).toBe('autoloop finished 2/2')
+})
+
+test('long item descriptions shorten to their heading, and model names drop the claude- prefix', async () => {
+  expect(shortTitle('F33 Docs and harness for the new stack: README.md explains the monorepo')).toBe('F33 Docs and harness for the new stack')
+  expect(shortTitle('x'.repeat(100)).length).toBe(64)
+  expect(shortModel('claude-opus-5-5[1m]')).toBe('opus-5-5[1m]')
 })
