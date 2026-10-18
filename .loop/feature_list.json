@@ -91,8 +91,11 @@
       "ui": false,
       "description": "evals/ holds one claude plugin eval case per positive prompt (8 cases, one per bussin skill) using the exact prompts from the task, each with a prompt.md (frontmatter max_turns >= 15 and allowed_tools that include Skill) and a grader that checks the named skill fired via the `tool_used: Skill` style grader. The case format follows `claude plugin eval --help` and `claude plugin eval init --bare <name> --eval-dir evals` output; where those are not enough, ask the claude-code-guide subagent about plugin eval case and grader format.",
       "verify": "List evals/: eight kebab-case case folders, one per bussin skill, each prompt.md containing the task's prompt verbatim and max_turns >= 15, each grader naming its skill. `claude plugin validate --strict .` passes.",
-      "passes": false,
-      "evidence": null
+      "passes": true,
+      "evidence": {
+        "commit": "a6de05c",
+        "ran": "bash .loop/verify.sh (3 test files pass, structure test ok with evals/ present); claude plugin validate --strict . passed; evals/trigger-bussin-<skill>/ x8, prompts byte-exact to task, max_turns 20, allowed_tools [Read, Glob, Grep, Skill], graders type tool_used tool Skill input_match naming the skill; review subagent: spec/standards/lean clean"
+      }
     },
     {
       "id": "F9",
