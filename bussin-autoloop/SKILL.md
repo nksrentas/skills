@@ -1,6 +1,7 @@
 ---
 name: bussin-autoloop
 description: Autonomous build loop for one feature or a whole new project. `/bussin-autoloop init <task>` researches the codebase (or scaffolds a new project), expands the task into `.loop/feature_list.json` with functional, edge-case and regression items, installs verify gates and a commit guard, then `/bussin-autoloop run` completes ONE item per fresh session until every item passes with evidence. Use it whenever the user wants something built autonomously, "in a loop", "without back and forth", "until it's done", "overnight", "with proof it works end-to-end", or mentions autoloop, feature_list, Ralph-style loops or long-running agent harnesses. Also use it when they want the loop faster or more thorough (modes fast, standard, thorough) or want specific skills plugged into one feature.
+argument-hint: "init <task> [--mode fast|standard|thorough] [--skills a,b,review:c] [--no-checkpoint] [--new] [--stack <text>] [--base <ref>] | run | status"
 ---
 
 # bussin-autoloop

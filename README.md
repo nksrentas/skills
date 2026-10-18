@@ -21,6 +21,23 @@
 - [bussin-honest-feedback](./bussin-honest-feedback): Direct assessments instead of agreeable ones: verdict first, a rating out of 10 against fixed anchors, weak assumptions named, "you're wrong" with the reason, and "I don't know" when that is the truth.
 - [bussin-write-like-a-human](./bussin-write-like-a-human): Check and revise drafts against the narrative choices that separate human from AI fiction, using measured rates from the StoryScope study of 61,608 stories.
 
+## Short aliases
+
+Every skill has a short alias that takes the same arguments, and the slash menu shows those arguments as you type.
+
+| Alias | Skill | Arguments |
+|---|---|---|
+| `/autoloop` | `bussin-autoloop` | `init <task> [--mode fast\|standard\|thorough] [--skills a,b,review:c] [--no-checkpoint] [--new] [--stack <text>] [--base <ref>]`, `run` or `status` |
+| `/feature` | `bussin-feature` | `<feature to build or change>` |
+| `/lean` | `bussin-lean` | `[path, file or commit range to clean up]` |
+| `/arch` | `bussin-ts-architecture` | `[feature to place or wiring question]` |
+| `/drizzle` | `bussin-drizzle` | `[table, column, migration or query task]` |
+| `/ui` | `bussin-ui` | `[page, section or screen to build or restyle]` |
+| `/honest` | `bussin-honest-feedback` | `<idea, plan, draft or decision to assess>` |
+| `/humanize` | `bussin-write-like-a-human` | `<draft text or path to the draft>` |
+
+Aliases are user-only: Claude never picks one by itself, so they do not compete with the real skills for triggering. When the skills come from the plugin, the aliases are namespaced too, for example `/bussin:autoloop`.
+
 ## Install
 
 ### As a Claude Code plugin
