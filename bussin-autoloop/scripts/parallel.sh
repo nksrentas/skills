@@ -78,10 +78,10 @@ launch() {
   fi
   set_attempts "$id" $(($(attempts_of "$id") + 1))
   log "worker $slot started $id (attempt $(attempts_of "$id") of $item_attempts)"
-  (cd "$dir" && LOOP_WORKER="$slot" LOOP_MAIN_DIR="$main_dir" exec perl -e 'setpgrp(0, 0); exec @ARGV' \
-    claude -p "$skill_command run --item $id" --output-format json \
-    --allowedTools "${allowed_tools[@]}" --disallowedTools "${denied_tools[@]}") \
-    > "$state_dir/w$slot.json" 2> "$state_dir/w$slot.log" < /dev/null &
+  install_commit_hook
+  agent_command "$skill_command run --item $id"
+  (cd "$dir" && LOOP_WORKER="$slot" LOOP_MAIN_DIR="$main_dir" AUTOLOOP_SESSION=1 exec perl -e 'setpgrp(0, 0); exec @ARGV' \
+    "${agent_cmd[@]}") > "$state_dir/w$slot.json" 2> "$state_dir/w$slot.log" < /dev/null &
   slot_pid[$slot]=$!
   slot_item[$slot]="$id"
   slot_started[$slot]="$(date +%s)"

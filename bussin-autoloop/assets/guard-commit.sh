@@ -2,20 +2,22 @@
 set -euo pipefail
 trap 'echo "autoloop: commit blocked because the guard itself failed at line $LINENO." >&2; exit 2' ERR
 
-input="$(cat)"
-command="$(jq -r '.tool_input.command // ""' <<< "$input" 2>/dev/null)" || command="$input"
-commit_pattern='(^|[;&|(`$[:space:]])git([[:space:]]+-[^[:space:]]+([[:space:]]+[^-[:space:]][^[:space:]]*)?)*[[:space:]]+commit([[:space:]]|$)'
-[[ "$command" =~ $commit_pattern ]] || exit 0
-
 block() {
   echo "autoloop: commit blocked. $1" >&2
   exit 2
 }
 
-redirect_pattern='GIT_(INDEX_FILE|DIR|WORK_TREE|OBJECT_DIRECTORY|COMMON_DIR)=|--git-dir|--work-tree|--namespace'
-[[ "$command" =~ $redirect_pattern ]] && block "Commit commands may not point git at another index, git dir or work tree."
-
-cd "${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel)}"
+if [ "${1:-}" = --pre-commit ]; then
+  cd "$(git rev-parse --show-toplevel)"
+else
+  input="$(cat)"
+  command="$(jq -r '.tool_input.command // ""' <<< "$input" 2>/dev/null)" || command="$input"
+  commit_pattern='(^|[;&|(`$[:space:]])git([[:space:]]+-[^[:space:]]+([[:space:]]+[^-[:space:]][^[:space:]]*)?)*[[:space:]]+commit([[:space:]]|$)'
+  [[ "$command" =~ $commit_pattern ]] || exit 0
+  redirect_pattern='GIT_(INDEX_FILE|DIR|WORK_TREE|OBJECT_DIRECTORY|COMMON_DIR)=|--git-dir|--work-tree|--namespace'
+  [[ "$command" =~ $redirect_pattern ]] && block "Commit commands may not point git at another index, git dir or work tree."
+  cd "${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel)}"
+fi
 empty_tree=4b825dc642cb6eb9a060e54bf8d69288fbee4904
 head="$(git rev-parse -q --verify HEAD || echo "$empty_tree")"
 loop_fingerprint() {

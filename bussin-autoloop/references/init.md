@@ -119,9 +119,9 @@ git add -A
 git commit -m "chore(autoloop): init <short task slug>"
 ```
 
-Tell the user the guard applies to every Claude Code session in this repo while `.loop/` exists, including other harnesses, so a commit there needs `bash .loop/verify.sh` first.
+Tell the user the guard applies to every Claude Code session in this repo while `.loop/` exists, so a commit there needs `bash .loop/verify.sh` first. Sessions the driver starts, with any agent, also pass through a git `pre-commit` hook the driver installs; it ignores commits made outside those sessions.
 
-On a re-init over an earlier loop, the guard blocks this commit because `config.json` and the scripts change. Ask the user to run the commit themselves, in their terminal or with `!` in Claude Code; the guard only checks Claude's own Bash tool.
+On a re-init over an earlier loop, the guard blocks this commit because `config.json` and the scripts change. Ask the user to run the commit themselves, in their terminal or with `!` in Claude Code; neither guard checks a commit the user makes there.
 
 Tell the user they can change `depends_on` and `touches` at any time by editing `.loop/feature_list.json`: the driver re-reads them before every launch, and the commit guard ignores those two fields. Then tell them how to start:
 
@@ -129,4 +129,4 @@ Tell the user they can change `depends_on` and `touches` at any time by editing 
 bash "$SKILL_DIR/scripts/loop.sh"
 ```
 
-with `$SKILL_DIR` written out as the real base directory, because the user's shell does not have that variable. When two or more items could run at once, also show the parallel form, `LOOP_WORKERS=3 bash "$SKILL_DIR/scripts/loop.sh"`, and say that it runs up to that many sessions at once, each in its own worktree, and uses usage that many times faster. Mention that `/autoloop-status`, from the `bussin-loop-status` mod, shows progress, ETA, tokens and cost while it runs. Add that a single iteration can be run by hand with `/bussin-autoloop run`, or `/bussin:bussin-autoloop run` when the skill came from the `bussin` plugin.
+with `$SKILL_DIR` written out as the real base directory, because the user's shell does not have that variable. When this init runs in Codex or GitHub Copilot, prefix the command with `LOOP_AGENT=codex` or `LOOP_AGENT=copilot` so the sessions use the same agent. When two or more items could run at once, also show the parallel form, `LOOP_WORKERS=3 bash "$SKILL_DIR/scripts/loop.sh"`, and say that it runs up to that many sessions at once, each in its own worktree, and uses usage that many times faster. Mention that `bash "$SKILL_DIR/scripts/loop-status.sh" --watch` shows progress, ETA, tokens and cost in any terminal while it runs, and `/autoloop-status` does the same in Claude Code with the `bussin-loop-status` mod. Add that a single iteration can be run by hand with `/bussin-autoloop run`, or `/bussin:bussin-autoloop run` when the skill came from the `bussin` plugin.

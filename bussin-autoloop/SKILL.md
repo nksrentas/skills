@@ -15,18 +15,34 @@ Two prompts over one harness. `init` runs once and leaves artifacts in `.loop/`.
 | `/bussin-autoloop init <task> [flags]` | `references/init.md` | Research or scaffold, write `.loop/`, checkpoint with the user, commit |
 | `/bussin-autoloop run` | `references/run.md` | One item: implement, pass the gates, mark passing with evidence, commit, stop |
 | `/bussin-autoloop run --item <id>` | `references/run.md` | Worker mode for the parallel driver: that one item in its own worktree, result written to `.loop/results/<id>.json` |
-| `/bussin-autoloop status` | nothing | Print items still `passes:false`, the totals from `.loop/usage.jsonl` (sessions, input and output tokens, cost, models), and the last 20 lines of `.loop/progress.md` |
+| `/bussin-autoloop status` | nothing | Run `bash <skill directory>/scripts/loop-status.sh` and show its output: progress, ETA, what runs now and next, cost, tokens, models and the latest progress notes |
 | `/bussin-autoloop <text>` with no `.loop/` | `references/init.md` | Treat the text as the task |
 
-Installed as the `bussin` plugin, the command is `/bussin:bussin-autoloop`; everything else is the same.
+Installed as the `bussin` plugin, the command is `/bussin:bussin-autoloop`; everything else is the same. In Codex the skill is mentioned as `$bussin-autoloop`.
 
-The driver `scripts/loop.sh` calls `claude -p "/bussin-autoloop run"` (or the plugin form, chosen from where the script lives; override with `LOOP_SKILL_COMMAND`) until no item has `passes:false`, with a stall guard. A session that exits on a usage limit is not a stall: the driver waits `LIMIT_WAIT` seconds (default 600) and retries. Start it from the project root:
+The driver `scripts/loop.sh` starts one headless agent session per item with the `run` prompt until no item has `passes:false`, with a stall guard. The prompt is `/bussin-autoloop run`, the plugin form when the script lives in the plugin cache, or `$bussin-autoloop run` for Codex; override it with `LOOP_SKILL_COMMAND`. A session that exits on a usage limit is not a stall: the driver waits `LIMIT_WAIT` seconds (default 600) and retries. Start it from the project root:
 
 ```bash
 bash <skill directory>/scripts/loop.sh
 ```
 
 Init prints the exact path for the current install, for example `~/.claude/skills/bussin-autoloop/scripts/loop.sh`.
+
+### Agents
+
+`LOOP_AGENT` picks the CLI that runs each session; the default is `claude`. Each needs the skill installed where that agent finds it (`npx skills add nksrentas/skills --skill bussin-autoloop -a codex`, or `-a github-copilot`).
+
+| `LOOP_AGENT` | Session command | Tool limits | Telemetry |
+|---|---|---|---|
+| `claude` | `claude -p … --output-format json` | Allowlist per tool and command, Edit and Write denied on loop files | Tokens, cost and models from the result |
+| `codex` | `codex exec --json --sandbox workspace-write --add-dir <git dir>` | Codex's sandbox: writes only inside the project and its git dir, no network | Tokens per turn; cost unknown |
+| `copilot` | `copilot -p … --output-format json --no-ask-user` | `--allow-tool` for file writes, `bash`, the git read and commit subcommands and each project command; writes to the loop scripts and config denied | Model, turns and premium requests; tokens and cost unknown |
+
+`LOOP_MODEL` sets the model for any agent. `LOOP_AGENT_ARGS` appends raw flags, for example `LOOP_AGENT_ARGS='-c sandbox_workspace_write.network_access=true'` when Codex sessions need the network for installs or a browser check. `LOOP_EXTRA_TOOLS` adds Claude or Copilot tool rules; Codex takes its MCP servers from its own config.
+
+```bash
+LOOP_AGENT=codex LOOP_MODEL=gpt-5.6-luna bash <skill directory>/scripts/loop.sh
+```
 
 ### Parallel workers
 
@@ -38,7 +54,16 @@ The speed-up depends on the list's shape, not on the cap. Items that all edit on
 
 ### Status view
 
-The `bussin-loop-status` mod shows a run as it happens. Install it with `claude plugin marketplace add nksrentas/skills` and `claude plugin install bussin-loop-status@bussin`.
+In any terminal, whichever agent runs the loop:
+
+```bash
+bash <skill directory>/scripts/loop-status.sh            # every loop in this repository and its worktrees
+bash <skill directory>/scripts/loop-status.sh --watch 5  # redraw every 5 seconds
+```
+
+It prints the same view as the pane below: progress bar, elapsed time, ETA and its clock time, cost, then Now, Next and Done, then cost, tokens, models (and Copilot premium requests) and the latest progress notes.
+
+In Claude Code, the `bussin-loop-status` mod shows a run as it happens. Install it with `claude plugin marketplace add nksrentas/skills` and `claude plugin install bussin-loop-status@bussin`.
 - **Status line:** shows a loop's outcome once nothing is running, for example `autoloop finished 59/59 · 9h 12m · $41.20`. While loops run it stays empty, because the band below already shows them.
 - **Band above the prompt:** with several loops in the repository, every running one gets its own row, for example `▶ stage1-auth-site ███░░ 36/59 · on F31 · ETA 40m · $6.09`, with a Details button that opens it in the pane. The status line lists them all too.
 - **Pane:** `/autoloop-status` or a band row's Details button opens it. It shows a header with progress, ETA, elapsed time and cost so far. Below that are three aligned lists: Now, Next (the next few items with what they wait for), and Done (the latest few). At the bottom are cost, tokens, models and the latest progress notes.
@@ -49,9 +74,13 @@ It reads only `.loop/` folders, and it finds them in the session's project and i
 
 ### Running unattended
 
-Each session runs headless, so it gets only the tools the driver passes in `--allowedTools`: the file tools, `Skill`, `Agent`, `TodoWrite`, `bash .loop/init.sh`, `bash .loop/verify.sh`, the read and commit subset of git, and every command in `config.commands`. Any other shell command is denied rather than run, and Edit and Write are denied on `.loop/*.sh`, `.loop/config.json`, `.claude/` and `.git/`. Recent Claude Code applies the `Edit` rule to every file tool and warns that the `Write` rule is redundant. Older versions need both, and the warning only reaches a session's error file. Add tools with a comma-separated `LOOP_EXTRA_TOOLS`, most often the browser MCP server that browser verification needs, for example `LOOP_EXTRA_TOOLS=mcp__plugin_playwright_playwright`.
+Each session runs headless with the limits in the agents table. A Claude session gets only the tools the driver passes in `--allowedTools`: the file tools, `Skill`, `Agent`, `TodoWrite`, `bash .loop/init.sh`, `bash .loop/verify.sh`, the read and commit subset of git, and every command in `config.commands`. Any other shell command is denied rather than run, and Edit and Write are denied on `.loop/*.sh`, `.loop/config.json`, `.claude/` and `.git/`. Recent Claude Code applies the `Edit` rule to every file tool and warns that the `Write` rule is redundant. Older versions need both, and the warning only reaches a session's error file. Add tools with a comma-separated `LOOP_EXTRA_TOOLS`, most often the browser MCP server that browser verification needs, for example `LOOP_EXTRA_TOOLS=mcp__plugin_playwright_playwright`.
 
-The guard and `verify.sh` read the loop scripts and config from the last commit, so editing them in the working tree changes nothing, and committing an edit is blocked. Together with the allowlist this stops the loop from shortcutting its own gates. It is not a sandbox against hostile code: the project's test script runs whatever the repo says, so a deliberately adversarial session could still rewrite it. When the proof has to hold against that, run the same tests in CI on the pushed commits. For an overnight run, use Claude Code's sandbox or a devcontainer with no production credentials and limited network access.
+The commit guard runs in two places. In Claude Code it is a PreToolUse hook on Bash. For every agent, the driver also installs a git `pre-commit` hook that runs the same guard on the commit being made, but only inside sessions it started (`AUTOLOOP_SESSION` is set), so your own commits are untouched. An existing `pre-commit` hook is kept as `pre-commit.before-autoloop` and still runs after the guard. When `core.hooksPath` is set (husky), the driver skips the hook and says so.
+
+A git hook can be skipped with `--no-verify`, so after every sequential session the driver audits what was committed. It stops the loop when a commit changed the loop config or scripts, or added, removed or reworded items. For Codex and Copilot, which have no tool-level guard, it also re-runs `verify.sh` whenever an item turned passing. The parallel driver already re-gates every merge.
+
+The guard and `verify.sh` read the loop scripts and config from the last commit, so editing them in the working tree changes nothing, and committing an edit is blocked. Together with the allowlist this stops the loop from shortcutting its own gates. It is not a sandbox against hostile code: the project's test script runs whatever the repo says, so a deliberately adversarial session could still rewrite it. When the proof has to hold against that, run the same tests in CI on the pushed commits. For an overnight run, use Claude Code's sandbox, Codex's sandbox or a devcontainer with no production credentials and limited network access. Copilot's allowlist works per command name, so allowing `bash` for the gate allows any bash script; run Copilot loops in a container when that matters.
 
 ## Artifacts in `.loop/`
 
@@ -61,10 +90,10 @@ The guard and `verify.sh` read the loop scripts and config from the last commit,
 | `feature_list.json` | init writes items; run touches only `passes` and `evidence` | The contract and the final proof |
 | `init.sh` | init | Boots the environment so no session rediscovers how |
 | `verify.sh` | init copies from `assets/` | Runs tests, then Stryker on changed files when enabled, then writes the code's fingerprint to `.loop/tests-passed` |
-| `guard-commit.sh` | init copies from `assets/` | PreToolUse hook, always run from the committed copy (`git show HEAD:`), that blocks any `git commit` unless the marker matches the current code, items are unchanged apart from `passes` and `evidence`, and the loop config and scripts are untouched |
+| `guard-commit.sh` | init copies from `assets/` | The commit guard, run as a Claude Code PreToolUse hook and as the git `pre-commit` hook the driver installs, always from the committed copy (`git show HEAD:`). It blocks any commit unless the marker matches the current code, items are unchanged apart from `passes` and `evidence`, and the loop config and scripts are untouched |
 | `progress.md` | run, or the driver in parallel mode | What each session did, learned about the codebase, and what is next |
-| `usage.jsonl` | the driver | One line per session: item, worker, outcome, duration, input, output and cache tokens, cost, and a per-model breakdown |
-| `live.json` | the driver | Whether the loop is running, its mode and workers, when it started, and which items are running now |
+| `usage.jsonl` | the driver | One line per session: agent, item, worker, outcome, duration, input, output and cache tokens, cost, and a per-model breakdown. `cost_usd` is absent when the agent does not report it |
+| `live.json` | the driver | Whether the loop is running, its mode, agent and workers, when it started, and which items are running now |
 | `results/<id>.json` | a parallel worker | One item's outcome, merged and then folded into `feature_list.json` and `progress.md` by the driver |
 | `retro.md` | run, thorough mode | Proposed environment improvements, never applied by the loop |
 
@@ -87,7 +116,7 @@ Fast suits throwaway or low-risk work. Standard suits normal features. Thorough 
 
 ## Per-feature skills
 
-`--skills a,b,review:c` adds skills to `config.skills`. A bare name lands in the `context` stage, which run reads before implementing (design systems, framework conventions, house style). `stage:name` targets `context`, `implement`, `review` or `end`. Run invokes each configured skill at its stage with the Skill tool, after its own built-in work for that stage. Test-first implementation, review and retro are built into `references/run.md`, so no outside skill is required. When a configured skill is not installed, run skips it and notes that in `progress.md`.
+`--skills a,b,review:c` adds skills to `config.skills`. A bare name lands in the `context` stage, which run reads before implementing (design systems, framework conventions, house style). `stage:name` targets `context`, `implement`, `review` or `end`. Run invokes each configured skill at its stage (the Skill tool in Claude Code; other agents load it by name), after its own built-in work for that stage. Test-first implementation, review and retro are built into `references/run.md`, so no outside skill is required. When a configured skill is not installed, run skips it and notes that in `progress.md`.
 
 House context skills, opt-in per feature:
 

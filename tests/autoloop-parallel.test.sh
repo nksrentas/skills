@@ -31,7 +31,10 @@ case "\$(jq -r --arg id "\$id" '.features[] | select(.id == \$id) | .tamper // "
   flip) jq '.features |= map(.passes = true)' .loop/feature_list.json > .loop/f.tmp && mv .loop/f.tmp .loop/feature_list.json ;;
   script) echo 'exit 0' >> .loop/verify.sh ;;
 esac
-git add -A && git commit -qm "feat: \$id"
+bash .loop/verify.sh > /dev/null 2>&1 || true
+bypass=()
+[ "\$(jq -r --arg id "\$id" '.features[] | select(.id == \$id) | .bypass // false' .loop/feature_list.json)" = true ] && bypass=(--no-verify)
+git add -A && git commit -qm "feat: \$id" \${bypass[@]+"\${bypass[@]}"}
 sha="\$(git rev-parse --short HEAD)"
 mkdir -p .loop/results
 if [ "\$(jq -r --arg id "\$id" '.features[] | select(.id == \$id) | .no_evidence // false' .loop/feature_list.json)" = true ]; then
@@ -39,7 +42,7 @@ if [ "\$(jq -r --arg id "\$id" '.features[] | select(.id == \$id) | .no_evidence
 else
   jq -n --arg id "\$id" --arg sha "\$sha" '{id: \$id, passes: true, evidence: {commit: \$sha, ran: "mock"}, notes: "Did: \\(\$id)"}' > ".loop/results/\$id.json"
 fi
-git add -A && git commit -qm "chore(loop): result \$id"
+git add -A && git commit -qm "chore(loop): result \$id" \${bypass[@]+"\${bypass[@]}"}
 echo "end \$id" >> "$dir/events"
 printf '{"type":"result","duration_ms":120000,"num_turns":9,"total_cost_usd":0.5,"usage":{"input_tokens":1,"output_tokens":1},"modelUsage":{"claude-opus-5-5":{"inputTokens":1000,"outputTokens":200,"cacheReadInputTokens":5000,"cacheCreationInputTokens":300,"costUSD":0.5}}}\n'
 EOF
@@ -92,7 +95,7 @@ check "nothing runs when every item is blocked" '[ ! -f "$cycle/events" ]'
 
 gate="$tmp/gate"
 make_project "$gate" '! test -e src/broken.txt' '{"features": [
-  {"id": "E", "passes": false, "evidence": null, "touches": ["src/broken.txt"], "writes": "src/broken.txt"},
+  {"id": "E", "passes": false, "evidence": null, "bypass": true, "touches": ["src/broken.txt"], "writes": "src/broken.txt"},
   {"id": "F", "passes": false, "evidence": null, "touches": ["src/fine.txt"], "writes": "src/fine.txt"}
 ]}'
 gate_status=0
@@ -111,7 +114,7 @@ tamper="$tmp/tamper"
 make_project "$tamper" true '{"features": [
   {"id": "T1", "passes": false, "evidence": null, "tamper": "flip", "touches": ["src/t1.txt"], "writes": "src/t1.txt"},
   {"id": "T2", "passes": false, "evidence": null, "depends_on": ["T1"], "touches": ["src/t2.txt"], "writes": "src/t2.txt"},
-  {"id": "T3", "passes": false, "evidence": null, "tamper": "script", "touches": ["src/t3.txt"], "writes": "src/t3.txt"}
+  {"id": "T3", "passes": false, "evidence": null, "tamper": "script", "bypass": true, "touches": ["src/t3.txt"], "writes": "src/t3.txt"}
 ]}'
 tamper_status=0
 run_loop "$tamper" LOOP_WORKERS=2 LOOP_ITEM_ATTEMPTS=1 || tamper_status=$?
@@ -128,6 +131,7 @@ cat > "$seq/bin/claude" <<EOF
 id="\$(jq -r '[.features[] | select(.passes == false)][0].id' .loop/feature_list.json)"
 echo "\$id" > "src/\$id.txt"
 jq --arg id "\$id" '(.features[] | select(.id == \$id)) |= (.passes = true | .evidence = {commit: "x"})' .loop/feature_list.json > .loop/f.tmp && mv .loop/f.tmp .loop/feature_list.json
+bash .loop/verify.sh > /dev/null
 git add -A && git commit -qm "feat: \$id"
 printf '{"type":"result","duration_ms":60000,"num_turns":4,"total_cost_usd":0.25,"modelUsage":{"claude-sonnet-5-5":{"inputTokens":700,"outputTokens":90,"cacheReadInputTokens":0,"cacheCreationInputTokens":0,"costUSD":0.25}}}\n'
 EOF
