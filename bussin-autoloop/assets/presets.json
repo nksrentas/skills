@@ -1,0 +1,14 @@
+{
+  "fast": {
+    "gates": { "tests": true, "mutation": false, "browser": false },
+    "skills": { "context": [], "implement": [], "review": [], "end": [] }
+  },
+  "standard": {
+    "gates": { "tests": true, "mutation": false, "browser": true },
+    "skills": { "context": [], "implement": ["tdd"], "review": ["code-review"], "end": [] }
+  },
+  "thorough": {
+    "gates": { "tests": true, "mutation": true, "browser": true },
+    "skills": { "context": [], "implement": ["tdd"], "review": ["code-review", "test-audit"], "end": ["retro"] }
+  }
+}

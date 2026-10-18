@@ -1,0 +1,167 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-parkinsans), ui-sans-serif, system-ui, sans-serif;
+
+  --color-canvas: #f7f7f2;
+  --color-ink: #191818;
+  --color-sun: #f9b000;
+  --color-cream: #fffeea;
+  --color-lace: #e6decb;
+  --color-flour: #e9e5da;
+  --color-oxford: #e9e7e3;
+  --color-line: #ede9e5;
+  --color-cocoa: #481f00;
+  --color-bark: #6b4a30;
+  --color-taupe: #8e7561;
+  --color-graphite: #444141;
+  --color-ash: #727171;
+  --color-stone: #908c8a;
+
+  --radius-card: 24px;
+  --radius-panel: 12px;
+  --radius-field: 8px;
+  --radius-chip: 6px;
+
+  --breakpoint-sm: 30rem;
+  --breakpoint-md: 48rem;
+  --breakpoint-lg: 62rem;
+  --breakpoint-xl: 80rem;
+  --breakpoint-2xl: 90rem;
+}
+
+@utility text-display {
+  font-size: 38px;
+  line-height: 0.99;
+  letter-spacing: -0.8px;
+  font-weight: 600;
+  @variant md {
+    font-size: 60px;
+  }
+  @variant lg {
+    font-size: 70px;
+  }
+}
+
+@utility text-h2 {
+  font-size: 26px;
+  line-height: 1.15;
+  letter-spacing: -0.32px;
+  font-weight: 500;
+  @variant md {
+    font-size: 38px;
+  }
+  @variant lg {
+    font-size: 48px;
+  }
+}
+
+@utility text-h3 {
+  font-size: 22px;
+  line-height: 1.34;
+  letter-spacing: -0.32px;
+  font-weight: 500;
+  @variant md {
+    font-size: 30px;
+  }
+  @variant lg {
+    font-size: 32px;
+  }
+}
+
+@utility text-h4 {
+  font-size: 20px;
+  line-height: 1.2;
+  letter-spacing: -0.32px;
+  font-weight: 500;
+  @variant md {
+    font-size: 24px;
+  }
+}
+
+@utility text-h5 {
+  font-size: 20px;
+  line-height: 1.28;
+  letter-spacing: -0.32px;
+  font-weight: 500;
+}
+
+@utility text-h6 {
+  font-size: 16px;
+  line-height: 1.05;
+  letter-spacing: -0.32px;
+  font-weight: 500;
+}
+
+@utility text-lead {
+  font-size: 18px;
+  line-height: 1.55;
+  letter-spacing: -0.32px;
+}
+
+@utility text-body {
+  font-size: 16px;
+  line-height: 1.55;
+  letter-spacing: -0.32px;
+}
+
+@utility text-small {
+  font-size: 14px;
+  line-height: 1.55;
+  letter-spacing: -0.32px;
+}
+
+@utility text-eyebrow {
+  font-size: 14px;
+  line-height: 1.34;
+  letter-spacing: 0.64px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+@utility text-button {
+  font-size: 16px;
+  line-height: 1.25;
+  letter-spacing: 0;
+  font-weight: 600;
+}
+
+@layer base {
+  html {
+    background-color: var(--color-canvas);
+  }
+
+  body {
+    font-size: 16px;
+    line-height: 1.55;
+    letter-spacing: -0.32px;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-ink);
+    outline-offset: 4px;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-reveal] {
+    opacity: 0;
+  }
+}
+
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+
+.lenis.lenis-smooth [data-lenis-prevent] {
+  overscroll-behavior: contain;
+}
+
+.lenis.lenis-stopped {
+  overflow: hidden;
+}

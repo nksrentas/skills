@@ -1,0 +1,91 @@
+---
+name: bussin-ui
+description: House UI system for landing pages and dashboards in Next.js + Tailwind CSS v4 + GSAP + Lenis, modelled on the Edefy Webflow template - warm cream canvas, Parkinsans type, sun-yellow pill buttons with a rolling label, 24px "tray" cards, one-second rise-in reveals, smooth scroll and scroll-scrubbed text. Use it whenever building or restyling a landing page, marketing site, hero, pricing or feature section, admin panel, dashboard, settings screen or any React UI where the user wants "our style", "the Edefy look", GSAP or Lenis animations, or when bussin-autoloop loads it as a context skill. Use it even when the user only says "make it look like our other sites" or "add the usual animations".
+---
+
+# bussin-ui
+
+A warm, editorial look: off-white canvas, near-black ink, one saturated accent (sun yellow), big rounded image frames, cards that sit inside a beige "tray", and motion that is slow, smooth and sparse. The values here were measured from the live template on 2026-10-18, so use them as given instead of approximating.
+
+## Stack
+
+| Concern | Choice |
+|---|---|
+| Framework | Next.js App Router, React Server Components by default |
+| Styling | Tailwind CSS v4, tokens in `@theme` from `assets/theme.css` |
+| Font | Parkinsans 300 to 700 via `next/font/google`, exposed as `--font-parkinsans` |
+| Animation | GSAP 3.15+ with ScrollTrigger and SplitText (free since 3.13), `@gsap/react` for `useGSAP` |
+| Smooth scroll | Lenis via `lenis/react`, driven by the GSAP ticker |
+| Hover micro-motion | CSS transitions in Tailwind classes, so server components stay server components |
+
+GSAP owns everything scroll-driven, sequenced or timed. Hover and focus states use CSS transitions with the same durations, because a pointer state needs no JavaScript and works before hydration. Do not add Framer Motion, AOS, react-spring or another scroll library next to these.
+
+## Setting up a project
+
+Copy from `assets/` into the app, keeping kebab-case names:
+
+| Asset | Goes to | What it gives you |
+|---|---|---|
+| `theme.css` | `app/globals.css` (merge) | Colours, radii, breakpoints, type utilities, reveal pre-state |
+| `smooth-scroll.tsx` | `components/motion/` | Lenis root synced with ScrollTrigger, respects reduced motion |
+| `motion-root.tsx` | `components/motion/` | One client boundary that animates every `data-reveal`, `data-split-color` and `data-marquee` inside it |
+| `components/roll-button.tsx` | `components/ui/` | The pill button with rolling label and sliding arrow |
+| `components/eyebrow.tsx` | `components/ui/` | Small uppercase section label with its mark |
+| `components/tray-card.tsx` | `components/ui/` | Beige frame around a canvas card |
+
+Install: `gsap @gsap/react lenis` and Tailwind v4 (`tailwindcss @tailwindcss/postcss`). In the root layout load the font and wrap the body:
+
+```tsx
+const parkinsans = Parkinsans({ subsets: ["latin"], weight: ["300", "400", "500", "600", "700"], variable: "--font-parkinsans" })
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en" className={parkinsans.variable}>
+      <body className="bg-canvas font-sans text-ink antialiased">
+        <SmoothScroll>{children}</SmoothScroll>
+      </body>
+    </html>
+  )
+}
+```
+
+Add `<noscript><style>{"[data-reveal]{opacity:1!important;transform:none!important}"}</style></noscript>` in `<head>`. Each page wraps its content in `<MotionRoot>`; sections stay server components and opt into motion with data attributes. A `data-reveal` outside a `MotionRoot` stays invisible, so the root goes in the page, not in individual sections. `next/font` warns that it has no fallback metrics for Parkinsans; that is harmless.
+
+Verified on 2026-10-18 with Next.js 16.4, React 19.3, Tailwind 4, GSAP 3.15, Lenis 1.3.26: production build, reveals, reduced-motion path, split-colour scrub, marquee loop, button roll and the responsive type scale at 390, 800 and 1280px.
+
+## Reference files
+
+Read the one that matches the work before writing markup:
+
+- `references/tokens.md`: every colour, the type scale at three breakpoints, spacing, radii, breakpoints. Read before choosing any value.
+- `references/components.md`: anatomy and Tailwind recipes for buttons, header, hero, section heads, tray cards, image cards, chips, icon lists, testimonials, sliders, inputs, footer, marquee.
+- `references/motion.md`: every animation with exact duration, easing, distance, trigger and delay rules, plus Lenis and reduced-motion handling.
+- `references/dashboard.md`: how the same language becomes an app shell, data cards, tables, forms and charts without turning a dashboard into a landing page.
+
+## Rules that make it look right
+
+- One accent. Sun `#f9b000` is for the primary action and small highlights; everything else is ink, canvas, cream and the warm neutrals. Two yellow buttons side by side is already one too many.
+- Ink is `#191818`, never pure black; canvas is `#f7f7f2`, never pure white. Pure white only appears inside inputs and glass menus.
+- Headings are Parkinsans 500, the display size 600, with negative tracking (-0.32px, -0.8px for display). Body text is 16px at 155% line height.
+- Large surfaces are rounded 24px: hero frame, image cards, trays, footer. Small things are pills (buttons, inputs) or 4 to 6px chips.
+- Sections breathe: 100px vertical padding on desktop, 70px tablet, 50px mobile. The page sits 10 to 20px inside the viewport so rounded frames read as objects.
+- Motion is slow and rare: content rises 100px over one second with `power3.out`, once. Nothing bounces, nothing loops except marquees.
+- Every animation has a reduced-motion path where content is simply visible.
+
+## Assets are not the brand
+
+Use the system, not Edefy's content: write your own copy, use your own photography and logo, and never hotlink `cdn.prod.website-files.com`. Parkinsans is under the SIL Open Font License, so it is fine to ship. If a page is meant to be a pixel copy of the template itself for commercial use, the Webflow template licence covers that, not this skill.
+
+## Review checklist
+
+When bussin-autoloop loads this skill, copy this list into `CODING_STANDARDS.md` so the review stage enforces it:
+
+- Colours, radii, spacing and type come from the theme tokens and utilities; no raw hex values or arbitrary pixel sizes in components.
+- Only one sun-yellow primary action per view.
+- Buttons use `RollButton`; no ad hoc button styles.
+- Section-level components are server components; client code is limited to `MotionRoot`, `SmoothScroll` and interactive widgets.
+- Every reveal uses `data-reveal` with the documented directions and delays; no inline GSAP tweens in sections.
+- Reduced motion leaves all content visible and unanimated; verified with the OS setting or an emulated media query.
+- Images use `next/image` with explicit sizes, rounded frames clip with `overflow-hidden`.
+- Interactive elements have visible focus states and work with the keyboard.
+- Dashboards follow `references/dashboard.md`: no scroll reveals on data, no smooth scroll inside scrollable panels.
