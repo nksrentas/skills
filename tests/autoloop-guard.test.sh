@@ -19,9 +19,10 @@ git add -A
 git commit -qm init
 
 failures=0
+hook_command="$(jq -r '.hooks.PreToolUse[0].hooks[0].command' "$assets/hooks.json")"
 guard() {
   printf '{"tool_input":{"command":%s}}' "$(jq -Rn --arg c "$1" '$c')" \
-    | CLAUDE_PROJECT_DIR="$repo" bash .loop/guard-commit.sh 2>/dev/null
+    | CLAUDE_PROJECT_DIR="$repo" bash -c "$hook_command" 2>/dev/null
 }
 expect() {
   local want="$1" label="$2" command="$3" got=0
@@ -75,8 +76,21 @@ echo 'exit 0' >> .loop/verify.sh
 expect 2 "editing verify.sh is blocked" "git commit -m x"
 git checkout -q .loop/verify.sh
 
+printf '#!/usr/bin/env bash\nexit 0\n' > .loop/guard-commit.sh
+printf 'loop_fingerprint() { cat .loop/tests-passed 2>/dev/null; }\n' > .loop/fingerprint.sh
+echo 'export const a = 4' > src/a.ts
+expect 2 "a gutted guard and fingerprint in the working tree are ignored" "git commit -m x"
+git checkout -q .loop/guard-commit.sh .loop/fingerprint.sh
+
+jq '.commands.test = "exit 1"' .loop/config.json > .loop/c.tmp && mv .loop/c.tmp .loop/config.json
+rm -f .loop/tests-passed
+bash .loop/verify.sh >/dev/null 2>&1 && echo "ok   verify runs the committed test command, not the working-tree one" || { echo "FAIL verify used the working-tree config"; failures=$((failures + 1)); }
+git checkout -q .loop/config.json src/a.ts
+
+git add -A && git commit -qm "make tests fail" --allow-empty
 echo '{"commands":{"test":"false"},"gates":{"mutation":false}}' > "$repo/failing.json"
 cp .loop/config.json "$repo/config.bak" && cp "$repo/failing.json" .loop/config.json
+git -c core.hooksPath=/dev/null commit -qam "committed failing test command"
 rm -f .loop/tests-passed
 bash .loop/verify.sh >/dev/null 2>&1 || true
 [ ! -f .loop/tests-passed ] && echo "ok   failing tests leave no marker" || { echo "FAIL failing tests left a marker"; failures=$((failures + 1)); }

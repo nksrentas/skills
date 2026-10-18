@@ -4,7 +4,10 @@
       {
         "matcher": "Bash",
         "hooks": [
-          { "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/.loop/guard-commit.sh\"" }
+          {
+            "type": "command",
+            "command": "bash -c 'bash <(git -C \"$CLAUDE_PROJECT_DIR\" show HEAD:.loop/guard-commit.sh 2>/dev/null)'"
+          }
         ]
       }
     ]

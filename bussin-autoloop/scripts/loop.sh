@@ -22,6 +22,10 @@ if [ -f .loop/config.json ]; then
     [ -n "$project_command" ] && allowed_tools+=("Bash($project_command)" "Bash($project_command *)")
   done < <(jq -r '.commands // {} | .[] | strings' .loop/config.json)
 fi
+denied_tools=()
+for protected in ".loop/*.sh" ".loop/config.json" ".claude/**" ".git/**"; do
+  denied_tools+=("Edit($protected)" "Write($protected)")
+done
 if [ -n "${LOOP_EXTRA_TOOLS:-}" ]; then
   IFS=',' read -r -a extra_tools <<< "$LOOP_EXTRA_TOOLS"
   allowed_tools+=("${extra_tools[@]}")
@@ -44,7 +48,7 @@ while [ "$(remaining)" -gt 0 ]; do
   echo "autoloop: iteration $iteration, $(remaining) items remaining"
   before="$(snapshot)"
   status=0
-  claude -p "/bussin-autoloop run" --allowedTools "${allowed_tools[@]}" 2>&1 | tee "$session_output" || status=$?
+  claude -p "/bussin-autoloop run" --allowedTools "${allowed_tools[@]}" --disallowedTools "${denied_tools[@]}" 2>&1 | tee "$session_output" || status=$?
   [ "$status" -eq 0 ] || echo "autoloop: session exited non-zero" >&2
   after="$(snapshot)"
   if [ "$before" = "$after" ] && [ "$status" -ne 0 ] && grep -qiE "$limit_pattern" "$session_output"; then

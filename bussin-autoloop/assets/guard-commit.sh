@@ -1,14 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-here="$(cd "$(dirname "$0")" && pwd)"
-source "$here/fingerprint.sh"
-
 command="$(jq -r '.tool_input.command // ""')"
 commit_pattern='(^|[;&|(`$[:space:]])git([[:space:]]+-[^[:space:]]+([[:space:]]+[^-[:space:]][^[:space:]]*)?)*[[:space:]]+commit([[:space:]]|$)'
 [[ "$command" =~ $commit_pattern ]] || exit 0
 
 cd "${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel)}"
+eval "$(git show HEAD:.loop/fingerprint.sh)"
 
 block() {
   echo "autoloop: commit blocked. $1" >&2

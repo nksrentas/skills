@@ -102,7 +102,7 @@ Unless `checkpoint` is false, show the user the item list as a compact table and
 
 ## 10. Commit and hand over
 
-The commit guard is already active, so run the gate first; it doubles as the proof that the gate works in this repo:
+The guard runs from the committed copy, so it starts protecting commits once this init commit exists. Run the gate first anyway; it doubles as the proof that the gate works in this repo:
 
 ```bash
 bash .loop/verify.sh
