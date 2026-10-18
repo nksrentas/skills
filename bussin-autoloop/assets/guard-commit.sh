@@ -30,7 +30,7 @@ loop_fingerprint() {
 }
 
 while IFS= read -r -d '' path; do
-  git diff --quiet -- "$path" || block "$path has staged changes that differ from the working tree. Stage exactly what was verified."
+  git --literal-pathspecs diff --quiet -- "$path" || block "$path has staged changes that differ from the working tree. Stage exactly what was verified."
 done < <(git diff --cached --name-only -z --no-renames "$head")
 
 infra=(.loop/config.json .loop/verify.sh .loop/guard-commit.sh)

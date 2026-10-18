@@ -14,6 +14,7 @@
 
 - [bussin-autoloop](./bussin-autoloop): Autonomous build loop. `init` expands a task into a feature list with verify gates and a commit guard, then `run` finishes one item per fresh session until every item passes with evidence.
 - [bussin-feature](./bussin-feature): The workflow for building a feature end to end: ground it in the repo, cover loading, error, empty and success states, update every dependent file, keep the folder portable, and verify.
+- [bussin-lean](./bussin-lean): Lean code while writing it, then a mandatory cleanup pass on the diff: no leftovers from earlier implementations, nothing over-engineered, no wasteful allocation or data access.
 - [bussin-ts-architecture](./bussin-ts-architecture): Feature-based folders for TypeScript backends and Next.js apps, where every feature folder is portable: it imports nothing from other features and works when copied into another project.
 - [bussin-drizzle](./bussin-drizzle): Drizzle ORM data access with schemas per feature, drizzle-kit migrations, typed queries inside services, and tests against a real database.
 - [bussin-ui](./bussin-ui): House UI system for landing pages and dashboards in Next.js, Tailwind CSS v4, GSAP and Lenis.
@@ -24,7 +25,7 @@
 
 ### As a Claude Code plugin
 
-One install gives you all seven skills:
+One install gives you all eight skills:
 
 ```bash
 claude plugin marketplace add nksrentas/skills
@@ -50,6 +51,15 @@ npx skills add nksrentas/skills --skill bussin-autoloop -g
 ```
 
 Omit `-g` for a project-local installation. `npx skills update -g` pulls updates.
+
+### Ponytail for bussin-lean
+
+`bussin-lean` also runs the ponytail plugin's over-engineering review when it is installed:
+
+```bash
+claude plugin marketplace add DietrichGebert/ponytail
+claude plugin install ponytail@ponytail
+```
 
 ### Animation skills for bussin-ui
 

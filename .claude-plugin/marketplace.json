@@ -1,16 +1,21 @@
 {
   "name": "bussin",
-  "owner": { "name": "nrentas" },
-  "metadata": { "description": "Bussin skills for shipping features with Claude Code" },
+  "owner": {
+    "name": "nrentas"
+  },
+  "metadata": {
+    "description": "Bussin skills for shipping features with Claude Code"
+  },
   "plugins": [
     {
       "name": "bussin",
       "source": "./",
-      "description": "Seven bussin- skills: an autonomous build loop, portable TypeScript feature architecture, Drizzle data access, the house UI system, a feature build workflow, honest feedback and human-sounding writing.",
+      "description": "Eight bussin- skills: an autonomous build loop, a feature build workflow, lean code with a mandatory cleanup pass, portable TypeScript feature architecture, Drizzle data access, the house UI system, honest feedback and human-sounding writing.",
       "strict": false,
       "skills": [
         "./bussin-autoloop",
         "./bussin-feature",
+        "./bussin-lean",
         "./bussin-ts-architecture",
         "./bussin-drizzle",
         "./bussin-ui",
