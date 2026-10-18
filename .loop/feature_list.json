@@ -140,8 +140,11 @@
       "ui": false,
       "description": "README replaces the current 'Tests' section with a short 'Tests and evals' section: what CI runs (every tests/*.test.sh on ubuntu-latest and macos-latest, on pull requests and pushes to main) and the exact command to run the eval suite locally, noting that evals use the caller's Claude credentials and cost money.",
       "verify": "Read README.md: one 'Tests and evals' section, no leftover 'Tests' section, the eval command is a copy-pasteable code block that matches how F11 was run (without --case), the credentials and cost note is present. `bash tests/skills-structure.test.sh` still passes (README Included skills list intact).",
-      "passes": false,
-      "evidence": null
+      "passes": true,
+      "evidence": {
+        "commit": "30c882d",
+        "ran": "bash .loop/verify.sh (all tests/*.test.sh incl. skills-structure) passed; README has one ## Tests and evals, no ## Tests; review subagent: no spec/lean findings"
+      }
     },
     {
       "id": "E1",
