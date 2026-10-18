@@ -1,6 +1,6 @@
 ---
 name: bussin-feature
-description: Workflow for creating, updating, or refactoring a TypeScript/JavaScript application feature end to end - ground the change in the repository, implement every runtime state (loading, error, empty, success), update every dependent file and registration, keep the feature folder portable, and verify with the project's checks before calling it done. Use for frontend, backend, or full-stack feature implementation; folder layout, file roles and the portability rule come from bussin-ts-architecture. Do not invoke for explanation-only requests or isolated non-feature edits.
+description: Workflow for creating, updating, or refactoring a TypeScript/JavaScript application feature end to end - ground the change in the repository, implement every runtime state (loading, error, empty, success), update every dependent file and registration, keep the feature folder portable, run the mandatory bussin-lean cleanup pass, and verify with the project's checks before calling it done. Use for frontend, backend, or full-stack feature implementation; folder layout, file roles and the portability rule come from bussin-ts-architecture. Do not invoke for explanation-only requests or isolated non-feature edits.
 ---
 
 # Bussin Feature
@@ -46,6 +46,10 @@ For every asynchronous or data-rendering surface, handle each applicable state e
 
 For mutations, also provide appropriate pending protection and success/failure feedback. Do not invent these states for synchronous behavior that cannot enter them.
 
+## Keep it lean
+
+Load `bussin-lean` before writing code and follow its rules while you write: nothing speculative, no abstraction without a second real use, no wasteful allocation or data access. Its cleanup pass is a mandatory step of this workflow (step 6). If that skill is not installed, apply the same cleanup pass by hand: leftovers, over-engineering, structure, allocation.
+
 ## Prefer simple, established tools
 
 - Reuse installed project libraries before adding dependencies.
@@ -70,7 +74,7 @@ Consumers outside the feature folder should only be the composition root, thin r
 3. Implement end-to-end behavior, including applicable loading, error, empty, and success paths.
 4. Update the complete dependent-file set and remove obsolete paths created by the change.
 5. Run focused tests first, then the import-boundary check, type-check, lint, broader tests, and build commands available in the repository.
-6. Inspect the final diff for accidental scope growth, imports from other features, comments, duplicated contracts, unnecessary abstractions, and missed consumers.
+6. Run the `bussin-lean` cleanup pass on the whole diff and fix what it finds: leftovers from earlier implementations, over-engineering, structure, allocation. Also check for scope growth, imports from other features, comments, duplicated contracts and missed consumers. Re-run the tests after the fixes. This step is mandatory.
 
 </workflow>
 
@@ -85,6 +89,7 @@ Do not call the feature complete until the relevant checks pass or their failure
 - All known dependents and registrations are updated.
 - The solution uses existing or simple primitives unless a library is justified.
 - Tests cover changed behavior and available verification commands have been run.
+- The `bussin-lean` cleanup pass ran on the final diff and came back clean.
 </quality_gate>
 
 <auditable_reasoning>
@@ -95,6 +100,7 @@ Keep private chain-of-thought private. Make the work auditable through concrete 
 - Loading/error/empty/success coverage, including any state that was not applicable.
 - Dependent files or registrations updated.
 - Verification commands and outcomes.
+- What the cleanup pass removed or simplified, or "Cleanup pass: clean".
 - Remaining risks or blockers, if any.
 
 Explain decisions briefly enough that another engineer can verify them from the diff.

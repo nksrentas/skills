@@ -33,12 +33,13 @@ It runs the test command, then Stryker on the changed files when `gates.mutation
 
 ## 5. Review
 
-Skipped in `fast` mode. Otherwise spawn one review subagent with read-only tools (Read, Glob, Grep). Give it the item's `description` and `verify` steps as the spec, the output of `git diff <config.base> -- . ':(exclude).loop'`, and `CODING_STANDARDS.md`. It writes nothing and returns two lists:
+In `fast` mode, skip the subagent but still run the `bussin-lean` cleanup pass yourself on the diff before the gate. Otherwise spawn one review subagent with read-only tools (Read, Glob, Grep). Give it the item's `description` and `verify` steps as the spec, the output of `git diff <config.base> -- . ':(exclude).loop'`, and `CODING_STANDARDS.md`. It writes nothing and returns two lists:
 
 - **Spec**: a requirement in the item that is missing, only looks implemented (dead code path, hard-coded value, test that never reaches it), or scope beyond the item.
 - **Standards**: each rule in `CODING_STANDARDS.md` the diff breaks, with file and line.
+- **Lean**: the `bussin-lean` cleanup pass applied to the diff. Leftovers from earlier implementations (dead code, unused exports, files, flags or dependencies, debug logging, commented-out code), over-engineering (an abstraction, parameter or dependency with no real use today, pass-through layers, duplicate types), structure problems, and wasteful allocation or data access. Tell the subagent to load `bussin-lean` for the full checklist when it is installed.
 
-Any Spec finding means the item stays `false`: fix it, re-run the gate, review again with a fresh subagent. Fix Standards findings when cheap and log the rest in `progress.md`.
+Any Spec or Lean finding means the item stays `false`: fix it, re-run the gate, review again with a fresh subagent. Fix Standards findings when cheap and log the rest in `progress.md`.
 
 In `thorough` mode, spawn a second read-only subagent on the tests this item added or changed. It flags tests that are tautological (the expected value is computed by the code under test), coupled to implementation (private fields, mocks of the unit itself, direct DB reads where the public interface would do), or duplicate another test without covering a new case. Rewrite or delete what it flags, then re-run the gate.
 

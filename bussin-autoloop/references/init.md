@@ -94,6 +94,8 @@ Write `.loop/feature_list.json` following `assets/feature-list.example.json`. Th
 - **edge**: walk this checklist against every functional item and add what applies: empty or none, boundaries (0, 1, max, off by one), invalid or malformed input, permissions and roles, duplicates and concurrency, time (timezone, DST, past and future), size and performance, encoding and i18n, dependency failure (network, DB, third party), partial state and retries.
 - **regression**: the existing behaviour around the code you will touch, plus "existing test suite stays green".
 
+Order the list so that each item's `verify` steps can pass with only that item and the ones before it implemented. A verify example that also needs a later item (an input that only comes out right once trimming exists, for example) pulls that item's work forward and blurs the evidence. Pick a different example or reorder the items.
+
 Mark UI-visible items with `"ui": true` so run knows the browser gate applies. All items start `"passes": false, "evidence": null`.
 
 ## 9. Checkpoint

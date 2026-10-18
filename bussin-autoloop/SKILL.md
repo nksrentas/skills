@@ -54,7 +54,7 @@ Presets live in `assets/presets.json`. Choose with `--mode`; the default is `sta
 |---|---|---|---|
 | Tests gate | yes | yes | yes |
 | Implement stage | tests after code | test-first | test-first |
-| Review stage | none | spec and standards review | spec and standards review, plus test audit |
+| Review stage | `bussin-lean` cleanup pass, inline | spec, standards and lean review | spec, standards and lean review, plus test audit |
 | Mutation gate (Stryker) | no | no | yes |
 | Browser verification | only when the item's `verify` says so | UI items | UI items |
 | End stage | none | none | retro note in `retro.md` |
@@ -72,6 +72,7 @@ House context skills, opt-in per feature:
 | `bussin-ts-architecture` | Any TypeScript backend or Next.js feature: portable feature folders with controller, service, DTO, job and UI files |
 | `bussin-drizzle` | The feature reads or writes a SQL database from TypeScript |
 | `bussin-ui` | Landing pages and dashboards in Next.js + Tailwind v4 + GSAP + Lenis with the house look |
+| `bussin-lean` | Always on: every preset loads it, and the review stage blocks on its findings |
 
 Example: `/bussin-autoloop init "Invoice reminders" --skills bussin-ts-architecture,bussin-drizzle`. Init copies each one's review checklist into `CODING_STANDARDS.md`, so the review stage enforces it.
 
@@ -88,7 +89,7 @@ For UI work, pair the house look with Emil Kowalski's animation review: `/bussin
   "commands": { "test": "npm test", "dev": "npm run dev" },
   "mutation_paths": ["src/**/*.ts", "src/**/*.tsx"],
   "gates": { "tests": true, "mutation": false, "browser": true },
-  "skills": { "context": [], "implement": [], "review": [], "end": [] },
+  "skills": { "context": ["bussin-lean"], "implement": [], "review": [], "end": [] },
   "checkpoint": true
 }
 ```
