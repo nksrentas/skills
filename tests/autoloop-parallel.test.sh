@@ -3,7 +3,7 @@ set -euo pipefail
 
 skill="$(cd "$(dirname "$0")/../bussin-autoloop" && pwd)"
 tmp="$(mktemp -d)"
-trap 'rm -rf "$tmp"' EXIT
+trap '[ ! -f "$tmp/leak/leak.pid" ] || kill -9 "$(cat "$tmp/leak/leak.pid")" 2>/dev/null || true; rm -rf "$tmp"' EXIT
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
 failures=0
 
@@ -17,12 +17,18 @@ make_project() {
   cp "$skill/assets/verify.sh" "$skill/assets/guard-commit.sh" "$dir/.loop/"
   jq -n --arg test "$test_command" '{commands: {test: $test}, gates: {mutation: false}}' > "$dir/.loop/config.json"
   echo "$features" | jq . > "$dir/.loop/feature_list.json"
-  printf '.loop/tests-passed\n' > "$dir/.gitignore"
+  printf '.loop/tests-passed\n.cache/\n' > "$dir/.gitignore"
   echo keep > "$dir/src/keep.txt"
   cat > "$dir/bin/claude" <<EOF
 #!/usr/bin/env bash
 id="\${2##* }"
 echo "start \$id" >> "$dir/events"
+if [ "\$(jq -r --arg id "\$id" '.features[] | select(.id == \$id) | .leak // false' .loop/feature_list.json)" = true ]; then
+  mkdir -p .cache
+  nohup perl -e 'setpgrp(0, 0); exec @ARGV' bash -c 'while :; do touch .cache/\$RANDOM; sleep 0.1; done' > /dev/null 2>&1 &
+  echo \$! > "$dir/leak.pid"
+  echo s > src/stashed.txt && git add src/stashed.txt && git stash push -q -m "WIP on loop/\$id"
+fi
 if [ "\$(jq -r --arg id "\$id" '.features[] | select(.id == \$id) | .stop // false' .loop/feature_list.json)" = true ]; then
   bash "$skill/scripts/loop-status.sh" --stop "\$LOOP_MAIN_DIR" > /dev/null
   for _ in 1 2 3 4 5 6 7 8 9 10; do
@@ -90,6 +96,29 @@ check "merged sessions are recorded as merged with their worker" '[ "$(jq -s "ma
 check "live state ends as finished with nothing running" '[ "$(jq -r ".state" "$happy/.loop/live.json")" = finished ] && [ "$(jq ".running | length" "$happy/.loop/live.json")" = 0 ] && [ "$(jq -r ".mode" "$happy/.loop/live.json")" = parallel ] && [ "$(jq -r ".script" "$happy/.loop/live.json")" = "$skill/scripts/loop.sh" ]'
 check "worktrees and branches are cleaned up" '[ "$(git -C "$happy" worktree list | wc -l | tr -d " ")" = 1 ] && [ -z "$(git -C "$happy" branch --list "loop/*")" ]'
 
+leak="$tmp/leak"
+make_project "$leak" true '{"features": [{"id": "L", "passes": false, "evidence": null, "leak": true, "writes": "src/l.txt"}]}'
+leak_status=0
+run_loop "$leak" LOOP_WORKERS=2 || leak_status=$?
+check "a server a worker left running in its worktree is killed and the run finishes" '[ "$leak_status" = 0 ] && ! kill -0 "$(cat "$leak/leak.pid")" 2>/dev/null && [ ! -e "$leak.loop-workers/w1" ] && grep -q "stopping processes left in worker 1" "$leak/out"'
+check "a stash entry a worker made is reported and kept" 'grep -q "new git stash entry(ies) appeared while L ran" "$leak/out" && [ "$(git -C "$leak" stash list | wc -l | tr -d " ")" = 1 ]'
+
+flaky_gate() { echo "[ -n \"\${LOOP_WORKER:-}\" ] || [ \$(wc -l < $1) -ge $2 ] || { echo x >> $1; false; }"; }
+
+flaky="$tmp/flaky"
+make_project "$flaky" "$(flaky_gate "$tmp/flaky.count" 1)" '{"features": [{"id": "K", "passes": false, "evidence": null, "writes": "src/k.txt"}]}'
+: > "$tmp/flaky.count"
+flaky_status=0
+run_loop "$flaky" LOOP_WORKERS=2 LOOP_ITEM_ATTEMPTS=1 || flaky_status=$?
+check "a merge gate that fails once is re-run and the item merges in one attempt" '[ "$flaky_status" = 0 ] && [ -f "$flaky/src/k.txt" ] && [ "$(grep -c "^start K$" "$flaky/events")" = 1 ] && grep -q "running the gate once more" "$flaky/out"'
+
+requeue="$tmp/requeue"
+make_project "$requeue" "$(flaky_gate "$tmp/requeue.count" 2)" '{"features": [{"id": "Q", "passes": false, "evidence": null, "writes": "src/q.txt"}]}'
+: > "$tmp/requeue.count"
+requeue_status=0
+run_loop "$requeue" LOOP_WORKERS=2 LOOP_ITEM_ATTEMPTS=1 || requeue_status=$?
+check "a merge-gate failure after the worker's gate passed spends no attempt" '[ "$requeue_status" = 0 ] && [ -f "$requeue/src/q.txt" ] && [ "$(grep -c "^start Q$" "$requeue/events")" = 2 ] && grep -q "does not count as an attempt (merge retry 1 of 2)" "$requeue/out"'
+
 cycle="$tmp/cycle"
 make_project "$cycle" true '{"features": [
   {"id": "X", "passes": false, "evidence": null, "depends_on": ["Y"], "writes": "src/x.txt"},
@@ -107,9 +136,9 @@ make_project "$gate" '! test -e src/broken.txt' '{"features": [
   {"id": "F", "passes": false, "evidence": null, "touches": ["src/fine.txt"], "writes": "src/fine.txt"}
 ]}'
 gate_status=0
-run_loop "$gate" LOOP_WORKERS=2 LOOP_ITEM_ATTEMPTS=2 || gate_status=$?
+run_loop "$gate" LOOP_WORKERS=2 LOOP_ITEM_ATTEMPTS=2 LOOP_MERGE_RETRIES=1 || gate_status=$?
 check "an item that breaks the merged gate is not merged" '[ "$gate_status" != 0 ] && [ ! -e "$gate/src/broken.txt" ] && grep -q "failed the gate" "$gate/out"'
-check "it is retried up to the attempt limit, then reported" '[ "$(grep -c "^start E$" "$gate/events")" = 2 ] && grep -q "E: gave up after 2 attempts" "$gate/out"'
+check "it is retried up to the attempt limit plus LOOP_MERGE_RETRIES, then reported" '[ "$(grep -c "^start E$" "$gate/events")" = 3 ] && grep -q "E: gave up after 2 attempts" "$gate/out"'
 check "other items still merge" '[ -f "$gate/src/fine.txt" ] && [ "$(jq -r ".features[] | select(.id == \"F\") | .passes" "$gate/.loop/feature_list.json")" = true ]'
 
 bare="$tmp/bare"
