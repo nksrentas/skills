@@ -73,8 +73,15 @@ It prints the same view as the pane below: progress bar, elapsed time, ETA and i
 
 In Claude Code, the `bussin-loop-status` mod shows a run as it happens. Install it with `claude plugin marketplace add nksrentas/skills` and `claude plugin install bussin-loop-status@bussin`.
 - **Status line:** shows a loop's outcome once nothing is running, for example `autoloop finished 59/59 · 9h 12m · $41.20`. While loops run it stays empty, because the band below already shows them.
-- **Band above the prompt:** with several loops in the repository, every running one gets its own row, for example `▶ stage1-auth-site ███░░ 36/59 · on F31 · ETA 40m · $6.09`, with a Details button that opens it in the pane and a Stop button that requests a stop. A loop that is finishing its running items after a stop shows as `□ … stopping`. The status line lists them all too.
-- **Pane:** `/autoloop-status` or a band row's Details button opens it. It shows a header with a Stop button, progress, ETA, elapsed time and cost so far. Below that are three aligned lists: Now, Next (the next few items with what they wait for), and Done (the latest few). At the bottom are cost, tokens, models and the latest progress notes.
+- **Band above the prompt:** with several loops in the repository, every running one gets its own row, for example `▶ stage1-auth-site ███░░ 36/59 · on F31 · ETA 40m · $6.09`, with a Details button that opens it in the pane and a Stop button that requests a stop. A loop that is finishing its running items after a stop shows as `□ … stopping`. A loop whose `live.json` says running but whose driver process is gone shows as `⚠ … driver not running`. The status line lists them all too.
+- **Pane:** `/autoloop-status` or a band row's Details button opens it.
+  - **Loop chips:** running loops show as chips. Loops that are not running fold behind a `+N not running` button.
+  - **Header:** a Stop button, progress, ETA, elapsed time, cost so far, and counts of done, running, ready, blocked and failing items.
+  - **Dead driver:** when the driver's process (the `pid` in `live.json`) has exited, a warning replaces the Stop button. It has a button that copies the command to resume.
+  - **Now:** the running items, with worker, time and attempt.
+  - **Next:** the next ready or failing items. Blocked items are grouped by what they wait for (`▸ 43 wait for R0`), and each group expands.
+  - **Recent:** the latest sessions with their outcome, time and cost.
+  - **Spend:** cost and models on one line. A button shows tokens.
 
 It reads only `.loop/` folders, and it finds them in the session's project and in every git worktree of the same repository. A session opened in the main checkout therefore sees loops running in worktrees, with buttons to switch between them. A loop started before this telemetry existed has no `usage.jsonl` or `live.json`, so the view shows progress and items only. Two steps fill it in:
 - Run `bash <skill directory>/scripts/backfill-usage.sh` in the project. It rebuilds `usage.jsonl` from Claude Code's own transcripts of past loop sessions: tokens, models, time and item per session. Cost isn't in transcripts, so it shows as unknown.
