@@ -13,6 +13,8 @@ pause_after_poll=0
 slot_pid=()
 slot_item=()
 slot_started=()
+slot_pointers=()
+slot_admin=()
 
 ready_query='
 def prefix: sub("[*?\\[{].*$"; "");
@@ -69,19 +71,21 @@ next_ready() {
 
 launch() {
   local slot="$1" id="$2" dir="$worker_root/w$1" branch="loop/$2"
-  git worktree remove --force "$dir" >/dev/null 2>&1 || true
+  remove_worktree "$slot"
   git branch -D "$branch" >/dev/null 2>&1 || true
   mkdir -p "$worker_root"
   git worktree add -q -b "$branch" "$dir" "$integration"
+  slot_admin[$slot]="$(git -C "$dir" rev-parse --absolute-git-dir)"
+  slot_pointers[$slot]="$(worker_pointers "$slot")"
   if [ -f .claude/settings.local.json ]; then
     mkdir -p "$dir/.claude" && cp .claude/settings.local.json "$dir/.claude/"
   fi
   set_attempts "$id" $(($(attempts_of "$id") + 1))
   log "worker $slot started $id (attempt $(attempts_of "$id") of $item_attempts)"
-  (cd "$dir" && LOOP_WORKER="$slot" LOOP_MAIN_DIR="$main_dir" exec perl -e 'setpgrp(0, 0); exec @ARGV' \
-    claude -p "$skill_command run --item $id" --output-format json \
-    --allowedTools "${allowed_tools[@]}" --disallowedTools "${denied_tools[@]}") \
-    > "$state_dir/w$slot.json" 2> "$state_dir/w$slot.log" < /dev/null &
+  install_commit_hook
+  agent_command "$skill_command run --item $id" "$dir"
+  (cd "$dir" && LOOP_WORKER="$slot" LOOP_MAIN_DIR="$main_dir" AUTOLOOP_SESSION=1 exec perl -e 'setpgrp(0, 0); exec @ARGV' \
+    "${agent_cmd[@]}") > "$state_dir/w$slot.json" 2> "$state_dir/w$slot.log" < /dev/null &
   slot_pid[$slot]=$!
   slot_item[$slot]="$id"
   slot_started[$slot]="$(date +%s)"
@@ -135,18 +139,50 @@ merge_item() {
   log "merged $id"
 }
 
+remove_worktree() {
+  rm -rf "${worker_root:?}/w$1"
+  git worktree prune
+}
+
+worker_pointers() { cat "${slot_admin[$1]}/commondir" "${slot_admin[$1]}/gitdir" 2> /dev/null || true; }
+
+worker_redirected() {
+  [ -n "${slot_item[$1]}" ] || return 1
+  [ "$(worker_pointers "$1")" != "${slot_pointers[$1]}" ] || return 1
+  echo "autoloop: stopped, because worker $1 changed its worktree's git pointers (commondir or gitdir). Inspect $(git rev-parse --git-common-dir)/worktrees before running git here again." >&2
+}
+
+any_worker_redirected() {
+  local i
+  for ((i = 1; i <= workers; i++)); do
+    if worker_redirected "$i"; then return 0; fi
+  done
+  return 1
+}
+
+stop_on_tamper() {
+  local i
+  for ((i = 1; i <= workers; i++)); do
+    if [ -n "${slot_pid[$i]}" ]; then kill -- -"${slot_pid[$i]}" 2>/dev/null || true; fi
+  done
+  trap - EXIT
+  write_live stopped parallel "$workers" "[]"
+  exit 1
+}
+
 finish() {
   local slot="$1" id="${slot_item[$1]}" started="${slot_started[$1]}" status=0 outcome
   local branch="loop/$id" output="$state_dir/w$1.log" result="$state_dir/w$1.json"
   wait "${slot_pid[$slot]}" || status=$?
   kill -- -"${slot_pid[$slot]}" 2>/dev/null || true
+  if worker_redirected "$slot"; then stop_on_tamper; fi
   slot_pid[$slot]=""
   slot_item[$slot]=""
-  git worktree remove --force "$worker_root/w$slot" >/dev/null 2>&1 || true
+  remove_worktree "$slot"
   if git show "$branch:.loop/results/$id.json" 2>/dev/null \
     | jq -e --arg id "$id" '.passes == true and .id == $id and (.evidence | type) == "object"' >/dev/null 2>&1; then
     if merge_item "$id" "$branch" "$slot"; then outcome=merged; else outcome="not merged"; fi
-  elif [ "$status" -ne 0 ] && grep -qiE "$limit_pattern" "$output" "$result"; then
+  elif [ "$status" -ne 0 ] && session_tail "$result" "$output" | grep -iE "$limit_pattern" > /dev/null; then
     outcome=limit
     set_attempts "$id" $(($(attempts_of "$id") - 1))
     launched=$((launched - 1))
@@ -173,7 +209,7 @@ stop_workers() {
   local i
   for ((i = 1; i <= workers; i++)); do
     if [ -n "${slot_pid[$i]:-}" ]; then kill -- -"${slot_pid[$i]}" 2>/dev/null || true; fi
-    git worktree remove --force "$worker_root/w$i" >/dev/null 2>&1 || true
+    rm -rf "${worker_root:?}/w$i"
   done
   git merge --abort >/dev/null 2>&1 || true
   git worktree prune
@@ -216,11 +252,16 @@ run_parallel() {
     slot_pid[$i]=""
     slot_item[$i]=""
     slot_started[$i]=""
+    slot_pointers[$i]=""
+    slot_admin[$i]=""
   done
   trap stop_workers EXIT
   trap 'exit 130' INT TERM
+  install_commit_hook
+  remember_git_controls
   log "running up to $workers workers on $integration, $(remaining) items remaining"
   while :; do
+    if git_controls_changed || any_worker_redirected; then stop_on_tamper; fi
     for ((i = 1; i <= workers; i++)); do
       if [ -n "${slot_pid[$i]}" ] && ! kill -0 "${slot_pid[$i]}" 2>/dev/null; then finish "$i"; fi
     done

@@ -2,20 +2,22 @@
 set -euo pipefail
 trap 'echo "autoloop: commit blocked because the guard itself failed at line $LINENO." >&2; exit 2' ERR
 
-input="$(cat)"
-command="$(jq -r '.tool_input.command // ""' <<< "$input" 2>/dev/null)" || command="$input"
-commit_pattern='(^|[;&|(`$[:space:]])git([[:space:]]+-[^[:space:]]+([[:space:]]+[^-[:space:]][^[:space:]]*)?)*[[:space:]]+commit([[:space:]]|$)'
-[[ "$command" =~ $commit_pattern ]] || exit 0
-
 block() {
   echo "autoloop: commit blocked. $1" >&2
   exit 2
 }
 
-redirect_pattern='GIT_(INDEX_FILE|DIR|WORK_TREE|OBJECT_DIRECTORY|COMMON_DIR)=|--git-dir|--work-tree|--namespace'
-[[ "$command" =~ $redirect_pattern ]] && block "Commit commands may not point git at another index, git dir or work tree."
-
-cd "${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel)}"
+if [ "${1:-}" = --pre-commit ]; then
+  cd "$(git rev-parse --show-toplevel)"
+else
+  input="$(cat)"
+  command="$(jq -r '.tool_input.command // ""' <<< "$input" 2>/dev/null)" || command="$input"
+  commit_pattern='(^|[;&|(`$[:space:]])git([[:space:]]+-[^[:space:]]+([[:space:]]+[^-[:space:]][^[:space:]]*)?)*[[:space:]]+commit([[:space:]]|$)'
+  [[ "$command" =~ $commit_pattern ]] || exit 0
+  redirect_pattern='GIT_(INDEX_FILE|DIR|WORK_TREE|OBJECT_DIRECTORY|COMMON_DIR)=|--git-dir|--work-tree|--namespace'
+  [[ "$command" =~ $redirect_pattern ]] && block "Commit commands may not point git at another index, git dir or work tree."
+  cd "${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel)}"
+fi
 empty_tree=4b825dc642cb6eb9a060e54bf8d69288fbee4904
 head="$(git rev-parse -q --verify HEAD || echo "$empty_tree")"
 loop_fingerprint() {
@@ -35,7 +37,7 @@ while IFS= read -r -d '' path; do
   git --literal-pathspecs diff --quiet -- "$path" || block "$path has staged changes that differ from the working tree. Stage exactly what was verified."
 done < <(git diff --cached --name-only -z --no-renames "$head")
 
-infra=(.loop/config.json .loop/verify.sh .loop/guard-commit.sh)
+infra=(.loop/config.json .loop/verify.sh .loop/guard-commit.sh .loop/init.sh)
 for file in "${infra[@]}"; do
   git cat-file -e "HEAD:$file" 2>/dev/null || continue
   git diff --quiet HEAD -- "$file" || block "$file changed since the last commit. Loop config and scripts are fixed by init; a human changes them."

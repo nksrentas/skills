@@ -108,9 +108,19 @@ To run independent items at the same time, each in its own git worktree, set a c
 
 For UI work add `bussin-ui` and `review:review-animations` to `--skills`.
 
+The loop runs with Codex or GitHub Copilot too: install the skill for that agent, start init there (`$bussin-autoloop init …` in Codex, `/bussin-autoloop init …` in Copilot), then run the driver with `LOOP_AGENT=codex` or `LOOP_AGENT=copilot`. Every agent's commits go through the same commit guard, here as a git `pre-commit` hook, and the driver re-runs the gate after Codex and Copilot sessions. See [Agents](./bussin-autoloop/SKILL.md#agents) for what each one limits and reports.
+
 ### Watching a run
 
-The `bussin-loop-status` mod puts every running loop in your status line and in a band above the prompt, one row per loop, including loops in git worktrees. `/autoloop-status`, or a row's Details button, opens a pane. It shows:
+From any terminal, whichever agent runs the loop:
+
+```bash
+bash ~/.claude/skills/bussin-autoloop/scripts/loop-status.sh --watch
+```
+
+It shows every loop in the repository and its worktrees: progress, ETA, what runs now and next, cost, tokens and models.
+
+Inside Claude Code, the `bussin-loop-status` mod puts every running loop in your status line and in a band above the prompt, one row per loop, including loops in git worktrees. `/autoloop-status`, or a row's Details button, opens a pane. It shows:
 - progress and what each worker is running
 - elapsed time and the estimated finish
 - input, output and cache tokens

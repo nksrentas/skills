@@ -44,11 +44,11 @@ Edge items get at least one example test each. Parsing, escaping, money, dates a
 bash .loop/verify.sh
 ```
 
-It runs the test command, then Stryker on the changed files when `gates.mutation` is on, and creates `.loop/tests-passed` only if everything held. If mutants survive, add the tests that kill them. Do not touch thresholds, do not exclude files. After three attempts on the same item, write what survived into `progress.md`, leave the item `false`, and stop; a human reads it next.
+Under Copilot, whose allowlist names the loop scripts by path, run them as `.loop/verify.sh` and `.loop/init.sh` without `bash`. It runs the test command, then Stryker on the changed files when `gates.mutation` is on, and creates `.loop/tests-passed` only if everything held. If mutants survive, add the tests that kill them. Do not touch thresholds, do not exclude files. After three attempts on the same item, write what survived into `progress.md`, leave the item `false`, and stop; a human reads it next.
 
 ## 5. Review
 
-In `fast` mode, skip the subagent but still run the `bussin-lean` cleanup pass yourself on the diff before the gate. Otherwise spawn one review subagent with read-only tools (Read, Glob, Grep). Give it the item's `description` and `verify` steps as the spec, the output of `git diff <config.base> -- . ':(exclude).loop'`, and `CODING_STANDARDS.md`. It writes nothing and returns two lists:
+In `fast` mode, skip the subagent but still run the `bussin-lean` cleanup pass yourself on the diff before the gate. Otherwise spawn one review subagent with read-only tools (Read, Glob, Grep). An agent without subagents does the review as a separate pass: re-read the item and the diff cold, as if someone else wrote it, before changing any code. Give it the item's `description` and `verify` steps as the spec, the output of `git diff <config.base> -- . ':(exclude).loop'`, and `CODING_STANDARDS.md`. It writes nothing and returns two lists:
 
 - **Spec**: a requirement in the item that is missing, only looks implemented (dead code path, hard-coded value, test that never reaches it), or scope beyond the item.
 - **Standards**: each rule in `CODING_STANDARDS.md` the diff breaks, with file and line.
@@ -74,7 +74,7 @@ Set `passes: true` and `evidence` on that one item only:
 
 Commit in two steps. First commit the implementation with a message that names the item id. Then set `passes` and `evidence` with that commit's sha, append to `progress.md` (step 8), and commit those as `chore(loop): mark <item id>`.
 
-The commit guard allows a commit only when `.loop/tests-passed` holds the fingerprint of the current code, so any code change after the gate, by any tool, means running the gate again. `feature_list.json`, `progress.md` and `retro.md` are outside the fingerprint, so the second commit needs no new gate. The guard also refuses a commit that rewords, adds or removes items, or that changes `.loop/config.json` or the loop scripts.
+The commit guard (a git `pre-commit` hook in driver sessions, plus a PreToolUse hook in Claude Code) allows a commit only when `.loop/tests-passed` holds the fingerprint of the current code, so any code change after the gate, by any tool, means running the gate again. `feature_list.json`, `progress.md` and `retro.md` are outside the fingerprint, so the second commit needs no new gate. The guard also refuses a commit that rewords, adds or removes items, or that changes `.loop/config.json` or the loop scripts. Never commit with `--no-verify` or another way around the hook: the driver audits every commit, re-runs the gate, and stops the whole loop when the guard was skipped.
 
 ## 8. Progress and retro
 
