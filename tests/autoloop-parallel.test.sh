@@ -87,7 +87,7 @@ check "progress gets one entry per item" '[ "$(grep -c "^## " "$happy/.loop/prog
 check "result files are cleaned up" '[ ! -d "$happy/.loop/results" ] || [ -z "$(ls -A "$happy/.loop/results")" ]'
 check "every session is recorded with tokens, cost and model" '[ "$(wc -l < "$happy/.loop/usage.jsonl" | tr -d " ")" = 4 ] && [ "$(jq -s "map(.input_tokens) | add" "$happy/.loop/usage.jsonl")" = 4000 ] && [ "$(jq -s "map(.cost_usd) | add" "$happy/.loop/usage.jsonl")" = 2 ] && [ "$(jq -s -r "map(.models | keys[]) | unique | join(\",\")" "$happy/.loop/usage.jsonl")" = claude-opus-5-5 ]'
 check "merged sessions are recorded as merged with their worker" '[ "$(jq -s "map(select(.outcome == \"merged\" and .worker >= 1)) | length" "$happy/.loop/usage.jsonl")" = 4 ]'
-check "live state ends as finished with nothing running" '[ "$(jq -r ".state" "$happy/.loop/live.json")" = finished ] && [ "$(jq ".running | length" "$happy/.loop/live.json")" = 0 ] && [ "$(jq -r ".mode" "$happy/.loop/live.json")" = parallel ]'
+check "live state ends as finished with nothing running" '[ "$(jq -r ".state" "$happy/.loop/live.json")" = finished ] && [ "$(jq ".running | length" "$happy/.loop/live.json")" = 0 ] && [ "$(jq -r ".mode" "$happy/.loop/live.json")" = parallel ] && [ "$(jq -r ".script" "$happy/.loop/live.json")" = "$skill/scripts/loop.sh" ]'
 check "worktrees and branches are cleaned up" '[ "$(git -C "$happy" worktree list | wc -l | tr -d " ")" = 1 ] && [ -z "$(git -C "$happy" branch --list "loop/*")" ]'
 
 cycle="$tmp/cycle"

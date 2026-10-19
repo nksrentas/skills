@@ -75,9 +75,9 @@ record_usage() {
 
 write_live() {
   local state="$1" mode="$2" workers="$3" running="$4"
-  jq -n --arg state "$state" --arg mode "$mode" --arg agent "$agent" --argjson workers "$workers" --argjson started "$loop_started" \
+  jq -n --arg state "$state" --arg mode "$mode" --arg agent "$agent" --arg script "$script_dir/loop.sh" --argjson workers "$workers" --argjson started "$loop_started" \
     --argjson updated "$(date +%s)" --argjson pid "$$" --argjson running "$running" \
-    '{state: $state, mode: $mode, agent: $agent, workers: $workers, started_at: $started, updated_at: $updated, pid: $pid, running: $running}' \
+    '{state: $state, mode: $mode, agent: $agent, script: $script, workers: $workers, started_at: $started, updated_at: $updated, pid: $pid, running: $running}' \
     > "$live_file.tmp"
   mv "$live_file.tmp" "$live_file"
 }

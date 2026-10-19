@@ -123,8 +123,10 @@ It shows every loop in the repository and its worktrees: progress, ETA, what run
 To stop a loop without losing in-flight work, run `bash ~/.claude/skills/bussin-autoloop/scripts/loop-status.sh --stop`. Running sessions finish and parallel workers merge, then the loop exits. Run `loop.sh` again to resume.
 
 Inside Claude Code, the `bussin-loop-status` mod puts every running loop in your status line and in a band above the prompt, one row per loop, including loops in git worktrees. `/autoloop-status`, or a row's Details button, opens a pane. The band rows and the pane each have a Stop button that works like `--stop`. The pane shows:
-- progress and what each worker is running
+- progress and what each worker is running, with its attempt
 - elapsed time and the estimated finish
+- a warning, and a copyable resume command, when the driver process is gone
+- blocked items grouped by what they wait for, and the latest sessions
 - input, output and cache tokens
 - cost, per model and per session
 

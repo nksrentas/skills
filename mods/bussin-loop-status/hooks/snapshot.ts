@@ -1,4 +1,4 @@
-import type { ItemRow, LoopSnapshot, ModelRow, RunningRow } from '../types'
+import type { BlockedGroup, ItemRow, LoopSnapshot, ModelRow, RunningRow, SessionRow } from '../types'
 
 type Feature = { id: string; description?: string; passes?: boolean; depends_on?: string[] }
 
@@ -19,13 +19,24 @@ type Usage = {
 type Live = {
   state?: string
   mode?: string
+  agent?: string
+  script?: string
+  pid?: number
   workers?: number
   started_at?: number
   updated_at?: number
   running?: { item: string; worker: number; started_at: number }[]
 }
 
-export type LoopFiles = { features: string; usage?: string; live?: string; progress?: string; stopRequested?: boolean; now: number }
+export type LoopFiles = {
+  features: string
+  usage?: string
+  live?: string
+  attempts?: string
+  stopRequested?: boolean
+  driverAlive?: boolean
+  now: number
+}
 
 const parseJson = <T>(text: string | undefined): T | undefined => {
   if (!text) return undefined
@@ -71,6 +82,9 @@ const toLive = (value: unknown): Live | undefined => {
   return {
     state: clean(value.state),
     mode: clean(value.mode ?? 'sequential'),
+    agent: clean(value.agent ?? ''),
+    script: typeof value.script === 'string' ? clean(value.script) : undefined,
+    pid: optionalNum(value.pid),
     workers: Math.max(1, Math.floor(num(value.workers) || 1)),
     started_at: optionalNum(value.started_at),
     updated_at: optionalNum(value.updated_at),
@@ -151,9 +165,39 @@ const itemRow = (feature: Feature, passed: Set<string>, running: Map<string, num
   }
   const waitingFor = (feature.depends_on ?? []).filter(id => !passed.has(id))
   if (waitingFor.length > 0) {
-    return { id: feature.id, title: title(feature), state: 'waiting', note: `waiting for ${waitingFor.join(', ')}` }
+    return { id: feature.id, title: title(feature), state: 'waiting', note: `waiting for ${waitingFor.join(', ')}`, waitingFor }
   }
   return { id: feature.id, title: title(feature), state: 'ready', note: 'ready' }
+}
+
+const OUTCOME_OK: Record<string, boolean> = { passed: true, merged: true, failed: false, error: false, 'not merged': false }
+
+const sessionRows = (usage: Usage[]): SessionRow[] =>
+  usage
+    .slice(-3)
+    .reverse()
+    .map(row => ({
+      item: row.item,
+      outcome: row.outcome,
+      ok: OUTCOME_OK[row.outcome] ?? null,
+      seconds: Math.round((row.duration_ms ?? 0) / 1000),
+      costUsd: row.cost_usd ?? null,
+      endedAt: row.ended_at ?? null,
+    }))
+
+const blockedGroups = (items: ItemRow[]): BlockedGroup[] => {
+  const groups = new Map<string, string[]>()
+  for (const row of items) {
+    if (row.state !== 'waiting') continue
+    const key = (row.waitingFor ?? []).join(', ')
+    groups.set(key, [...(groups.get(key) ?? []), row.id])
+  }
+  return [...groups.entries()].map(([waitingFor, ids]) => ({ waitingFor, items: ids })).sort((a, b) => b.items.length - a.items.length)
+}
+
+const attemptCounts = (text: string | undefined) => {
+  const parsed = parseJson<unknown>(text)
+  return isRecord(parsed) ? parsed : {}
 }
 
 export const compute = (files: LoopFiles): LoopSnapshot | null => {
@@ -179,32 +223,33 @@ export const compute = (files: LoopFiles): LoopSnapshot | null => {
   const sessionSec = sum(usage, row => row.duration_ms) / 1000
   const parallelism = mode === 'parallel' ? Math.max(1, Math.min(workers, remaining)) : 1
   const doneByLoop = new Set(usage.filter(row => passed.has(row.item)).map(row => row.item)).size
+  const stale = isActive(loopState) && files.driverAlive === false
+  const attempts = attemptCounts(files.attempts)
   const etaSec =
-    loopState === 'running' && doneByLoop > 0 && remaining > 0 ? Math.round((remaining * sessionSec) / doneByLoop / parallelism) : null
+    loopState === 'running' && !stale && doneByLoop > 0 && remaining > 0 ? Math.round((remaining * sessionSec) / doneByLoop / parallelism) : null
   const runningRows: RunningRow[] = runningList.map(row => ({
     item: row.item,
     title: title(features.find(feature => feature.id === row.item)),
     worker: row.worker,
     seconds: Math.max(0, files.now - row.started_at),
+    attempt: Math.floor(num(attempts[row.item])),
   }))
-  const recent = (files.progress ?? '')
-    .split('\n')
-    .filter(line => line.startsWith('## '))
-    .slice(-3)
-    .map(line => clean(line.slice(3)).trim())
   return {
     loopState,
+    stale,
     mode,
+    agent: live?.agent ?? '',
+    script: live?.script ?? null,
     workers,
     total,
     done,
     running: runningRows.length,
+    ready: items.filter(row => row.state === 'ready').length,
     waiting: items.filter(row => row.state === 'waiting').length,
     failing: items.filter(row => row.state === 'failing').length,
     elapsedSec,
     etaSec,
     finishAt: etaSec === null ? null : files.now + etaSec,
-    updatedAgoSec: live?.updated_at === undefined ? null : Math.max(0, files.now - live.updated_at),
     sessions: usage.length,
     unpricedSessions: usage.filter(row => row.cost_usd === undefined).length,
     hasLiveData: live !== undefined,
@@ -216,7 +261,8 @@ export const compute = (files: LoopFiles): LoopSnapshot | null => {
     models: modelRows(usage),
     runningRows,
     items,
-    recent,
+    blockedGroups: blockedGroups(items),
+    recent: sessionRows(usage),
   }
 }
 
@@ -253,6 +299,7 @@ export const statusLine = (snapshot: LoopSnapshot) => {
   const cost = pricedCost(snapshot)
   const elapsed = snapshot.elapsedSec > 0 ? formatDuration(snapshot.elapsedSec) : undefined
   const parts = (head: string, ...rest: (string | undefined)[]) => [head, ...rest].filter(Boolean).join(' · ')
+  if (snapshot.stale) return parts(`autoloop driver not running at ${progress}`, cost)
   if (snapshot.loopState === 'running') {
     const eta = snapshot.etaSec === null ? 'ETA after first item' : `ETA ${formatDuration(snapshot.etaSec)}`
     return parts(`autoloop ${progress} done`, `${snapshot.running} running`, eta, cost)
@@ -281,6 +328,7 @@ export const shortName = (name: string, repoName: string | undefined) =>
   repoName !== undefined && name !== repoName && name.startsWith(`${repoName}-`) ? name.slice(repoName.length + 1) : name
 
 export const compactLine = (name: string, snapshot: LoopSnapshot) => {
+  if (snapshot.stale) return [`⚠ ${name} ${snapshot.done}/${snapshot.total} driver not running`, pricedCost(snapshot)].filter(Boolean).join(' · ')
   if (snapshot.loopState === 'stopping') return [`□ ${name} ${snapshot.done}/${snapshot.total} stopping`, pricedCost(snapshot)].filter(Boolean).join(' · ')
   const eta = snapshot.etaSec === null ? 'ETA after first item' : `ETA ${formatDuration(snapshot.etaSec)}`
   return [`▶ ${name} ${snapshot.done}/${snapshot.total}`, eta, pricedCost(snapshot)].filter(Boolean).join(' · ')
@@ -293,3 +341,28 @@ export const shortTitle = (text: string, max = 64) => {
 }
 
 export const shortModel = (name: string) => name.replace(/^claude-/, '')
+
+const shellQuote = (text: string) => `'${text.replace(/'/g, `'\\''`)}'`
+
+const DRIVER_PATH = /^\/(?:[^/\0]+\/)*bussin-autoloop\/scripts\/loop\.sh$/
+
+const KNOWN_AGENTS = ['claude', 'codex', 'copilot']
+
+const trustedDriver = (path: string, script: string) =>
+  DRIVER_PATH.test(script) && !script.split('/').includes('..') && !`${script}/`.startsWith(`${path.replace(/\/+$/, '')}/`)
+
+export const resumeCommand = (path: string, snapshot: LoopSnapshot) => {
+  if (snapshot.script === null || !trustedDriver(path, snapshot.script) || !KNOWN_AGENTS.includes(snapshot.agent || 'claude')) return null
+  const env = [
+    snapshot.agent !== '' && snapshot.agent !== 'claude' ? `LOOP_AGENT=${snapshot.agent}` : '',
+    snapshot.mode === 'parallel' ? `LOOP_WORKERS=${snapshot.workers}` : '',
+  ].filter(Boolean)
+  return `cd ${shellQuote(path)} && ${[...env, 'bash', shellQuote(snapshot.script)].join(' ')}`
+}
+
+export const isDriverCommand = (command: string) => /(^|[\s/])loop\.sh(\s|$)/.test(command.trim().split('\n')[0] ?? '')
+
+export const livePid = (text: string | undefined) => {
+  const live = toLive(parseJson<unknown>(text))
+  return (live?.state === 'running' || live?.state === 'stopping') && live.pid !== undefined && Number.isInteger(live.pid) && live.pid > 0 ? live.pid : undefined
+}
