@@ -344,10 +344,17 @@ export const shortModel = (name: string) => name.replace(/^claude-/, '')
 
 const shellQuote = (text: string) => `'${text.replace(/'/g, `'\\''`)}'`
 
+const DRIVER_PATH = /^\/(?:[^/\0]+\/)*bussin-autoloop\/scripts\/loop\.sh$/
+
+const KNOWN_AGENTS = ['claude', 'codex', 'copilot']
+
+const trustedDriver = (path: string, script: string) =>
+  DRIVER_PATH.test(script) && !script.split('/').includes('..') && !`${script}/`.startsWith(`${path.replace(/\/+$/, '')}/`)
+
 export const resumeCommand = (path: string, snapshot: LoopSnapshot) => {
-  if (snapshot.script === null) return null
+  if (snapshot.script === null || !trustedDriver(path, snapshot.script) || !KNOWN_AGENTS.includes(snapshot.agent || 'claude')) return null
   const env = [
-    snapshot.agent !== '' && snapshot.agent !== 'claude' ? `LOOP_AGENT=${shellQuote(snapshot.agent)}` : '',
+    snapshot.agent !== '' && snapshot.agent !== 'claude' ? `LOOP_AGENT=${snapshot.agent}` : '',
     snapshot.mode === 'parallel' ? `LOOP_WORKERS=${snapshot.workers}` : '',
   ].filter(Boolean)
   return `cd ${shellQuote(path)} && ${[...env, 'bash', shellQuote(snapshot.script)].join(' ')}`

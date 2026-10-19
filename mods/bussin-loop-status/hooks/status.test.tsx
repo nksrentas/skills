@@ -2,7 +2,7 @@ import type { On } from 'claude-code'
 import { expect, test } from 'claude-code/testing'
 
 import { PANE } from './register'
-import { commonDirFromGitFile, compactLine, compute, isDriverCommand, formatDuration, formatTokens, shortModel, shortName, shortTitle, statusLine } from './snapshot'
+import { commonDirFromGitFile, compactLine, compute, isDriverCommand, resumeCommand, formatDuration, formatTokens, shortModel, shortName, shortTitle, statusLine } from './snapshot'
 
 const NOW = 4000
 
@@ -485,7 +485,7 @@ test('a failed stop says why and changes nothing', async ($, on) => {
   await band.unmount()
 })
 
-const STALE_LIVE = JSON.stringify({ ...JSON.parse(LIVE), agent: 'codex', pid: 4242, script: "/skills/it's/loop.sh" })
+const STALE_LIVE = JSON.stringify({ ...JSON.parse(LIVE), agent: 'codex', pid: 4242, script: "/skills/it's/bussin-autoloop/scripts/loop.sh" })
 
 function answerProject(on: On, ps: { exitCode: number; stdout: string }, copied: string[], toasts: string[]) {
   const files: Record<string, string> = { ...LOOP_FILES, '/project/.loop/live.json': STALE_LIVE, '/project/.loop/attempts.json': '{"F2": 3}' }
@@ -530,7 +530,8 @@ test('a running loop whose driver process is gone shows a warning, no Stop, and 
   }
   const pane = await $.ui.mount({ ...PANE_TARGET, surface: 'terminal' })
   await pane.press({ key: 'copy-resume' })
-  expect(copied).toEqual([`cd '/project' && LOOP_AGENT='codex' LOOP_WORKERS=2 bash '/skills/it'\\''s/loop.sh'`])
+  expect(copied).toEqual([`cd '/project' && LOOP_AGENT=codex LOOP_WORKERS=2 bash '/skills/it'\\''s/bussin-autoloop/scripts/loop.sh'`])
+  expect(await pane.find({ type: 'Text', text: copied[0] })).toBeDefined()
   expect(toasts).toEqual(['Resume command copied'])
   await pane.unmount()
   const band = await $.ui.mount({ ...BAND_TARGET, surface: 'terminal' })
@@ -565,4 +566,20 @@ test('a reused pid that is not loop.sh counts as gone, and blocked items group b
     { waitingFor: 'R0', items: ['A', 'B', 'C'] },
     { waitingFor: 'A, R0', items: ['D'] },
   ])
+})
+
+test('the resume command only runs a bussin-autoloop loop.sh outside the project, with a known agent', async () => {
+  const stale = (live: Record<string, unknown>) => {
+    const snapshot = compute({ features: FEATURES, live: JSON.stringify({ ...JSON.parse(LIVE), ...live }), driverAlive: false, now: NOW })
+    if (snapshot === null) throw new Error('no snapshot')
+    return resumeCommand('/project', snapshot)
+  }
+  expect(stale({ script: '/home/me/.claude/skills/bussin-autoloop/scripts/loop.sh' })).toBe(
+    `cd '/project' && LOOP_WORKERS=2 bash '/home/me/.claude/skills/bussin-autoloop/scripts/loop.sh'`,
+  )
+  expect(stale({ script: '/project/bussin-autoloop/scripts/loop.sh' })).toBeNull()
+  expect(stale({ script: '/project/evil.sh' })).toBeNull()
+  expect(stale({ script: 'bussin-autoloop/scripts/loop.sh' })).toBeNull()
+  expect(stale({ script: '/x/../project/bussin-autoloop/scripts/loop.sh' })).toBeNull()
+  expect(stale({ script: '/home/me/bussin-autoloop/scripts/loop.sh', agent: '$(rm -rf ~)' })).toBeNull()
 })

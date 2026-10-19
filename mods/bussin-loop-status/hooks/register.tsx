@@ -379,6 +379,7 @@ export const register: Register = on => {
             <Text dimColor>
               Its process has exited, so nothing is working on {runningIds || 'any item'}. Run loop.sh again to resume; attempt counts are kept.
             </Text>
+            {resume !== null && <Text dimColor>{resume}</Text>}
             {resume !== null && (
               <Box flexDirection="row" gap={1}>
                 <Button
