@@ -8,6 +8,7 @@ main_dir="$(pwd)"
 integration="$(git rev-parse --abbrev-ref HEAD)"
 worker_root="${LOOP_WORKER_ROOT:-$main_dir.loop-workers}"
 state_dir="$(mktemp -d)"
+attempts_file=.loop/attempts.json
 launched=0
 pause_after_poll=0
 slot_pid=()
@@ -54,15 +55,15 @@ running_items() {
   done
 }
 
-attempts_of() { cat "$state_dir/attempts-$1" 2>/dev/null || echo 0; }
-set_attempts() { echo "$2" > "$state_dir/attempts-$1"; }
+attempts_of() { jq -r --arg id "$1" '.[$id] | if type == "number" then floor else 0 end' "$attempts_file" 2>/dev/null || echo 0; }
+
+set_attempts() {
+  { jq -e 'objects' "$attempts_file" 2>/dev/null || echo '{}'; } | jq --arg id "$1" --argjson count "$2" '.[$id] = $count' > "$attempts_file.tmp"
+  mv "$attempts_file.tmp" "$attempts_file"
+}
 
 exhausted_items() {
-  local f
-  for f in "$state_dir"/attempts-*; do
-    [ -e "$f" ] || continue
-    if [ "$(cat "$f")" -ge "$item_attempts" ]; then echo "${f##*/attempts-}"; fi
-  done
+  jq -r --argjson max "$item_attempts" 'to_entries[] | select((.value | type) == "number" and .value >= $max) | .key' "$attempts_file" 2>/dev/null || true
 }
 
 next_ready() {
@@ -275,6 +276,16 @@ run_parallel() {
       continue
     fi
     [ "$left" -gt 0 ] || break
+    if [ -e "$stop_file" ]; then
+      if [ "$(busy_workers)" -eq 0 ]; then
+        rm -f "$stop_file"
+        log "stopped on request; run loop.sh again to resume"
+        exit 0
+      fi
+      write_live stopping parallel "$workers" "$(running_json)"
+      sleep "$poll_seconds"
+      continue
+    fi
     for ((i = 1; i <= workers; i++)); do
       [ -z "${slot_pid[$i]}" ] || continue
       [ "$launched" -lt "$max_iterations" ] || break
@@ -290,5 +301,6 @@ run_parallel() {
     sleep "$poll_seconds"
   done
   log "all items passing"
+  rm -f "$attempts_file"
   jq -r '.features[] | [.id, .category, (.evidence.commit // "")] | @tsv' "$list"
 }

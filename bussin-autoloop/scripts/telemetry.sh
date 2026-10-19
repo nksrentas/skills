@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
 
 live_file=.loop/live.json
+stop_file=.loop/stop
 usage_file=.loop/usage.jsonl
 loop_started="$(date +%s)"
 
 exclude_file="$(git rev-parse --git-path info/exclude)"
 mkdir -p "$(dirname "$exclude_file")"
-for pattern in /.loop/usage.jsonl /.loop/live.json /.loop/live.json.tmp; do
+for pattern in /.loop/usage.jsonl /.loop/live.json /.loop/live.json.tmp /.loop/stop /.loop/attempts.json /.loop/attempts.json.tmp; do
   grep -qxF "$pattern" "$exclude_file" 2>/dev/null || echo "$pattern" >> "$exclude_file"
 done
+rm -f "$stop_file"
 
 events_query='(fromjson? | objects | [.]) // [split("\n")[] | fromjson? | objects]'
 

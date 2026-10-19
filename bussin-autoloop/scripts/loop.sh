@@ -36,7 +36,13 @@ write_live running sequential 1 "[]"
 
 iteration=0
 stalls=0
+item=""
 while [ "$(remaining)" -gt 0 ]; do
+  if [ -e "$stop_file" ]; then
+    rm -f "$stop_file"
+    echo "autoloop: stopped on request${item:+ after $item}"
+    exit 0
+  fi
   iteration=$((iteration + 1))
   if [ "$iteration" -gt "$max_iterations" ]; then
     echo "autoloop: reached MAX_ITERATIONS=$max_iterations with $(remaining) items left" >&2
@@ -91,4 +97,5 @@ while [ "$(remaining)" -gt 0 ]; do
 done
 
 echo "autoloop: all items passing"
+rm -f .loop/attempts.json
 jq -r '.features[] | [.id, .category, (.evidence.commit // "")] | @tsv' "$list"

@@ -11,6 +11,7 @@ import {
   formatCost,
   formatDuration,
   formatTokens,
+  isActive,
   orderLoops,
   parentDir,
   progressBar,
@@ -28,7 +29,7 @@ export const loopsAtom = atom({ plugin: 'bussin-loop-status', key: 'loops' } as 
 export const selectedAtom = atom({ plugin: 'bussin-loop-status', key: 'selected' } as const, null as string | null)
 
 const STATE_COLOR: Record<ItemState, string> = { done: 'success', running: 'claude', waiting: 'subtle', failing: 'error', ready: 'text' }
-const LOOP_COLOR: Record<LoopSnapshot['loopState'], string> = { running: 'claude', finished: 'success', stopped: 'warning', idle: 'subtle' }
+const LOOP_COLOR: Record<LoopSnapshot['loopState'], string> = { running: 'claude', stopping: 'warning', finished: 'success', stopped: 'warning', idle: 'subtle' }
 
 function costSummary(snapshot: LoopSnapshot) {
   const priced = snapshot.sessions - snapshot.unpricedSessions
@@ -43,7 +44,7 @@ function primaryLoop(loops: LoopView[], selected: string | null) {
 }
 
 function runningLoops(loops: LoopView[]) {
-  return loops.filter(loop => loop.snapshot.loopState === 'running')
+  return loops.filter(loop => isActive(loop.snapshot.loopState))
 }
 
 function summaryText(loops: LoopView[]) {
@@ -105,6 +106,7 @@ async function loadLoop($: EngineInterface, dir: string, repoName: string, now: 
     usage: await readOptional($, `${dir}/.loop/usage.jsonl`),
     live: await readOptional($, `${dir}/.loop/live.json`),
     progress: await readOptional($, `${dir}/.loop/progress.md`),
+    stopRequested: (await readOptional($, `${dir}/.loop/stop`)) !== undefined,
     now,
   })
   return snapshot === null ? null : { name: shortName(baseName(dir), repoName), path: dir, snapshot }
@@ -121,6 +123,24 @@ async function loadLoops($: EngineInterface) {
   return orderLoops(views)
 }
 
+async function refresh($: EngineInterface) {
+  const loops = await loadLoops($)
+  await update($, loopsAtom, () => loops)
+  $.ui.status(statusText(loops))
+  return loops
+}
+
+async function requestStop($: EngineInterface, loop: LoopView) {
+  try {
+    await $.fs.write(`${loop.path}/.loop/stop`, '')
+  } catch (error) {
+    $.ui.toast(`Could not stop ${loop.name}: ${error instanceof Error ? error.message : String(error)}`)
+    return
+  }
+  $.ui.toast(`${loop.name} stops after its running items finish`)
+  await refresh($)
+}
+
 function openPane($: EngineInterface) {
   return $.ui.open({ id: PANE, title: 'Autoloop status' })
 }
@@ -128,22 +148,16 @@ function openPane($: EngineInterface) {
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: 'autoloop-status', description: 'Show the bussin-autoloop runs in this repository and its worktrees' })
-    const loops = await loadLoops($)
-    await update($, loopsAtom, () => loops)
-    $.ui.status(statusText(loops))
+    const loops = await refresh($)
     $.clock.every(REFRESH_MS, async () => {
-      const latest = await loadLoops($)
-      await update($, loopsAtom, () => latest)
-      $.ui.status(statusText(latest))
+      await refresh($)
     })
-    if (loops.some(loop => loop.snapshot.loopState === 'running')) void openPane($)
+    if (runningLoops(loops).length > 0) void openPane($)
     return next(e)
   })
 
   on('command.run', { command: 'autoloop-status' }, async $ => {
-    const loops = await loadLoops($)
-    await update($, loopsAtom, () => loops)
-    $.ui.status(statusText(loops))
+    const loops = await refresh($)
     if (loops.length === 0) return { text: 'No .loop/feature_list.json in this repository or its worktrees. Start one with /bussin-autoloop init.' }
     await openPane($)
     return { text: summaryText(loops) ?? '' }
@@ -167,9 +181,10 @@ export const register: Register = on => {
         {shown.map(loop => (
           <Box key={`band-${loop.path}`} flexDirection="row" gap={1}>
             <Text color="claude" wrap="truncate-end">
-              ▶ {loop.name} {progressBar(loop.snapshot.done, loop.snapshot.total, 10)} {loop.snapshot.done}/{loop.snapshot.total}
-              {loop.snapshot.runningRows.length > 0 ? ` · on ${loop.snapshot.runningRows.map(row => row.item).join(', ')}` : ''} ·{' '}
-              {loop.snapshot.etaSec === null ? 'ETA after first item' : `ETA ${formatDuration(loop.snapshot.etaSec)}`}
+              {loop.snapshot.loopState === 'stopping' ? '□' : '▶'} {loop.name}
+              {loop.snapshot.loopState === 'stopping' ? ' stopping' : ''} {progressBar(loop.snapshot.done, loop.snapshot.total, 10)} {loop.snapshot.done}/{loop.snapshot.total}
+              {loop.snapshot.runningRows.length > 0 ? ` · on ${loop.snapshot.runningRows.map(row => row.item).join(', ')}` : ''}
+              {loop.snapshot.loopState === 'stopping' ? '' : loop.snapshot.etaSec === null ? ' · ETA after first item' : ` · ETA ${formatDuration(loop.snapshot.etaSec)}`}
               {loop.snapshot.sessions > loop.snapshot.unpricedSessions ? ` · ${formatCost(loop.snapshot.costUsd)}` : ''}
             </Text>
             <Button
@@ -180,6 +195,7 @@ export const register: Register = on => {
                 await openPane($)
               }}
             />
+            {loop.snapshot.loopState === 'running' && <Button key={`stop-${loop.name}`} label="Stop" onPress={() => requestStop($, loop)} />}
           </Box>
         ))}
         {running.length > shown.length && <Text dimColor>+{running.length - shown.length} more running · /autoloop-status</Text>}
@@ -269,7 +285,10 @@ export const register: Register = on => {
             <Text bold color={LOOP_COLOR[snapshot.loopState]}>
               {view.name} · {snapshot.loopState} · {mode}
             </Text>
-            <Text dimColor>{snapshot.updatedAgoSec === null ? '' : `updated ${formatDuration(snapshot.updatedAgoSec)} ago`}</Text>
+            <Box flexDirection="row" gap={1}>
+              <Text dimColor>{snapshot.updatedAgoSec === null ? '' : `updated ${formatDuration(snapshot.updatedAgoSec)} ago`}</Text>
+              {snapshot.loopState === 'running' && <Button key="pane-stop" label="Stop" onPress={() => requestStop($, view)} />}
+            </Box>
           </Box>
           <Text>
             {progressBar(snapshot.done, snapshot.total, 30)} {snapshot.done}/{snapshot.total} done · {snapshot.running} running ·{' '}

@@ -25,7 +25,7 @@ type Live = {
   running?: { item: string; worker: number; started_at: number }[]
 }
 
-export type LoopFiles = { features: string; usage?: string; live?: string; progress?: string; now: number }
+export type LoopFiles = { features: string; usage?: string; live?: string; progress?: string; stopRequested?: boolean; now: number }
 
 const parseJson = <T>(text: string | undefined): T | undefined => {
   if (!text) return undefined
@@ -100,10 +100,13 @@ const sum = (rows: Usage[], pick: (row: Usage) => number | undefined) =>
 
 const title = (feature: Feature | undefined) => feature?.description ?? ''
 
-const loopStateOf = (live: Live | undefined, done: number, total: number): LoopSnapshot['loopState'] => {
-  if (live?.state === 'running' || live?.state === 'finished' || live?.state === 'stopped') return live.state
+const loopStateOf = (live: Live | undefined, done: number, total: number, stopRequested: boolean): LoopSnapshot['loopState'] => {
+  if (live?.state === 'running' && stopRequested) return 'stopping'
+  if (live?.state === 'running' || live?.state === 'stopping' || live?.state === 'finished' || live?.state === 'stopped') return live.state
   return done === total && total > 0 ? 'finished' : 'idle'
 }
+
+export const isActive = (loopState: LoopSnapshot['loopState']) => loopState === 'running' || loopState === 'stopping'
 
 const modelRows = (usage: Usage[]): ModelRow[] => {
   const byName = new Map<string, ModelRow>()
@@ -161,16 +164,16 @@ export const compute = (files: LoopFiles): LoopSnapshot | null => {
   const usage = parseLines(files.usage)
   const live = toLive(parseJson<unknown>(files.live))
   const passed = new Set(features.filter(feature => feature.passes).map(feature => feature.id))
-  const runningList = live?.state === 'running' ? (live.running ?? []) : []
+  const runningList = live?.state === 'running' || live?.state === 'stopping' ? (live.running ?? []) : []
   const running = new Map(runningList.map(row => [row.item, row.worker]))
   const items = features.map(feature => itemRow(feature, passed, running, usage))
   const total = features.length
   const done = passed.size
-  const loopState = loopStateOf(live, done, total)
+  const loopState = loopStateOf(live, done, total, files.stopRequested === true)
   const mode = live?.mode ?? 'sequential'
   const workers = live?.workers ?? 1
   const firstStart = live?.started_at ?? usage[0]?.started_at
-  const lastSeen = loopState === 'running' ? files.now : (live?.updated_at ?? usage[usage.length - 1]?.ended_at ?? files.now)
+  const lastSeen = isActive(loopState) ? files.now : (live?.updated_at ?? usage[usage.length - 1]?.ended_at ?? files.now)
   const elapsedSec = firstStart === undefined ? 0 : Math.max(0, lastSeen - firstStart)
   const remaining = total - done
   const sessionSec = sum(usage, row => row.duration_ms) / 1000
@@ -254,6 +257,7 @@ export const statusLine = (snapshot: LoopSnapshot) => {
     const eta = snapshot.etaSec === null ? 'ETA after first item' : `ETA ${formatDuration(snapshot.etaSec)}`
     return parts(`autoloop ${progress} done`, `${snapshot.running} running`, eta, cost)
   }
+  if (snapshot.loopState === 'stopping') return parts(`autoloop stopping at ${progress}`, `${snapshot.running} running`, cost)
   if (snapshot.loopState === 'finished') return parts(`autoloop finished ${progress}`, elapsed, cost)
   if (snapshot.loopState === 'stopped') return parts(`autoloop stopped at ${progress}`, cost)
   return parts(`autoloop ${progress} done`, snapshot.hasLiveData ? 'not running' : 'no live data')
@@ -268,7 +272,7 @@ export const commonDirFromGitFile = (text: string) => {
   return match?.[1] === undefined ? undefined : parentDir(parentDir(match[1].trim()))
 }
 
-const LOOP_ORDER: Record<LoopSnapshot['loopState'], number> = { running: 0, stopped: 1, idle: 2, finished: 3 }
+const LOOP_ORDER: Record<LoopSnapshot['loopState'], number> = { running: 0, stopping: 0, stopped: 1, idle: 2, finished: 3 }
 
 export const orderLoops = <T extends { name: string; snapshot: LoopSnapshot }>(loops: T[]) =>
   [...loops].sort((a, b) => LOOP_ORDER[a.snapshot.loopState] - LOOP_ORDER[b.snapshot.loopState] || a.name.localeCompare(b.name))
@@ -277,6 +281,7 @@ export const shortName = (name: string, repoName: string | undefined) =>
   repoName !== undefined && name !== repoName && name.startsWith(`${repoName}-`) ? name.slice(repoName.length + 1) : name
 
 export const compactLine = (name: string, snapshot: LoopSnapshot) => {
+  if (snapshot.loopState === 'stopping') return [`□ ${name} ${snapshot.done}/${snapshot.total} stopping`, pricedCost(snapshot)].filter(Boolean).join(' · ')
   const eta = snapshot.etaSec === null ? 'ETA after first item' : `ETA ${formatDuration(snapshot.etaSec)}`
   return [`▶ ${name} ${snapshot.done}/${snapshot.total}`, eta, pricedCost(snapshot)].filter(Boolean).join(' · ')
 }
