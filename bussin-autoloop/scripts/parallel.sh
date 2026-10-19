@@ -38,7 +38,7 @@ blocked_query='
 | select(.passes == false)
 | .id as $id
 | "  \($id): " + (
-    if ($skip | index($id)) then "gave up after \($attempts) attempts, see .loop/progress.md and branch loop/\($id)"
+    if ($skip | index($id)) then "gave up after \($attempts) attempts, see .loop/progress.md and branch loop/\($name)/\($id)"
     else ((.depends_on // []) - $done | map(. as $dep | if ($all | index($dep)) then $dep else $dep + " (unknown id)" end) | join(", ")) as $waiting
       | if $waiting == "" then "ready" else "waiting for " + $waiting end
     end)'
@@ -72,7 +72,7 @@ next_ready() {
 }
 
 launch() {
-  local slot="$1" id="$2" dir="$worker_root/w$1" branch="loop/$2"
+  local slot="$1" id="$2" dir="$worker_root/w$1" branch="loop/$LOOP_NAME/$2"
   git branch -D "$branch" >/dev/null 2>&1 || true
   mkdir -p "$worker_root"
   git worktree add -q -b "$branch" "$dir" "$integration"
@@ -229,12 +229,13 @@ stop_on_tamper() {
   done
   trap - EXIT
   write_live stopped parallel "$workers" "[]"
+  release_lock
   exit 1
 }
 
 finish() {
   local slot="$1" id="${slot_item[$1]}" started="${slot_started[$1]}" status=0 merge_status=0 outcome
-  local branch="loop/$id" output="$state_dir/w$1.log" result="$state_dir/w$1.json"
+  local branch="loop/$LOOP_NAME/$id" output="$state_dir/w$1.log" result="$state_dir/w$1.json"
   wait "${slot_pid[$slot]}" || status=$?
   kill -- -"${slot_pid[$slot]}" 2>/dev/null || true
   if worker_redirected "$slot"; then stop_on_tamper; fi
@@ -279,6 +280,7 @@ stop_workers() {
   rmdir "$worker_root" 2>/dev/null || true
   rm -rf "$state_dir"
   write_live "$(closing_state)" parallel "$workers" "[]"
+  release_lock
 }
 
 busy_workers() {
@@ -294,7 +296,7 @@ report_blocked() {
     echo "autoloop: reached MAX_ITERATIONS=$max_iterations sessions with $(remaining) items left" >&2
   fi
   echo "autoloop: no item can start. Items still failing:" >&2
-  jq -r --argjson skip "$(json_array $(exhausted_items))" --arg attempts "$item_attempts" "$blocked_query" "$list" >&2
+  jq -r --argjson skip "$(json_array $(exhausted_items))" --arg attempts "$item_attempts" --arg name "$LOOP_NAME" "$blocked_query" "$list" >&2
 }
 
 run_parallel() {

@@ -23,6 +23,7 @@ make_project() {
 #!/usr/bin/env bash
 id="\${2##* }"
 echo "start \$id" >> "$dir/events"
+echo "branch \$(git rev-parse --abbrev-ref HEAD) \$LOOP_NAME" >> "$dir/events"
 if [ "\$(jq -r --arg id "\$id" '.features[] | select(.id == \$id) | .leak // false' .loop/feature_list.json)" = true ]; then
   mkdir -p .cache
   nohup perl -e 'setpgrp(0, 0); exec @ARGV' bash -c 'while :; do touch .cache/\$RANDOM; sleep 0.1; done' > /dev/null 2>&1 &
@@ -211,6 +212,24 @@ echo '{"G": 2}' > "$spent/.loop/attempts.json"
 spent_status=0
 run_loop "$spent" LOOP_WORKERS=2 LOOP_ITEM_ATTEMPTS=2 || spent_status=$?
 check "attempt counts survive a restart" '[ "$spent_status" != 0 ] && [ ! -f "$spent/events" ] && grep -q "G: gave up after 2 attempts" "$spent/out"'
+
+multi="$tmp/multi"
+make_project "$multi/one" true '{"features": [
+  {"id": "F1", "passes": false, "evidence": null, "touches": ["src/f1.txt"], "writes": "src/f1.txt"},
+  {"id": "F2", "passes": false, "evidence": null, "touches": ["src/f2.txt"], "writes": "src/f2.txt"}
+]}'
+git -C "$multi/one" worktree add -q -b two "$multi/two"
+run_loop "$multi/one" LOOP_WORKERS=2 &
+one_pid=$!
+run_loop "$multi/two" LOOP_WORKERS=2 &
+two_pid=$!
+one_status=0
+two_status=0
+wait "$one_pid" || one_status=$?
+wait "$two_pid" || two_status=$?
+check "two parallel loops in worktrees of one repo with the same item ids both finish" '[ "$one_status" = 0 ] && [ "$two_status" = 0 ] && [ "$(jq "[.features[] | select(.passes)] | length" "$multi/one/.loop/feature_list.json")" = 2 ] && [ "$(jq "[.features[] | select(.passes)] | length" "$multi/two/.loop/feature_list.json")" = 2 ] && [ -f "$multi/two/src/f1.txt" ]'
+check "each loop names its worker branches after itself and exports LOOP_NAME" 'grep -qx "branch loop/one/F1 one" "$multi/one/events" && grep -qx "branch loop/two/F1 two" "$multi/one/events"'
+check "both loops clean up their own branches" '[ -z "$(git -C "$multi/one" branch --list "loop/*")" ]'
 
 cap="$tmp/cap"
 make_project "$cap" true '{"features": [{"id": "A", "passes": false, "evidence": null, "writes": "src/a.txt"}]}'

@@ -3,13 +3,31 @@
 live_file=.loop/live.json
 stop_file=.loop/stop
 usage_file=.loop/usage.jsonl
+lock_dir=.loop/run.lock
 loop_started="$(date +%s)"
 
 exclude_file="$(git rev-parse --git-path info/exclude)"
 mkdir -p "$(dirname "$exclude_file")"
-for pattern in /.loop/usage.jsonl /.loop/live.json /.loop/live.json.tmp /.loop/stop /.loop/attempts.json /.loop/attempts.json.tmp; do
+for pattern in /.loop/usage.jsonl /.loop/live.json /.loop/live.json.tmp /.loop/stop /.loop/attempts.json /.loop/attempts.json.tmp /.loop/run.lock/ /.loop/port; do
   grep -qxF "$pattern" "$exclude_file" 2>/dev/null || echo "$pattern" >> "$exclude_file"
 done
+
+refuse_second_loop() {
+  echo "autoloop: a loop is already running here (pid $1); stop it first or use another worktree" >&2
+  exit 1
+}
+
+live_pid="$(jq -r 'select(.state == "running" or .state == "stopping") | .pid // empty' "$live_file" 2>/dev/null || true)"
+if [ -n "$live_pid" ] && kill -0 "$live_pid" 2>/dev/null; then refuse_second_loop "$live_pid"; fi
+if ! mkdir "$lock_dir" 2>/dev/null; then
+  lock_pid="$(cat "$lock_dir/pid" 2>/dev/null || { sleep 1; cat "$lock_dir/pid" 2>/dev/null; } || true)"
+  if [ -n "$lock_pid" ] && kill -0 "$lock_pid" 2>/dev/null; then refuse_second_loop "$lock_pid"; fi
+  rm -rf "$lock_dir"
+  mkdir "$lock_dir" 2>/dev/null || refuse_second_loop "$(cat "$lock_dir/pid" 2>/dev/null || echo unknown)"
+fi
+echo "$$" > "$lock_dir/pid"
+release_lock() { [ "$(cat "$lock_dir/pid" 2>/dev/null || true)" != "$$" ] || rm -rf "$lock_dir"; }
+trap release_lock EXIT
 rm -f "$stop_file"
 
 events_query='(fromjson? | objects | [.]) // [split("\n")[] | fromjson? | objects]'

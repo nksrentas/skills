@@ -108,6 +108,10 @@ To run independent items at the same time, each in its own git worktree, set a c
 
 For UI work add `bussin-ui` and `review:review-animations` to `--skills`.
 
+### Running several loops
+
+Run one loop per checkout; a second `loop.sh` in the same checkout refuses to start while the first runs. For several loops at once, from different chats or terminals, give each its own git worktree (`git worktree add ../app-billing`) or repo. Each loop is named after its directory, so its worker branches (`loop/<name>/<id>`), dev-server ports and test databases never collide with another loop's.
+
 The loop runs with Codex or GitHub Copilot too: install the skill for that agent, start init there (`$bussin-autoloop init …` in Codex, `/bussin-autoloop init …` in Copilot), then run the driver with `LOOP_AGENT=codex` or `LOOP_AGENT=copilot`. Every agent's commits go through the same commit guard, here as a git `pre-commit` hook, and the driver re-runs the gate after Codex and Copilot sessions. See [Agents](./bussin-autoloop/SKILL.md#agents) for what each one limits and reports.
 
 ### Watching a run
