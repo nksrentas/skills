@@ -23,6 +23,13 @@ make_project() {
 #!/usr/bin/env bash
 id="\${2##* }"
 echo "start \$id" >> "$dir/events"
+if [ "\$(jq -r --arg id "\$id" '.features[] | select(.id == \$id) | .stop // false' .loop/feature_list.json)" = true ]; then
+  bash "$skill/scripts/loop-status.sh" --stop "\$LOOP_MAIN_DIR" > /dev/null
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    [ "\$(jq -r .state "\$LOOP_MAIN_DIR/.loop/live.json")" = stopping ] && { echo "saw stopping" >> "$dir/events"; break; }
+    sleep 1
+  done
+fi
 sleep 2
 target="\$(jq -r --arg id "\$id" '.features[] | select(.id == \$id) | .writes' .loop/feature_list.json)"
 mkdir -p "\$(dirname "\$target")"
@@ -149,6 +156,32 @@ check "the sequential loop records each session as passed" '[ "$seq_status" = 0 
 check "the sequential loop records tokens, cost and model" '[ "$(jq -s "map(.output_tokens) | add" "$seq/.loop/usage.jsonl")" = 180 ] && [ "$(jq -s "map(.cost_usd) | add" "$seq/.loop/usage.jsonl")" = 0.5 ] && [ "$(jq -r ".state" "$seq/.loop/live.json")" = finished ]'
 check "telemetry files are kept out of commits through info/exclude" 'grep -qxF /.loop/usage.jsonl "$seq/.git/info/exclude" && grep -qxF /.loop/live.json "$seq/.git/info/exclude" && [ -z "$(git -C "$seq" status --porcelain .loop/usage.jsonl .loop/live.json)" ]'
 check "the sequential loop prints a summary per session" 'grep -q "autoloop: S1 passed after 1m, \$0.25, 700 in / 90 out tokens" "$seq/out"'
+
+drain="$tmp/drain"
+make_project "$drain" true '{"features": [
+  {"id": "P1", "passes": false, "evidence": null, "stop": true, "touches": ["src/p1.txt"], "writes": "src/p1.txt"},
+  {"id": "P2", "passes": false, "evidence": null, "touches": ["src/p2.txt"], "writes": "src/p2.txt"},
+  {"id": "P3", "passes": false, "evidence": null, "touches": ["src/p3.txt"], "writes": "src/p3.txt"}
+]}'
+drain_status=0
+run_loop "$drain" LOOP_WORKERS=2 || drain_status=$?
+check "a stop request drains the running workers and exits 0" '[ "$drain_status" = 0 ] && grep -q "stopped on request" "$drain/out"'
+check "the live state says stopping while workers drain" 'grep -q "^saw stopping$" "$drain/events"'
+check "running items still merge after a stop request" '[ -f "$drain/src/p1.txt" ] && [ -f "$drain/src/p2.txt" ] && [ "$(jq "[.features[] | select(.passes)] | length" "$drain/.loop/feature_list.json")" = 2 ]'
+check "no new worker starts after a stop request" '! grep -q "^start P3$" "$drain/events"'
+check "a drained loop ends as stopped and clears the request" '[ "$(jq -r ".state" "$drain/.loop/live.json")" = stopped ] && [ ! -e "$drain/.loop/stop" ] && [ -z "$(git -C "$drain" status --porcelain .loop)" ]'
+check "attempt counts are kept in .loop/attempts.json" '[ "$(jq -c . "$drain/.loop/attempts.json")" = "{\"P1\":1,\"P2\":1}" ] || [ "$(jq -c . "$drain/.loop/attempts.json")" = "{\"P2\":1,\"P1\":1}" ]'
+resume_status=0
+run_loop "$drain" LOOP_WORKERS=2 || resume_status=$?
+check "running loop.sh again resumes and finishes" '[ "$resume_status" = 0 ] && [ -f "$drain/src/p3.txt" ] && [ "$(jq -r ".state" "$drain/.loop/live.json")" = finished ]'
+check "attempt counts are deleted once every item passes" '[ ! -e "$drain/.loop/attempts.json" ]'
+
+spent="$tmp/spent"
+make_project "$spent" true '{"features": [{"id": "G", "passes": false, "evidence": null, "writes": "src/g.txt"}]}'
+echo '{"G": 2}' > "$spent/.loop/attempts.json"
+spent_status=0
+run_loop "$spent" LOOP_WORKERS=2 LOOP_ITEM_ATTEMPTS=2 || spent_status=$?
+check "attempt counts survive a restart" '[ "$spent_status" != 0 ] && [ ! -f "$spent/events" ] && grep -q "G: gave up after 2 attempts" "$spent/out"'
 
 cap="$tmp/cap"
 make_project "$cap" true '{"features": [{"id": "A", "passes": false, "evidence": null, "writes": "src/a.txt"}]}'

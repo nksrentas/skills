@@ -2,6 +2,7 @@
 set -euo pipefail
 
 watch_seconds=""
+stop=0
 target=""
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -9,8 +10,9 @@ while [ $# -gt 0 ]; do
       watch_seconds=5
       if [[ "${2:-}" =~ ^[0-9]+$ ]]; then watch_seconds="$2"; shift; fi
       ;;
+    --stop) stop=1 ;;
     -h | --help)
-      echo "usage: loop-status.sh [--watch [seconds]] [project dir]"
+      echo "usage: loop-status.sh [--watch [seconds] | --stop] [project dir]"
       exit 0
       ;;
     *) target="$1" ;;
@@ -45,9 +47,11 @@ def row($label; $id; $title; $note): "  \($label | pad(6))\($id | clean | pad(6)
 | ($features | map(select(.passes == true) | .id)) as $passed
 | ($features | length) as $total
 | ($passed | length) as $done
-| (if ["running", "finished", "stopped"] | index($l.state) then $l.state
+| (if $l.state == "running" and $stop_requested then "stopping"
+   elif ["running", "stopping", "finished", "stopped"] | index($l.state) then $l.state
    elif $done == $total and $total > 0 then "finished" else "idle" end) as $state
-| (if $state == "running" then ($l.running // []) else [] end) as $running
+| (["running", "stopping"] | index($state) != null) as $active
+| (if $active then ($l.running // []) else [] end) as $running
 | ($running | map(.item)) as $running_ids
 | ($usage | map(select(.cost_usd != null))) as $priced
 | ($usage | sum(.duration_ms) / 1000) as $session_sec
@@ -56,7 +60,7 @@ def row($label; $id; $title; $note): "  \($label | pad(6))\($id | clean | pad(6)
 | (if $l.mode == "parallel" then ([1, ([($l.workers // 1), $left] | min)] | max) else 1 end) as $parallel
 | (if $state == "running" and $done_by_loop > 0 and $left > 0 then ($left * $session_sec / $done_by_loop / $parallel | round) else null end) as $eta
 | ($l.started_at // $usage[0].started_at) as $first
-| (if $state == "running" then $now else ($l.updated_at // $usage[-1].ended_at // $now) end) as $last
+| (if $active then $now else ($l.updated_at // $usage[-1].ended_at // $now) end) as $last
 | (if $first then ([0, $last - $first] | max) else 0 end) as $elapsed
 | def spend($id): ($usage | map(select(.item == $id))) as $s
     | [ (if ($s | map(select(.cost_usd != null)) | length) > 0 then ($s | sum(.cost_usd) | usd)
@@ -68,7 +72,7 @@ def row($label; $id; $title; $note): "  \($label | pad(6))\($id | clean | pad(6)
     | if $tries > 0 then ([if $tries == 1 then "1 attempt" else "\($tries) attempts" end, spend($f.id)] | map(select(. != "")) | join(" · "))
       elif ($waiting | length) > 0 then "waiting for \($waiting | map(clean) | join(", "))"
       else "ready" end;
-  ({running: "▶", finished: "✓", stopped: "■", idle: "·"}[$state]) as $icon
+  ({running: "▶", stopping: "□", finished: "✓", stopped: "■", idle: "·"}[$state]) as $icon
 | [ "\($bold)\($icon) \($name)\($reset)  \($state) · \($l.mode // "sequential")"
     + (if ($l.workers // 1) > 1 then " ×\($l.workers)" else "" end)
     + (if $l.agent then " · \($l.agent | clean)" else "" end),
@@ -110,7 +114,7 @@ render() {
   { cat "$dir/.loop/live.json" 2> /dev/null || true; } | jq -c -s -R '[fromjson? | objects]' > "$scratch/live"
   { cat "$dir/.loop/progress.md" 2> /dev/null || true; } > "$scratch/progress"
   if ! jq -r --arg name "$name" --argjson now "$(date +%s)" --slurpfile usage "$scratch/usage" --slurpfile live "$scratch/live" \
-    --rawfile progress "$scratch/progress" --arg bold "$bold" --arg dim "$dim" --arg reset "$reset" \
+    --rawfile progress "$scratch/progress" --argjson stop_requested "$([ -e "$dir/.loop/stop" ] && echo true || echo false)" --arg bold "$bold" --arg dim "$dim" --arg reset "$reset" \
     '. as $list | ($usage[0]) as $usage | ($live[0]) as $live | $list | '"$render_query" "$dir/.loop/feature_list.json" 2> "$scratch/error"; then
     echo "$name: cannot read .loop/feature_list.json ($(head -n 1 "$scratch/error"))" >&2
   fi
@@ -136,6 +140,19 @@ show_all() {
   done < <(loop_dirs | awk '!seen[$0]++')
   [ "$shown" = 1 ] || { echo "No autoloop found here. Run it inside a project with .loop/feature_list.json." >&2; return 1; }
 }
+
+request_stop() {
+  local dir
+  dir="$(cd "${target:-.}" && { git rev-parse --show-toplevel 2> /dev/null || pwd; })"
+  [ -f "$dir/.loop/feature_list.json" ] || { echo "No autoloop in $dir." >&2; return 1; }
+  touch "$dir/.loop/stop"
+  echo "autoloop: $(basename "$dir") stops after its running items finish. Run loop.sh again to resume."
+}
+
+if [ "$stop" = 1 ]; then
+  request_stop
+  exit
+fi
 
 scratch="$(mktemp -d)"
 trap 'rm -rf "$scratch"' EXIT

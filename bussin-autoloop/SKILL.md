@@ -28,6 +28,14 @@ bash <skill directory>/scripts/loop.sh
 
 Init prints the exact path for the current install, for example `~/.claude/skills/bussin-autoloop/scripts/loop.sh`.
 
+To stop without losing work, request a stop instead of pressing Ctrl-C:
+
+```bash
+bash <skill directory>/scripts/loop-status.sh --stop [project dir]
+```
+
+It creates `.loop/stop`, which git never sees. The driver never interrupts a running session. A sequential loop exits before its next session starts. A parallel loop starts no new workers, lets the running ones finish and merge as usual (live state `stopping`), then exits. Both exit 0 with live state `stopped`. To resume, run `loop.sh` again. The Stop button in the `bussin-loop-status` mod does the same.
+
 ### Agents
 
 `LOOP_AGENT` picks the CLI that runs each session; the default is `claude`. Each needs the skill installed where that agent finds it (`npx skills add nksrentas/skills --skill bussin-autoloop -a codex`, or `-a github-copilot`).
@@ -48,7 +56,7 @@ LOOP_AGENT=codex LOOP_MODEL=gpt-5.6-luna bash <skill directory>/scripts/loop.sh
 
 `LOOP_WORKERS=3 bash <skill directory>/scripts/loop.sh` runs up to three sessions at once. The cap is whatever you set, up to 8, and the default of 1 keeps the sequential loop. Init writes two scheduling fields on every item: `depends_on`, the items that must pass first, and `touches`, the paths it will change. An item starts when its dependencies pass and its `touches` overlap no running item. Edit either field in `.loop/feature_list.json` at any time; the driver re-reads them before each launch, and the commit guard ignores them.
 
-Each worker gets a git worktree next to the repo (`<repo>.loop-workers/w<n>`, override with `LOOP_WORKER_ROOT`) on branch `loop/<id>`, and runs `run --item <id>`. When it reports a pass, the driver merges the branch into the current branch one item at a time and runs `verify.sh` on the merged result, because two items that pass alone can still break together. A conflict or a red gate sends the item back to run again on top of the latest work, up to `LOOP_ITEM_ATTEMPTS` (default 3). When nothing can start (a dependency cycle, an unknown id, or an item out of attempts), the driver stops and lists what each item is waiting for.
+Each worker gets a git worktree next to the repo (`<repo>.loop-workers/w<n>`, override with `LOOP_WORKER_ROOT`) on branch `loop/<id>`, and runs `run --item <id>`. When it reports a pass, the driver merges the branch into the current branch one item at a time and runs `verify.sh` on the merged result, because two items that pass alone can still break together. A conflict or a red gate sends the item back to run again on top of the latest work, up to `LOOP_ITEM_ATTEMPTS` (default 3). Attempt counts live in `.loop/attempts.json`, so they survive a restart; the driver deletes the file once every item passes, and you can delete it yourself to give items fresh attempts. When nothing can start (a dependency cycle, an unknown id, or an item out of attempts), the driver stops and lists what each item is waiting for.
 
 The speed-up depends on the list's shape, not on the cap. Items that all edit one file run one after another whatever the cap is, while portable feature folders (`bussin-ts-architecture`) parallelise well. Every worker is a full session, so usage goes N times faster. `init.sh` has to give each worker its own port and test database, using `LOOP_WORKER`.
 
@@ -65,8 +73,8 @@ It prints the same view as the pane below: progress bar, elapsed time, ETA and i
 
 In Claude Code, the `bussin-loop-status` mod shows a run as it happens. Install it with `claude plugin marketplace add nksrentas/skills` and `claude plugin install bussin-loop-status@bussin`.
 - **Status line:** shows a loop's outcome once nothing is running, for example `autoloop finished 59/59 · 9h 12m · $41.20`. While loops run it stays empty, because the band below already shows them.
-- **Band above the prompt:** with several loops in the repository, every running one gets its own row, for example `▶ stage1-auth-site ███░░ 36/59 · on F31 · ETA 40m · $6.09`, with a Details button that opens it in the pane. The status line lists them all too.
-- **Pane:** `/autoloop-status` or a band row's Details button opens it. It shows a header with progress, ETA, elapsed time and cost so far. Below that are three aligned lists: Now, Next (the next few items with what they wait for), and Done (the latest few). At the bottom are cost, tokens, models and the latest progress notes.
+- **Band above the prompt:** with several loops in the repository, every running one gets its own row, for example `▶ stage1-auth-site ███░░ 36/59 · on F31 · ETA 40m · $6.09`, with a Details button that opens it in the pane and a Stop button that requests a stop. A loop that is finishing its running items after a stop shows as `□ … stopping`. The status line lists them all too.
+- **Pane:** `/autoloop-status` or a band row's Details button opens it. It shows a header with a Stop button, progress, ETA, elapsed time and cost so far. Below that are three aligned lists: Now, Next (the next few items with what they wait for), and Done (the latest few). At the bottom are cost, tokens, models and the latest progress notes.
 
 It reads only `.loop/` folders, and it finds them in the session's project and in every git worktree of the same repository. A session opened in the main checkout therefore sees loops running in worktrees, with buttons to switch between them. A loop started before this telemetry existed has no `usage.jsonl` or `live.json`, so the view shows progress and items only. Two steps fill it in:
 - Run `bash <skill directory>/scripts/backfill-usage.sh` in the project. It rebuilds `usage.jsonl` from Claude Code's own transcripts of past loop sessions: tokens, models, time and item per session. Cost isn't in transcripts, so it shows as unknown.

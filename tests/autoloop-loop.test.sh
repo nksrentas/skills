@@ -42,4 +42,28 @@ make_project "$tmp/fail" always-fail
 if run_loop "$tmp/fail"; then echo "FAIL: plain failure was not counted as a stall"; exit 1; fi
 grep -q "no progress (1/1)" "$tmp/fail/out" || { cat "$tmp/fail/out"; echo "FAIL: plain failure not reported as stall"; exit 1; }
 
+stop="$tmp/stop"
+mkdir -p "$stop/.loop" "$stop/bin"
+echo '{"features":[{"id":"A1","passes":false},{"id":"A2","passes":false}]}' > "$stop/.loop/feature_list.json"
+cat > "$stop/bin/claude" <<EOF
+#!/usr/bin/env bash
+echo run >> "$stop/calls"
+bash "$(dirname "$loop")/loop-status.sh" --stop > "$stop/stop-out"
+id="\$(jq -r '[.features[] | select(.passes == false)][0].id' .loop/feature_list.json)"
+jq --arg id "\$id" '(.features[] | select(.id == \$id)).passes = true' .loop/feature_list.json > .loop/tmp && mv .loop/tmp .loop/feature_list.json
+git commit -qam "pass \$id"
+EOF
+chmod +x "$stop/bin/claude"
+git -C "$stop" init -q
+git -C "$stop" add .loop
+git -C "$stop" -c user.email=t@t -c user.name=t commit -qm init
+touch "$stop/.loop/stop"
+run_loop "$stop" || { cat "$stop/out"; echo "FAIL: a stop request did not exit 0"; exit 1; }
+[ "$(wc -l < "$stop/calls" | tr -d " ")" = 1 ] || { cat "$stop/out"; echo "FAIL: a stale stop request blocked the start, or a session started after the stop request"; exit 1; }
+grep -q "stops after its running items finish" "$stop/stop-out" || { echo "FAIL: loop-status --stop did not confirm"; exit 1; }
+grep -q "autoloop: stopped on request after A1" "$stop/out" || { cat "$stop/out"; echo "FAIL: no stop notice"; exit 1; }
+[ "$(jq -r .state "$stop/.loop/live.json")" = stopped ] || { echo "FAIL: live state is not stopped"; exit 1; }
+[ ! -e "$stop/.loop/stop" ] || { echo "FAIL: the stop request was left behind"; exit 1; }
+[ "$(git -C "$stop" show HEAD:.loop/feature_list.json | jq -r '.features[1].passes')" = false ] || { echo "FAIL: A2 ran after the stop request"; exit 1; }
+
 echo "autoloop-loop.test.sh: ok"

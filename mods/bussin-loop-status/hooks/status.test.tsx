@@ -2,7 +2,7 @@ import type { On } from 'claude-code'
 import { expect, test } from 'claude-code/testing'
 
 import { PANE } from './register'
-import { commonDirFromGitFile, compute, formatDuration, formatTokens, shortModel, shortName, shortTitle, statusLine } from './snapshot'
+import { commonDirFromGitFile, compactLine, compute, formatDuration, formatTokens, shortModel, shortName, shortTitle, statusLine } from './snapshot'
 
 const NOW = 4000
 
@@ -251,11 +251,11 @@ const REPO_FILES: Record<string, string> = {
 
 const ENTRY = { kind: 'dir', size: 0, mtimeMs: 0, isLink: false } as const
 
-function answerRepo(on: On, root: string, statuses: (string | undefined)[]) {
+function answerRepo(on: On, root: string, statuses: (string | undefined)[], files: Record<string, string> = REPO_FILES) {
   on('session.root', async () => ({ value: root }))
   on('clock.now', async () => ({ value: NOW * 1000 }))
   on('fs.read', async (_, e) => {
-    const text = REPO_FILES[e.path]
+    const text = files[e.path]
     return text === undefined ? { deny: `ENOENT: ${e.path}` } : { value: text }
   })
   on('fs.stat', async (_, e) => {
@@ -405,4 +405,70 @@ test('long item descriptions shorten to their heading, and model names drop the 
   expect(shortTitle('F33 Docs and harness for the new stack: README.md explains the monorepo')).toBe('F33 Docs and harness for the new stack')
   expect(shortTitle('x'.repeat(100)).length).toBe(64)
   expect(shortModel('claude-opus-5-5[1m]')).toBe('opus-5-5[1m]')
+})
+
+test('a stop request turns a running loop into stopping, which keeps its running items but no ETA', async () => {
+  const requested = compute({ features: FEATURES, usage: USAGE, live: LIVE, stopRequested: true, now: NOW })
+  expect(requested?.loopState).toBe('stopping')
+  expect(requested?.runningRows.map(row => row.item)).toEqual(['F2'])
+  expect(requested?.etaSec).toBeNull()
+  expect(requested && statusLine(requested)).toBe('autoloop stopping at 1/4 · 1 running · $2.00')
+  expect(requested && compactLine('wt-a', requested)).toBe('□ wt-a 1/4 stopping · $2.00')
+  const draining = JSON.stringify({ ...JSON.parse(LIVE), state: 'stopping' })
+  expect(compute({ features: FEATURES, live: draining, now: NOW })?.loopState).toBe('stopping')
+  const stopped = JSON.stringify({ ...JSON.parse(LIVE), state: 'stopped', running: [] })
+  expect(compute({ features: FEATURES, live: stopped, stopRequested: true, now: NOW })?.loopState).toBe('stopped')
+})
+
+test('Stop in the band and in the pane writes the stop file, and the loop then shows as stopping', async ($, on) => {
+  const files = { ...REPO_FILES }
+  answerRepo(on, '/repo', [], files)
+  const written: string[] = []
+  const toasts: string[] = []
+  on('fs.write', async (_, e) => {
+    written.push(e.path)
+    files[e.path] = e.text
+    return { value: undefined }
+  })
+  on('ui.toast', async (_, e) => {
+    toasts.push(e.text)
+    return { value: undefined }
+  })
+  await $.command.run(RUN_COMMAND)
+  const band = await $.ui.mount({ ...BAND_TARGET, surface: 'terminal' })
+  await band.press({ key: 'stop-wt-a' })
+  expect(written).toEqual(['/elsewhere/wt-a/.loop/stop'])
+  expect(toasts).toEqual(['wt-a stops after its running items finish'])
+  expect(await band.find({ type: 'Text', text: /^□ wt-a stopping [█░]{10} 1\/4 · on F2 · \$2\.00$/ })).toBeDefined()
+  expect(await band.find({ key: 'stop-wt-a' })).toBeUndefined()
+  expect(await band.find({ key: 'stop-wt-c' })).toBeDefined()
+  await band.press({ key: 'details-wt-c' })
+  await band.unmount()
+  const before = await $.ui.mount({ ...PANE_TARGET, surface: 'terminal' })
+  expect(await before.find({ type: 'Text', text: /wt-c · running · parallel × 2/ })).toBeDefined()
+  await before.press({ key: 'pane-stop' })
+  await before.unmount()
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const pane = await $.ui.mount({ ...PANE_TARGET, surface })
+    expect(await pane.find({ type: 'Text', text: /wt-c · stopping · parallel × 2/ })).toBeDefined()
+    expect(await pane.find({ key: 'pane-stop' })).toBeUndefined()
+    await pane.unmount()
+  }
+  expect(written).toEqual(['/elsewhere/wt-a/.loop/stop', '/elsewhere/wt-c/.loop/stop'])
+})
+
+test('a failed stop says why and changes nothing', async ($, on) => {
+  answerRepo(on, '/repo', [])
+  const toasts: string[] = []
+  on('fs.write', async () => ({ deny: 'EACCES: read-only' }))
+  on('ui.toast', async (_, e) => {
+    toasts.push(e.text)
+    return { value: undefined }
+  })
+  await $.command.run(RUN_COMMAND)
+  const band = await $.ui.mount({ ...BAND_TARGET, surface: 'terminal' })
+  await band.press({ key: 'stop-wt-a' })
+  expect(toasts[0]).toMatch(/^Could not stop wt-a: .*EACCES/)
+  expect(await band.find({ key: 'stop-wt-a' })).toBeDefined()
+  await band.unmount()
 })

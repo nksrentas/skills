@@ -7,7 +7,7 @@ export type RunningRow = { item: string; title: string; worker: number; seconds:
 export type ModelRow = { name: string; costUsd: number; priced: boolean; inputTokens: number; outputTokens: number }
 
 export type LoopSnapshot = {
-  loopState: 'running' | 'finished' | 'stopped' | 'idle'
+  loopState: 'running' | 'stopping' | 'finished' | 'stopped' | 'idle'
   mode: string
   workers: number
   total: number

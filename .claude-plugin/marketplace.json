@@ -15,7 +15,7 @@
     {
       "name": "bussin-loop-status",
       "source": "./mods/bussin-loop-status",
-      "description": "Live status of a bussin-autoloop run in the status line and a pane: progress, running items, elapsed time, ETA, input and output tokens, cost and models."
+      "description": "Live status of a bussin-autoloop run in the status line and a pane: progress, running items, elapsed time, ETA, input and output tokens, cost and models, and a Stop button that lets running items finish."
     }
   ]
 }
