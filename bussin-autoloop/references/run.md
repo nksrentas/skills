@@ -9,6 +9,7 @@ The parallel driver starts sessions as `run --item <id>`, each in its own git wo
 - Work on exactly that item, even if earlier items are still failing; the driver already checked its dependencies.
 - `bash .loop/init.sh` gets `LOOP_WORKER`, so it can pick a free port and database name and copy untracked files such as `.env` from `LOOP_MAIN_DIR`.
 - Do not edit `.loop/feature_list.json` or `.loop/progress.md`; other workers run at the same time, and the driver is their only writer.
+- Never run `git stash`. Every worktree of a repo shares one stash, so a parallel worker could pop your entry or you its. To set work aside, make a WIP commit on your own branch; the driver warns when a worker leaves a stash entry behind.
 - In step 7, commit the implementation as usual. Then, in place of marking the item and writing progress, write `.loop/results/<id>.json` and commit it as `chore(loop): result <id>`:
 
 ```json
@@ -74,7 +75,7 @@ Set `passes: true` and `evidence` on that one item only:
 
 Commit in two steps. First commit the implementation with a message that names the item id. Then set `passes` and `evidence` with that commit's sha, append to `progress.md` (step 8), and commit those as `chore(loop): mark <item id>`.
 
-The commit guard (a git `pre-commit` hook in driver sessions, plus a PreToolUse hook in Claude Code) allows a commit only when `.loop/tests-passed` holds the fingerprint of the current code, so any code change after the gate, by any tool, means running the gate again. `feature_list.json`, `progress.md` and `retro.md` are outside the fingerprint, so the second commit needs no new gate. The guard also refuses a commit that rewords, adds or removes items, or that changes `.loop/config.json` or the loop scripts. Never commit with `--no-verify` or another way around the hook: the driver audits every commit, re-runs the gate, and stops the whole loop when the guard was skipped.
+The commit guard (a git `pre-commit` hook in driver sessions, plus a PreToolUse hook in Claude Code) allows a commit only when `.loop/tests-passed` holds the fingerprint of the current code, so any code change after the gate, by any tool, means running the gate again. `feature_list.json`, `progress.md` and `retro.md` are outside the fingerprint, so the second commit needs no new gate. The guard also refuses a commit that rewords, adds or removes items, or that changes `.loop/config.json` or the loop scripts. Never commit with `--no-verify` or another way around the hook: the driver audits every commit, re-runs the gate, and stops the whole loop when the guard was skipped. Never use `git stash` either; set work aside with a WIP commit on the session's branch.
 
 ## 8. Progress and retro
 
@@ -91,4 +92,4 @@ In `thorough` mode, write a short retro: what in this session cost the most time
 
 ## 9. Stop
 
-End the session. The driver starts a fresh one.
+Run `bash .loop/init.sh stop` (`.loop/init.sh stop` under Copilot) so no dev server outlives the session, then end it. The driver starts a fresh one.

@@ -39,7 +39,7 @@ fi
 claude_flags() {
   local allowed=(
     Read Edit Write Glob Grep Skill Agent TodoWrite
-    "Bash(bash .loop/init.sh)" "Bash(bash .loop/verify.sh)"
+    "Bash(bash .loop/init.sh)" "Bash(bash .loop/init.sh stop)" "Bash(bash .loop/verify.sh)"
     "Bash(git status *)" "Bash(git diff *)" "Bash(git log *)" "Bash(git show *)"
     "Bash(git add *)" "Bash(git commit *)" "Bash(git rev-parse *)"
   )

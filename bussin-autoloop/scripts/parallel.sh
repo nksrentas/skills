@@ -3,6 +3,7 @@
 max_workers=8
 workers="${LOOP_WORKERS:-1}"
 item_attempts="${LOOP_ITEM_ATTEMPTS:-3}"
+merge_retries="${LOOP_MERGE_RETRIES:-2}"
 poll_seconds="${LOOP_POLL_SECONDS:-5}"
 main_dir="$(pwd)"
 integration="$(git rev-parse --abbrev-ref HEAD)"
@@ -72,7 +73,6 @@ next_ready() {
 
 launch() {
   local slot="$1" id="$2" dir="$worker_root/w$1" branch="loop/$2"
-  remove_worktree "$slot"
   git branch -D "$branch" >/dev/null 2>&1 || true
   mkdir -p "$worker_root"
   git worktree add -q -b "$branch" "$dir" "$integration"
@@ -129,10 +129,13 @@ merge_item() {
     log "$id changed files under .loop or .claude other than its own result, which workers may not do; not merged"
     return 1
   fi
-  if ! bash <(git show HEAD:.loop/verify.sh) >> "$state_dir/merge.log" 2>&1; then
-    git merge --abort >/dev/null 2>&1 || true
-    log "$id failed the gate once merged with the latest work; it runs again on top of it"
-    return 1
+  if ! merge_gate; then
+    log "$id failed the gate once merged with the latest work; running the gate once more"
+    if ! merge_gate; then
+      git merge --abort >/dev/null 2>&1 || true
+      log "$id failed the merged gate twice; it runs again on top of the latest work"
+      return 2
+    fi
   fi
   git commit -q -m "merge(loop): $id"
   mark "$id" "$slot"
@@ -140,9 +143,67 @@ merge_item() {
   log "merged $id"
 }
 
+merge_gate() { bash <(git show HEAD:.loop/verify.sh) >> "$state_dir/merge.log" 2>&1; }
+
+refund_merge_failure() {
+  local id="$1" used
+  used="$(grep -cxF "$id" "$state_dir/merge-retries" 2>/dev/null || true)"
+  [ "${used:-0}" -lt "$merge_retries" ] || return 0
+  echo "$id" >> "$state_dir/merge-retries"
+  set_attempts "$id" $(($(attempts_of "$id") - 1))
+  log "$id passed its own gate, so this does not count as an attempt (merge retry $((${used:-0} + 1)) of $merge_retries)"
+}
+
+cwd_pids_under() {
+  local dir="$1" proc
+  if [ -d /proc/self ]; then
+    for proc in /proc/[0-9]*; do
+      case "$(readlink "$proc/cwd" 2>/dev/null || true)" in
+        "$dir" | "$dir"/*) echo "${proc#/proc/}" ;;
+      esac
+    done
+  else
+    { lsof -n -P -d cwd -Fpn 2>/dev/null || true; } \
+      | awk -v dir="$dir" '/^p/ {pid = substr($0, 2)} /^n/ {path = substr($0, 2); if (path == dir || index(path, dir "/") == 1) print pid}'
+  fi
+}
+
+kill_worker_processes() {
+  local dir pids
+  dir="$(cd "${worker_root:?}/w$1" 2>/dev/null && pwd -P)" || return 0
+  pids="$(cwd_pids_under "$dir")"
+  [ -n "$pids" ] || return 0
+  log "stopping processes left in worker $1's worktree: $(echo $pids)"
+  kill $pids 2>/dev/null || true
+  for _ in 1 2 3 4 5; do
+    sleep 1
+    pids="$(cwd_pids_under "$dir")"
+    [ -n "$pids" ] || return 0
+  done
+  kill -9 $pids 2>/dev/null || true
+}
+
 remove_worktree() {
-  rm -rf "${worker_root:?}/w$1"
-  git worktree prune
+  local dir="${worker_root:?}/w$1"
+  kill_worker_processes "$1"
+  rm -rf "$dir" 2>/dev/null || { sleep 1; rm -rf "$dir" 2>/dev/null; } || log "could not remove $dir; remove it by hand"
+  git worktree prune || true
+}
+
+warn_new_stashes() {
+  local new
+  new="$(git stash list --format=%H 2>/dev/null | grep -vxF -f "$state_dir/stashes" || true)"
+  [ -z "$new" ] || log "warning: $(echo "$new" | wc -l | tr -d ' ') new git stash entry(ies) appeared while $1 ran; stash is shared by every worktree, check git stash list (nothing was dropped)"
+  git stash list --format=%H > "$state_dir/stashes" 2>/dev/null || true
+}
+
+warn_on_load() {
+  local cores load
+  cores="$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo 0)"
+  if [ -r /proc/loadavg ]; then load="$(cut -d' ' -f1 /proc/loadavg)"; else load="$(sysctl -n vm.loadavg 2>/dev/null | awk '{print $2}' || true)"; fi
+  if awk -v load="${load:-0}" -v cores="${cores:-0}" 'BEGIN {exit !(cores > 0 && load > 2 * cores)}'; then
+    log "warning: 1-minute load is $load on $cores cores; flaky tests may fail merge gates"
+  fi
 }
 
 worker_pointers() { cat "${slot_admin[$1]}/commondir" "${slot_admin[$1]}/gitdir" 2> /dev/null || true; }
@@ -172,7 +233,7 @@ stop_on_tamper() {
 }
 
 finish() {
-  local slot="$1" id="${slot_item[$1]}" started="${slot_started[$1]}" status=0 outcome
+  local slot="$1" id="${slot_item[$1]}" started="${slot_started[$1]}" status=0 merge_status=0 outcome
   local branch="loop/$id" output="$state_dir/w$1.log" result="$state_dir/w$1.json"
   wait "${slot_pid[$slot]}" || status=$?
   kill -- -"${slot_pid[$slot]}" 2>/dev/null || true
@@ -180,9 +241,11 @@ finish() {
   slot_pid[$slot]=""
   slot_item[$slot]=""
   remove_worktree "$slot"
+  warn_new_stashes "$id"
   if git show "$branch:.loop/results/$id.json" 2>/dev/null \
     | jq -e --arg id "$id" '.passes == true and .id == $id and (.evidence | type) == "object"' >/dev/null 2>&1; then
-    if merge_item "$id" "$branch" "$slot"; then outcome=merged; else outcome="not merged"; fi
+    if merge_item "$id" "$branch" "$slot"; then outcome=merged; else merge_status=$?; outcome="not merged"; fi
+    if [ "$merge_status" = 2 ]; then refund_merge_failure "$id"; fi
   elif [ "$status" -ne 0 ] && session_tail "$result" "$output" | grep -iE "$limit_pattern" > /dev/null; then
     outcome=limit
     set_attempts "$id" $(($(attempts_of "$id") - 1))
@@ -210,10 +273,9 @@ stop_workers() {
   local i
   for ((i = 1; i <= workers; i++)); do
     if [ -n "${slot_pid[$i]:-}" ]; then kill -- -"${slot_pid[$i]}" 2>/dev/null || true; fi
-    rm -rf "${worker_root:?}/w$i"
+    remove_worktree "$i"
   done
   git merge --abort >/dev/null 2>&1 || true
-  git worktree prune
   rmdir "$worker_root" 2>/dev/null || true
   rm -rf "$state_dir"
   write_live "$(closing_state)" parallel "$workers" "[]"
@@ -260,6 +322,8 @@ run_parallel() {
   trap 'exit 130' INT TERM
   install_commit_hook
   remember_git_controls
+  git stash list --format=%H > "$state_dir/stashes" 2>/dev/null || true
+  warn_on_load
   log "running up to $workers workers on $integration, $(remaining) items remaining"
   while :; do
     if git_controls_changed || any_worker_redirected; then stop_on_tamper; fi
@@ -291,6 +355,8 @@ run_parallel() {
       [ "$launched" -lt "$max_iterations" ] || break
       id="$(next_ready 2>/dev/null)" || id=""
       [ -n "$id" ] || break
+      remove_worktree "$i"
+      [ ! -e "$worker_root/w$i" ] || continue
       launch "$i" "$id"
     done
     write_live running parallel "$workers" "$(running_json)"
