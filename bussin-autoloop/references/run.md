@@ -4,10 +4,10 @@ One iteration. You start with no memory of earlier sessions; the artifacts are y
 
 ## Worker mode: `run --item <id>`
 
-The parallel driver starts sessions as `run --item <id>`, each in its own git worktree on branch `loop/<id>`, with `LOOP_WORKER` (the worker's number) and `LOOP_MAIN_DIR` (the main checkout) in the environment. Follow the steps below with these differences:
+The parallel driver starts sessions as `run --item <id>`, each in its own git worktree on branch `loop/<loop name>/<id>`, with `LOOP_NAME` (the loop's name, from its checkout directory), `LOOP_WORKER` (the worker's number) and `LOOP_MAIN_DIR` (the main checkout) in the environment. Follow the steps below with these differences:
 
 - Work on exactly that item, even if earlier items are still failing; the driver already checked its dependencies.
-- `bash .loop/init.sh` gets `LOOP_WORKER`, so it can pick a free port and database name and copy untracked files such as `.env` from `LOOP_MAIN_DIR`.
+- `bash .loop/init.sh` gets `LOOP_NAME` and `LOOP_WORKER`, so it can name its test database and copy untracked files such as `.env` from `LOOP_MAIN_DIR`; it picks a free port itself and prints the URL.
 - Do not edit `.loop/feature_list.json` or `.loop/progress.md`; other workers run at the same time, and the driver is their only writer.
 - Never run `git stash`. Every worktree of a repo shares one stash, so a parallel worker could pop your entry or you its. To set work aside, make a WIP commit on your own branch; the driver warns when a worker leaves a stash entry behind.
 - In step 7, commit the implementation as usual. Then, in place of marking the item and writing progress, write `.loop/results/<id>.json` and commit it as `chore(loop): result <id>`:

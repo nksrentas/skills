@@ -3,6 +3,8 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "$0")" && pwd)"
 cd "$(git rev-parse --show-toplevel)"
+LOOP_NAME="$(basename "$PWD" | tr -c 'A-Za-z0-9._\n-' '-')"
+export LOOP_NAME
 
 list=.loop/feature_list.json
 max_iterations="${MAX_ITERATIONS:-40}"
@@ -31,7 +33,7 @@ fi
 
 session_output="$(mktemp)"
 session_errors="$(mktemp)"
-trap 'rm -f "$session_output" "$session_errors"; write_live "$(closing_state)" sequential 1 "[]"' EXIT
+trap 'rm -f "$session_output" "$session_errors"; write_live "$(closing_state)" sequential 1 "[]"; release_lock' EXIT
 write_live running sequential 1 "[]"
 
 iteration=0
