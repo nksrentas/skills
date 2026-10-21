@@ -112,4 +112,59 @@ echo "$dead" > "$tmp/stale/.loop/run.lock/pid"
 run_loop "$tmp/stale" || { cat "$tmp/stale/out"; echo "FAIL: a stale live.json or lock blocked the start"; exit 1; }
 [ "$(cat "$tmp/stale/calls")" = 1 ] && [ ! -e "$tmp/stale/.loop/run.lock" ] || { cat "$tmp/stale/out"; echo "FAIL: the run after a stale lock did not finish cleanly"; exit 1; }
 
+make_picker() {
+  local dir="$1" failing="$2"
+  mkdir -p "$dir/.loop" "$dir/bin"
+  echo '{"features":[{"id":"A1","passes":false},{"id":"A2","passes":false}]}' > "$dir/.loop/feature_list.json"
+  cat > "$dir/bin/claude" <<EOF
+#!/usr/bin/env bash
+echo "\$2" >> "$dir/prompts"
+id="\$(sed -n 's/.*--item \([^ ]*\).*/\1/p' <<< "\$2")"
+[ "\$id" != "$failing" ] || exit 0
+jq --arg id "\$id" '(.features[] | select(.id == \$id)).passes = true' .loop/feature_list.json > .loop/tmp && mv .loop/tmp .loop/feature_list.json
+git commit -qam "pass \$id"
+EOF
+  chmod +x "$dir/bin/claude"
+  git -C "$dir" init -q
+  git -C "$dir" add .loop
+  git -C "$dir" -c user.email=t@t -c user.name=t commit -qm init
+}
+
+blocked="$tmp/blocked"
+make_picker "$blocked" none
+printf '## Session 1 · A1\nBlocked: A1 needs an API key from a human\n' > "$blocked/.loop/progress.md"
+git -C "$blocked" add .loop/progress.md
+git -C "$blocked" -c user.email=t@t -c user.name=t commit -qm blocked
+blocked_status=0
+run_loop "$blocked" || blocked_status=$?
+[ "$(cat "$blocked/prompts")" = "/bussin-autoloop run --item A2 --sequential" ] || { cat "$blocked/out"; echo "FAIL: the sequential driver did not start the session on the unblocked item"; exit 1; }
+[ "$(jq -r .item "$blocked/.loop/usage.jsonl")" = A2 ] || { cat "$blocked/.loop/usage.jsonl"; echo "FAIL: usage.jsonl names the wrong item"; exit 1; }
+[ "$(jq -r .outcome "$blocked/.loop/usage.jsonl")" = passed ] || { echo "FAIL: the session's outcome is not passed"; exit 1; }
+[ "$blocked_status" = 1 ] && grep -q "every remaining item is blocked" "$blocked/out" || { cat "$blocked/out"; echo "FAIL: a loop with only blocked items left did not stop"; exit 1; }
+
+spent="$tmp/spent"
+make_picker "$spent" A1
+spent_status=0
+(cd "$spent" && GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t \
+  PATH="$spent/bin:$PATH" LOOP_ITEM_ATTEMPTS=2 MAX_STALLS=5 bash "$loop" > "$spent/out" 2>&1) || spent_status=$?
+[ "$(jq -r .item "$spent/.loop/usage.jsonl" | tr '\n' ' ')" = "A1 A1 A2 " ] || { cat "$spent/out"; echo "FAIL: an item out of attempts was not skipped"; exit 1; }
+grep -q "giving up on A1 after 2 attempts" "$spent/out" || { cat "$spent/out"; echo "FAIL: no notice when an item runs out of attempts"; exit 1; }
+[ "$spent_status" = 1 ] && [ "$(jq -c . "$spent/.loop/attempts.json")" = '{"A1":2,"A2":1}' ] || { cat "$spent/out"; echo "FAIL: attempts were not kept in .loop/attempts.json"; exit 1; }
+
+status_script="$(dirname "$loop")/loop-status.sh"
+crashed="$tmp/crashed"
+make_project "$crashed" pass
+jq -n --argjson pid "$dead" --argjson now "$(date +%s)" \
+  '{state: "running", mode: "sequential", workers: 1, started_at: ($now - 600), updated_at: ($now - 300), pid: $pid, running: [{item: "A1", worker: 0, started_at: ($now - 300)}]}' > "$crashed/.loop/live.json"
+crashed_out="$(bash "$status_script" "$crashed")"
+grep -q "stopped (driver exited) · sequential" <<< "$crashed_out" || { echo "$crashed_out"; echo "FAIL: loop-status shows a loop whose driver died as running"; exit 1; }
+! grep -qE "ETA|Now " <<< "$crashed_out" || { echo "$crashed_out"; echo "FAIL: a dead loop still shows an ETA or a running item"; exit 1; }
+bash -c 'sleep 30; :' loop.sh &
+alive=$!
+jq --argjson pid "$alive" '.pid = $pid' "$crashed/.loop/live.json" > "$crashed/.loop/tmp" && mv "$crashed/.loop/tmp" "$crashed/.loop/live.json"
+alive_out="$(bash "$status_script" "$crashed")"
+kill "$alive"
+wait "$alive" 2>/dev/null || true
+grep -q "running · sequential" <<< "$alive_out" && grep -q "Now   A1" <<< "$alive_out" || { echo "$alive_out"; echo "FAIL: loop-status does not show a live driver as running"; exit 1; }
+
 echo "autoloop-loop.test.sh: ok"

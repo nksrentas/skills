@@ -2,14 +2,12 @@
 
 max_workers=8
 workers="${LOOP_WORKERS:-1}"
-item_attempts="${LOOP_ITEM_ATTEMPTS:-3}"
 merge_retries="${LOOP_MERGE_RETRIES:-2}"
 poll_seconds="${LOOP_POLL_SECONDS:-5}"
 main_dir="$(pwd)"
 integration="$(git rev-parse --abbrev-ref HEAD)"
 worker_root="${LOOP_WORKER_ROOT:-$main_dir.loop-workers}"
 state_dir="$(mktemp -d)"
-attempts_file=.loop/attempts.json
 launched=0
 pause_after_poll=0
 slot_pid=()
@@ -45,26 +43,11 @@ blocked_query='
 
 log() { echo "autoloop: $*"; }
 
-json_array() {
-  if [ $# -eq 0 ]; then echo '[]'; else printf '%s\n' "$@" | jq -R . | jq -s -c .; fi
-}
-
 running_items() {
   local i
   for ((i = 1; i <= workers; i++)); do
     if [ -n "${slot_item[$i]}" ]; then echo "${slot_item[$i]}"; fi
   done
-}
-
-attempts_of() { jq -r --arg id "$1" '.[$id] | if type == "number" then floor else 0 end' "$attempts_file" 2>/dev/null || echo 0; }
-
-set_attempts() {
-  { jq -e 'objects' "$attempts_file" 2>/dev/null || echo '{}'; } | jq --arg id "$1" --argjson count "$2" '.[$id] = $count' > "$attempts_file.tmp"
-  mv "$attempts_file.tmp" "$attempts_file"
-}
-
-exhausted_items() {
-  jq -r --argjson max "$item_attempts" 'to_entries[] | select((.value | type) == "number" and .value >= $max) | .key' "$attempts_file" 2>/dev/null || true
 }
 
 next_ready() {

@@ -1,6 +1,6 @@
 ---
 name: bussin-seo
-description: On-page and technical SEO for every public page - one specific title and meta description, a single h1 and logical heading outline, semantic layout, canonical URLs, crawlable links, sitemap and robots, image alt and dimensions, internal linking, hreflang, Core Web Vitals (LCP, INP, CLS) and AI-search discoverability. Load it whenever building or changing a public page, route, layout, landing page or marketing site, adding metadata, or when asked to improve SEO, rank in Google, fix meta tags, add a sitemap or speed up a page, and when bussin-ui or bussin-autoloop loads it. JSON-LD details live in bussin-schema.
+description: On-page and technical SEO for public pages - a specific title and meta description, one h1 and a logical heading outline, canonical URLs, crawlable links, sitemap and robots, image alt, hreflang, Core Web Vitals (LCP, INP, CLS) and AI-search discoverability. Load it whenever building or changing a public page, landing page or marketing site, or when asked to improve SEO, rank in Google, fix meta tags, add a sitemap or speed up a page.
 argument-hint: "[page, route or URL]"
 license: MIT
 ---

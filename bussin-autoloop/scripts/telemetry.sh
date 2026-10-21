@@ -4,6 +4,8 @@ live_file=.loop/live.json
 stop_file=.loop/stop
 usage_file=.loop/usage.jsonl
 lock_dir=.loop/run.lock
+attempts_file=.loop/attempts.json
+item_attempts="${LOOP_ITEM_ATTEMPTS:-3}"
 loop_started="$(date +%s)"
 
 exclude_file="$(git rev-parse --git-path info/exclude)"
@@ -102,4 +104,19 @@ write_live() {
 
 closing_state() {
   if [ "$(remaining 2>/dev/null || echo 1)" = 0 ]; then echo finished; else echo stopped; fi
+}
+
+json_array() {
+  if [ $# -eq 0 ]; then echo '[]'; else printf '%s\n' "$@" | jq -R . | jq -s -c .; fi
+}
+
+attempts_of() { jq -r --arg id "$1" '.[$id] | if type == "number" then floor else 0 end' "$attempts_file" 2>/dev/null || echo 0; }
+
+set_attempts() {
+  { jq -e 'objects' "$attempts_file" 2>/dev/null || echo '{}'; } | jq --arg id "$1" --argjson count "$2" '.[$id] = $count' > "$attempts_file.tmp"
+  mv "$attempts_file.tmp" "$attempts_file"
+}
+
+exhausted_items() {
+  jq -r --argjson max "$item_attempts" 'to_entries[] | select((.value | type) == "number" and .value >= $max) | .key' "$attempts_file" 2>/dev/null || true
 }

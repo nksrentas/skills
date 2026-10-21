@@ -47,7 +47,9 @@ def row($label; $id; $title; $note): "  \($label | pad(6))\($id | clean | pad(6)
 | ($features | map(select(.passes == true) | .id)) as $passed
 | ($features | length) as $total
 | ($passed | length) as $done
-| (if $l.state == "running" and $stop_requested then "stopping"
+| ($driver_exited and (["running", "stopping"] | index($l.state) != null)) as $exited
+| (if $exited then "stopped"
+   elif $l.state == "running" and $stop_requested then "stopping"
    elif ["running", "stopping", "finished", "stopped"] | index($l.state) then $l.state
    elif $done == $total and $total > 0 then "finished" else "idle" end) as $state
 | (["running", "stopping"] | index($state) != null) as $active
@@ -73,7 +75,7 @@ def row($label; $id; $title; $note): "  \($label | pad(6))\($id | clean | pad(6)
       elif ($waiting | length) > 0 then "waiting for \($waiting | map(clean) | join(", "))"
       else "ready" end;
   ({running: "▶", stopping: "□", finished: "✓", stopped: "■", idle: "·"}[$state]) as $icon
-| [ "\($bold)\($icon) \($name)\($reset)  \($state) · \($l.mode // "sequential")"
+| [ "\($bold)\($icon) \($name)\($reset)  \($state)\(if $exited then " (driver exited)" else "" end) · \($l.mode // "sequential")"
     + (if ($l.workers // 1) > 1 then " ×\($l.workers)" else "" end)
     + (if $l.agent then " · \($l.agent | clean)" else "" end),
     "  \(bar($done; $total; 24)) \($done)/\($total)"
@@ -107,6 +109,13 @@ def row($label; $id; $title; $note): "  \($label | pad(6))\($id | clean | pad(6)
      | if length == 0 then [] else [""] + (to_entries | map("  \(if .key == 0 then "Recent" else "" end | pad(8))\(.value | cut(80))")) end)
 | .[]'
 
+driver_exited() {
+  local pid
+  pid="$(jq -r 'select(.state == "running" or .state == "stopping") | .pid // empty' "$1/.loop/live.json" 2> /dev/null || true)"
+  [ -n "$pid" ] || return 1
+  ! ps -p "$pid" -o command= 2> /dev/null | grep -q 'loop\.sh'
+}
+
 render() {
   local dir="$1" name="$2"
   { cat "$dir/.loop/usage.jsonl" 2> /dev/null || true; } \
@@ -114,7 +123,7 @@ render() {
   { cat "$dir/.loop/live.json" 2> /dev/null || true; } | jq -c -s -R '[fromjson? | objects]' > "$scratch/live"
   { cat "$dir/.loop/progress.md" 2> /dev/null || true; } > "$scratch/progress"
   if ! jq -r --arg name "$name" --argjson now "$(date +%s)" --slurpfile usage "$scratch/usage" --slurpfile live "$scratch/live" \
-    --rawfile progress "$scratch/progress" --argjson stop_requested "$([ -e "$dir/.loop/stop" ] && echo true || echo false)" --arg bold "$bold" --arg dim "$dim" --arg reset "$reset" \
+    --rawfile progress "$scratch/progress" --argjson stop_requested "$([ -e "$dir/.loop/stop" ] && echo true || echo false)" --argjson driver_exited "$(driver_exited "$dir" && echo true || echo false)" --arg bold "$bold" --arg dim "$dim" --arg reset "$reset" \
     '. as $list | ($usage[0]) as $usage | ($live[0]) as $live | $list | '"$render_query" "$dir/.loop/feature_list.json" 2> "$scratch/error"; then
     echo "$name: cannot read .loop/feature_list.json ($(head -n 1 "$scratch/error"))" >&2
   fi

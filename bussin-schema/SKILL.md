@@ -1,6 +1,6 @@
 ---
 name: bussin-schema
-description: Detect, validate or generate Schema.org JSON-LD and keep it eligible for Google rich results, using an up-to-date list of active, restricted and deprecated types (for example FAQ rich results retired in May 2026). Load it whenever a page needs structured data - Organization, WebSite, BreadcrumbList, Article, Product, LocalBusiness, Event, SoftwareApplication and more - when building or reviewing a public page together with bussin-seo, or when asked about schema markup, rich results or JSON-LD.
+description: Detect, validate or generate Schema.org JSON-LD and keep it eligible for Google rich results, with an up-to-date list of active, restricted and deprecated types (FAQ rich results retired in May 2026). Load it whenever a page needs structured data - Organization, BreadcrumbList, Article, Product, LocalBusiness, Event and more - when building a public page with bussin-seo, or when asked about schema markup, rich results or JSON-LD.
 user-invocable: true
 argument-hint: "[page, entity or URL]"
 license: MIT
