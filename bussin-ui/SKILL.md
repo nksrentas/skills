@@ -1,6 +1,6 @@
 ---
 name: bussin-ui
-description: House UI system for landing pages and dashboards in Next.js + Tailwind CSS v4 + GSAP + Lenis, modelled on the Edefy Webflow template - warm cream canvas, Parkinsans type, sun-yellow pill buttons with a rolling label, 24px "tray" cards, one-second rise-in reveals, smooth scroll and scroll-scrubbed text. Use it whenever building or restyling a landing page, marketing site, hero, pricing or feature section, admin panel, dashboard, settings screen or any React UI where the user wants "our style", "the Edefy look", GSAP or Lenis animations, or when bussin-autoloop loads it as a context skill. Use it even when the user only says "make it look like our other sites" or "add the usual animations".
+description: House UI system for landing pages and dashboards in Next.js, Tailwind CSS v4, GSAP and Lenis, modelled on the Edefy template - cream canvas, Parkinsans type, rolling-label pill buttons, tray cards, rise-in reveals. Use whenever building or restyling a landing page, hero, pricing or feature section, dashboard or settings screen where the user wants "our style" or "our usual style", the Edefy look, or says "make it look like our other sites".
 argument-hint: "[page, section or screen to build or restyle]"
 ---
 

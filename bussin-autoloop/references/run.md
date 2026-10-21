@@ -2,9 +2,13 @@
 
 One iteration. You start with no memory of earlier sessions; the artifacts are your memory. Finish one item and stop, even if the next one looks trivial. Stopping is what keeps the next session's picture accurate.
 
+## The item: `run --item <id> --sequential`
+
+The sequential driver picks the item and starts the session as `run --item <id> --sequential`. Work on exactly that item and follow the steps below unchanged, including marking it in `feature_list.json` and `progress.md` in step 7; there is no result file. The driver skips an item that has failed `LOOP_ITEM_ATTEMPTS` sessions (default 3) or that `progress.md` names on a line of its own as `Blocked: <id>`, so write that line when only a human can unblock the item.
+
 ## Worker mode: `run --item <id>`
 
-The parallel driver starts sessions as `run --item <id>`, each in its own git worktree on branch `loop/<loop name>/<id>`, with `LOOP_NAME` (the loop's name, from its checkout directory), `LOOP_WORKER` (the worker's number) and `LOOP_MAIN_DIR` (the main checkout) in the environment. Follow the steps below with these differences:
+The parallel driver starts sessions as `run --item <id>` without `--sequential`, each in its own git worktree on branch `loop/<loop name>/<id>`, with `LOOP_NAME` (the loop's name, from its checkout directory), `LOOP_WORKER` (the worker's number) and `LOOP_MAIN_DIR` (the main checkout) in the environment. Follow the steps below with these differences:
 
 - Work on exactly that item, even if earlier items are still failing; the driver already checked its dependencies.
 - `bash .loop/init.sh` gets `LOOP_NAME` and `LOOP_WORKER`, so it can name its test database and copy untracked files such as `.env` from `LOOP_MAIN_DIR`; it picks a free port itself and prints the URL.
@@ -24,7 +28,7 @@ Read `.loop/config.json`, `.loop/progress.md`, `.loop/feature_list.json` and `gi
 
 ## 2. Pick one item
 
-The first item with `passes:false` in list order, unless `progress.md` names a blocked item to skip. Read every skill in `config.skills.context` before touching code. If an item depends on an unlisted decision, make the decision, write it in `progress.md` under "Assumptions", and continue; do not ask.
+The item the driver named with `--item`. A plain `run`, started by hand, takes the first item with `passes:false` in list order that no `Blocked: <id>` line in `progress.md` names. Read every skill in `config.skills.context` before touching code. If an item depends on an unlisted decision, make the decision, write it in `progress.md` under "Assumptions", and continue; do not ask.
 
 ## 3. Implement
 
@@ -45,7 +49,7 @@ Edge items get at least one example test each. Parsing, escaping, money, dates a
 bash .loop/verify.sh
 ```
 
-Under Copilot, whose allowlist names the loop scripts by path, run them as `.loop/verify.sh` and `.loop/init.sh` without `bash`. It runs the test command, then Stryker on the changed files when `gates.mutation` is on, and creates `.loop/tests-passed` only if everything held. If mutants survive, add the tests that kill them. Do not touch thresholds, do not exclude files. After three attempts on the same item, write what survived into `progress.md`, leave the item `false`, and stop; a human reads it next.
+Under Copilot, whose allowlist names the loop scripts by path, run them as `.loop/verify.sh` and `.loop/init.sh` without `bash`. It runs the test command, then Stryker on the changed files when `gates.mutation` is on, and creates `.loop/tests-passed` only if everything held. If mutants survive, add the tests that kill them. Do not touch thresholds, do not exclude files. After three attempts on the same item, write what survived into `progress.md`, leave the item `false`, and stop; the driver counts the failed session and moves on once the item runs out of attempts.
 
 ## 5. Review
 

@@ -47,6 +47,8 @@ const parseJson = <T>(text: string | undefined): T | undefined => {
   }
 }
 
+const SILENT_DRIVER_SEC = 15 * 60
+
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f-\u009f]/g
 
 const clean = (text: unknown) => String(text ?? '').replace(CONTROL_CHARACTERS, '')
@@ -223,7 +225,8 @@ export const compute = (files: LoopFiles): LoopSnapshot | null => {
   const sessionSec = sum(usage, row => row.duration_ms) / 1000
   const parallelism = mode === 'parallel' ? Math.max(1, Math.min(workers, remaining)) : 1
   const doneByLoop = new Set(usage.filter(row => passed.has(row.item)).map(row => row.item)).size
-  const stale = isActive(loopState) && files.driverAlive === false
+  const silent = files.driverAlive === undefined && runningList.length > 0 && files.now - (live?.updated_at ?? files.now) > SILENT_DRIVER_SEC
+  const stale = isActive(loopState) && (files.driverAlive === false || silent)
   const attempts = attemptCounts(files.attempts)
   const etaSec =
     loopState === 'running' && !stale && doneByLoop > 0 && remaining > 0 ? Math.round((remaining * sessionSec) / doneByLoop / parallelism) : null

@@ -1,6 +1,6 @@
 ---
 name: bussin-ts-architecture
-description: House architecture for TypeScript apps - feature-based folders where each feature owns its controller, service, DTOs, jobs, schema and UI, and every feature folder is portable - copy it into another project with the same layout and it works after one registration step. Use whenever writing or reviewing TypeScript server or React code, adding an endpoint, page, background job or new domain area, scaffolding a TS API or app, deciding where a file goes, splitting a controller from business logic, wiring two features together, or when bussin-autoloop loads it as a context skill.
+description: House architecture for TypeScript apps - feature folders that own their controller, service, DTOs, jobs, schema and UI, each portable to another project after one registration step. Use whenever writing or reviewing TypeScript server or React code, adding an endpoint, page, job or domain area, scaffolding a TS app, deciding where a file goes, splitting a controller from business logic, or wiring two features together.
 argument-hint: "[feature to place or wiring question]"
 ---
 

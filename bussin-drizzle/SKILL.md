@@ -1,6 +1,6 @@
 ---
 name: bussin-drizzle
-description: House rules for Drizzle ORM in TypeScript, which differ from Drizzle's defaults - schemas live inside each feature, no foreign keys into another feature's tables, the client is passed in and created without a global schema, no db.query relational queries, every schema change ships with its drizzle-kit migration, and data tests hit a real database. Load it before adding or changing a table, column, index, relation or enum, generating or reviewing a migration, or writing a query, transaction or pagination against Postgres, SQLite or MySQL in a TypeScript project, even when the code already uses Drizzle and the change looks routine. Also load it when bussin-autoloop uses it as a context skill. Prefer Drizzle over Prisma, TypeORM, Knex or raw drivers unless the project already uses one of those.
+description: House rules for Drizzle ORM in TypeScript - schemas inside each feature, no cross-feature foreign keys, no global schema or db.query, a migration with every schema change. Load it before adding or changing a table, column, index, relation or enum, generating a migration, or writing a query against Postgres, SQLite or MySQL, even when the change looks routine. Prefer Drizzle over Prisma, TypeORM or Knex unless the project already uses one.
 argument-hint: "[table, column, migration or query task]"
 ---
 

@@ -1,6 +1,6 @@
 ---
 name: bussin-a11y
-description: Build and audit accessible web UI to WCAG 2.2 AA - semantic HTML first and ARIA only where native elements cannot express the pattern, keyboard access and visible focus, contrast, forms and error messages, live regions, target size, reduced motion and screen reader testing. Load it whenever building or changing a page, layout, component, form, dialog, menu or any interactive element in a web UI, not only when an audit is asked for, and when someone mentions a11y, WCAG, screen readers, aria-label, keyboard navigation or making something accessible, or when bussin-ui or bussin-autoloop loads it.
+description: Build and audit accessible web UI to WCAG 2.2 AA - semantic HTML before ARIA, keyboard access and visible focus, contrast, form errors, live regions, target size, reduced motion and screen reader testing. Load it whenever building or changing a page, component, form, dialog or menu in a web UI, not only for audits, and when someone mentions a11y, WCAG, screen readers, aria-label, keyboard navigation or making something accessible.
 argument-hint: "[page, component or URL to build or audit]"
 license: MIT
 ---

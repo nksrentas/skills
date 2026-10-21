@@ -1,6 +1,6 @@
 ---
 name: bussin-feature
-description: Workflow for creating, updating, or refactoring a TypeScript/JavaScript application feature end to end - ground the change in the repository, implement every runtime state (loading, error, empty, success), update every dependent file and registration, keep the feature folder portable, run the mandatory bussin-lean cleanup pass, and verify with the project's checks before calling it done. Use for frontend, backend, or full-stack feature implementation; folder layout, file roles and the portability rule come from bussin-ts-architecture. Do not invoke for explanation-only requests or isolated non-feature edits.
+description: Workflow for creating, updating or refactoring a TypeScript/JavaScript application feature end to end - ground it in the repo, implement every state (loading, error, empty, success), update every dependent file and registration, keep the feature folder portable, run the bussin-lean cleanup pass and verify with the project's checks. Use for frontend, backend or full-stack features. Not for explanations or isolated edits.
 argument-hint: "<feature to build or change>"
 ---
 

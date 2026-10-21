@@ -1,6 +1,6 @@
 ---
 name: bussin-autoloop
-description: Autonomous build loop for one feature or a whole new project. `/bussin-autoloop init <task>` researches the codebase (or scaffolds a new project), expands the task into `.loop/feature_list.json` with functional, edge-case and regression items, installs verify gates and a commit guard, then `/bussin-autoloop run` completes ONE item per fresh session until every item passes with evidence. Use it whenever the user wants something built autonomously, "in a loop", "without back and forth", "until it's done", "overnight", "with proof it works end-to-end", or mentions autoloop, feature_list, Ralph-style loops or long-running agent harnesses. Also use it when they want the loop faster or more thorough (modes fast, standard, thorough) or want specific skills plugged into one feature.
+description: Autonomous build loop for one feature or a new project. `init <task>` expands the task into `.loop/feature_list.json` with verify gates, then `run` completes ONE item per fresh session until every item passes with evidence. Use when the user wants something built autonomously, "in a loop", "until it's done", "overnight", with proof it works end-to-end, or mentions autoloop, feature_list or Ralph-style loops; modes fast, standard, thorough.
 argument-hint: "init <task> [--mode fast|standard|thorough] [--skills a,b,review:c] [--no-checkpoint] [--new] [--stack <text>] [--base <ref>] | run | status"
 ---
 
@@ -20,7 +20,7 @@ Two prompts over one harness. `init` runs once and leaves artifacts in `.loop/`.
 
 Installed as the `bussin` plugin, the command is `/bussin:bussin-autoloop`; everything else is the same. In Codex the skill is mentioned as `$bussin-autoloop`.
 
-The driver `scripts/loop.sh` starts one headless agent session per item with the `run` prompt until no item has `passes:false`, with a stall guard. The prompt is `/bussin-autoloop run`, the plugin form when the script lives in the plugin cache, or `$bussin-autoloop run` for Codex; override it with `LOOP_SKILL_COMMAND`. A session that exits on a usage limit is not a stall: the driver waits `LIMIT_WAIT` seconds (default 600) and retries. Start it from the project root:
+The driver `scripts/loop.sh` picks the first failing item that is not blocked and starts one headless agent session on it with `run --item <id> --sequential`, until no item has `passes:false`, with a stall guard. An item is blocked when `progress.md` has a line `Blocked: <id>` or when it has failed `LOOP_ITEM_ATTEMPTS` sessions (default 3, counted in `.loop/attempts.json`); when every remaining item is blocked, the driver stops. The prompt starts with `/bussin-autoloop run`, the plugin form when the script lives in the plugin cache, or `$bussin-autoloop run` for Codex; override it with `LOOP_SKILL_COMMAND`. A session that exits on a usage limit is not a stall: the driver waits `LIMIT_WAIT` seconds (default 600) and retries. Start it from the project root:
 
 ```bash
 bash <skill directory>/scripts/loop.sh

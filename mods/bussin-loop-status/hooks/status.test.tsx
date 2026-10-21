@@ -583,3 +583,14 @@ test('the resume command only runs a bussin-autoloop loop.sh outside the project
   expect(stale({ script: '/x/../project/bussin-autoloop/scripts/loop.sh' })).toBeNull()
   expect(stale({ script: '/home/me/bussin-autoloop/scripts/loop.sh', agent: '$(rm -rf ~)' })).toBeNull()
 })
+
+test('a running loop counts as stale from a dead pid, or from a live.json silent for 15 minutes when the pid cannot be checked', () => {
+  const snapshot = (live: Record<string, unknown>, driverAlive?: boolean) =>
+    compute({ features: FEATURES, live: JSON.stringify({ ...JSON.parse(LIVE), ...live }), driverAlive, now: NOW })
+  expect(snapshot({}, false)).toMatchObject({ loopState: 'running', stale: true, etaSec: null })
+  expect(snapshot({ state: 'stopping' }, false)).toMatchObject({ stale: true })
+  expect(snapshot({ updated_at: NOW - 901 })).toMatchObject({ stale: true, etaSec: null })
+  expect(snapshot({ updated_at: NOW - 600 })).toMatchObject({ stale: false })
+  expect(snapshot({ updated_at: NOW - 901 }, true)).toMatchObject({ stale: false })
+  expect(snapshot({ updated_at: NOW - 901, running: [] })).toMatchObject({ stale: false })
+})

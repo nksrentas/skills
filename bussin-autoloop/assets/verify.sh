@@ -27,6 +27,10 @@ test_cmd="$(cfg '.commands.test // "npm test"')"
 bash -c "$test_cmd"
 
 if [ "$(cfg '.gates.mutation // false')" = "true" ]; then
+  if [ ! -f package.json ]; then
+    echo "autoloop: gates.mutation is on, but there is no package.json; the mutation gate runs Stryker and needs a JS/TS test runner. Set gates.mutation to false in .loop/config.json." >&2
+    exit 1
+  fi
   base="$(cfg '.base // "HEAD"')"
   set -f
   paths="$(cfg '(.mutation_paths // ["src/**/*.ts", "src/**/*.tsx"]) | .[] | ":(glob)" + .')"

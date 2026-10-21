@@ -60,7 +60,7 @@ If the file already defines `hooks`, `*` would replace the arrays. In that case 
 
 ## 6. Mutation gate (thorough mode)
 
-Only when `gates.mutation` is true. Detect the runner from `package.json` (vitest or jest) and install the matching Stryker plugin:
+Only when `gates.mutation` is true. The gate runs Stryker, so it needs a JS/TS project with a `package.json` and a vitest or jest test runner. On any other stack, set `gates.mutation: false` in `config.json` before the init commit and tell the user that thorough mode runs without the mutation gate there. Otherwise detect the runner from `package.json` and install the matching Stryker plugin:
 
 ```bash
 npm i -D @stryker-mutator/core @stryker-mutator/vitest-runner

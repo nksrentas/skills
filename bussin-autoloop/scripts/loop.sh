@@ -21,6 +21,8 @@ git cat-file -e "HEAD:$list" 2> /dev/null || { echo "autoloop: $list is not comm
 remaining() { git show "HEAD:$list" | jq '[.features[] | select(.passes == false)] | length'; }
 session_tail() { tail -n 5 "$1"; cat "$2"; }
 snapshot() { echo "$(remaining)@$(git rev-parse HEAD)"; }
+blocked_items() { exhausted_items; sed -n 's/^Blocked: *\([^ ]*\).*/\1/p' .loop/progress.md 2> /dev/null || true; }
+next_item() { jq -r --argjson skip "$(json_array $(blocked_items))" '[.features[] | select(.passes == false) | select(.id as $id | $skip | index($id) | not)][0].id // empty' "$list"; }
 
 source "$script_dir/telemetry.sh"
 source "$script_dir/commit-hook.sh"
@@ -50,16 +52,21 @@ while [ "$(remaining)" -gt 0 ]; do
     echo "autoloop: reached MAX_ITERATIONS=$max_iterations with $(remaining) items left" >&2
     exit 1
   fi
-  echo "autoloop: iteration $iteration, $(remaining) items remaining"
+  item="$(next_item)"
+  if [ -z "$item" ]; then
+    echo "autoloop: every remaining item is blocked (a Blocked: line in .loop/progress.md, or $item_attempts failed attempts in .loop/attempts.json)" >&2
+    exit 1
+  fi
+  echo "autoloop: iteration $iteration, $(remaining) items remaining, working on $item"
   before="$(snapshot)"
   before_head="$(git rev-parse HEAD)"
-  item="$(jq -r '[.features[] | select(.passes == false)][0].id' "$list")"
+  set_attempts "$item" $(($(attempts_of "$item") + 1))
   started="$(date +%s)"
   write_live running sequential 1 "$(jq -n -c --arg item "$item" --argjson started "$started" '[{item: $item, worker: 0, started_at: $started}]')"
   status=0
   install_commit_hook
   remember_git_controls
-  agent_command "$skill_command run"
+  agent_command "$skill_command run --item $item --sequential"
   AUTOLOOP_SESSION=1 "${agent_cmd[@]}" > "$session_output" 2> "$session_errors" < /dev/null || status=$?
   if git_controls_changed; then exit 1; fi
   restore_uncommitted_list
@@ -77,6 +84,7 @@ while [ "$(remaining)" -gt 0 ]; do
   else
     outcome=failed
   fi
+  if [ "$outcome" = limit ]; then set_attempts "$item" $(($(attempts_of "$item") - 1)); fi
   record_usage "$item" 0 "$started" "$session_output" "$outcome"
   write_live running sequential 1 "[]"
   audit_session "$before_head" || exit 1
@@ -90,6 +98,10 @@ while [ "$(remaining)" -gt 0 ]; do
     stalls=$((stalls + 1))
     echo "autoloop: no progress ($stalls/$max_stalls)" >&2
   else
+    stalls=0
+  fi
+  if [ "$outcome" != passed ] && [ "$(attempts_of "$item")" -ge "$item_attempts" ]; then
+    echo "autoloop: giving up on $item after $item_attempts attempts, see .loop/progress.md" >&2
     stalls=0
   fi
   if [ "$stalls" -ge "$max_stalls" ]; then

@@ -164,4 +164,10 @@ bash .loop/verify.sh >/dev/null 2>&1 || true
 [ ! -f .loop/tests-passed ] && echo "ok   failing tests leave no marker" || { echo "FAIL failing tests left a marker"; failures=$((failures + 1)); }
 cp "$repo/config.bak" .loop/config.json
 
+echo '{"commands":{"test":"true"},"gates":{"mutation":true}}' > .loop/config.json
+git -c core.hooksPath=/dev/null commit -qam "mutation on without package.json"
+mutation_out="$(bash .loop/verify.sh 2>&1 || true)"
+grep -q "gates.mutation is on, but there is no package.json" <<< "$mutation_out" && [ ! -f .loop/tests-passed ] && echo "ok   mutation without package.json fails with a clear message" || { echo "$mutation_out"; echo "FAIL mutation without package.json"; failures=$((failures + 1)); }
+cp "$repo/config.bak" .loop/config.json
+
 [ "$failures" = 0 ] && echo "all guard checks passed" || { echo "$failures guard checks failed"; exit 1; }

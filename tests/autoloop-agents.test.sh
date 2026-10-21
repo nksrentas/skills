@@ -82,7 +82,7 @@ codex_status=0
 run_loop "$codex" LOOP_AGENT=codex LOOP_MODEL=gpt-test || codex_status=$?
 check "a codex loop finishes every item" '[ "$codex_status" = 0 ] && [ "$(jq "[.features[] | select(.passes)] | length" "$codex/.loop/feature_list.json")" = 2 ]'
 check "codex runs headless with json events, the workspace sandbox and the git dir writable" '[ "$(head -n 4 "$codex/argv" | tr "\n" " ")" = "exec --json --sandbox workspace-write " ] && grep -A1 -x -- --add-dir "$codex/argv" | grep -qx "$(cd "$codex/.git" && pwd -P)" && grep -qxF "gpt-test" "$codex/argv"'
-check "codex gets the skill through its \$ mention" '[ "$(tail -n 1 "$codex/argv")" = "\$bussin-autoloop run" ]'
+check "codex gets the skill through its \$ mention" '[ "$(tail -n 1 "$codex/argv")" = "\$bussin-autoloop run --item A2 --sequential" ]'
 check "codex sessions record tokens without cache double counting" '[ "$(jq -s "map(.input_tokens) | add" "$codex/.loop/usage.jsonl")" = 2000 ] && [ "$(jq -s "map(.cache_read_tokens) | add" "$codex/.loop/usage.jsonl")" = 1000 ] && [ "$(jq -s "map(.turns) | add" "$codex/.loop/usage.jsonl")" = 4 ]'
 check "codex sessions are unpriced and carry agent and model" '[ "$(jq -s -r "map(.agent + \"/\" + (.models | keys[0]) + \"/\" + (has(\"cost_usd\") | tostring)) | unique | join(\",\")" "$codex/.loop/usage.jsonl")" = "codex/gpt-test/false" ]'
 git -C "$codex" worktree add -q -b loop/probe "$tmp/codex-worker"
@@ -98,7 +98,7 @@ write_agent "$copilot" copilot "$copilot_output"
 copilot_status=0
 run_loop "$copilot" LOOP_AGENT=copilot || copilot_status=$?
 check "a copilot loop finishes every item" '[ "$copilot_status" = 0 ]'
-check "copilot gets the slash command and json output" '[ "$(sed -n 1,2p "$copilot/argv" | tr "\n" " ")" = "-p /bussin-autoloop run " ] && grep -qx json "$copilot/argv"'
+check "copilot gets the slash command and json output" '[ "$(sed -n 1,2p "$copilot/argv" | tr "\n" " ")" = "-p /bussin-autoloop run --item A2 --sequential " ] && grep -qx json "$copilot/argv"'
 check "copilot may run the gate, git and the project commands" 'grep -qxF "shell(.loop/verify.sh)" "$copilot/argv" && grep -qxF "shell(git commit)" "$copilot/argv" && grep -qxF "shell(npm run)" "$copilot/argv" && ! grep -qxF "shell(bash)" "$copilot/argv" && ! grep -qxF "shell(npm)" "$copilot/argv" && ! grep -qxF "shell(git push)" "$copilot/argv"'
 check "copilot may not write the loop scripts or config" 'grep -qxF "write(.loop/verify.sh)" "$copilot/argv" && grep -qxF "write(.loop/config.json)" "$copilot/argv"'
 check "copilot sessions record model, turns and premium requests" '[ "$(jq -s -r "map((.models | keys[0]) + \":\" + (.turns | tostring) + \":\" + (.premium_requests | tostring)) | unique | join(\",\")" "$copilot/.loop/usage.jsonl")" = "gpt-5.6-terra:2:2" ]'
