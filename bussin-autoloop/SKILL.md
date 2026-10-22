@@ -1,7 +1,7 @@
 ---
 name: bussin-autoloop
 description: Autonomous build loop for one feature or a new project. `init <task>` expands the task into `.loop/feature_list.json` with verify gates, then `run` completes ONE item per fresh session until every item passes with evidence. Use when the user wants something built autonomously, "in a loop", "until it's done", "overnight", with proof it works end-to-end, or mentions autoloop, feature_list or Ralph-style loops; modes fast, standard, thorough.
-argument-hint: "init <task> [--mode fast|standard|thorough] [--skills a,b,review:c] [--no-checkpoint] [--new] [--stack <text>] [--base <ref>] | run | status"
+argument-hint: "init <task> [--mode fast|standard|thorough] [--skills a,b,review:c] [--no-checkpoint] [--new] [--stack <text>] [--base <ref>] [--name <text>] | run | status"
 ---
 
 # bussin-autoloop
@@ -63,6 +63,8 @@ Each worker gets a git worktree next to the repo (`<repo>.loop-workers/w<n>`, ov
 The speed-up depends on the list's shape, not on the cap. Items that all edit one file run one after another whatever the cap is, while portable feature folders (`bussin-ts-architecture`) parallelise well. Every worker is a full session, so usage goes N times faster. `init.sh` has to pick a free port at runtime, record it in `.loop/port`, name test databases after `LOOP_NAME` and `LOOP_WORKER`, and stop its servers on `init.sh stop`. Before it removes a worker's worktree, the driver also kills every process still running inside it, so a dev server that outlives its session cannot hold the port or block the removal. Workers must not use `git stash`, which all worktrees share; the driver warns when a new stash entry appears. It also warns at start when the 1-minute load average is above twice the core count.
 
 ### Status view
+
+Each loop is shown by its name: `name` in `.loop/config.json` (set by init, or `--name`), else the start of its task, else its folder. When two loops share a name, the folder is added in brackets.
 
 In any terminal, whichever agent runs the loop:
 
@@ -158,6 +160,7 @@ For UI work, add accessibility, SEO and Emil Kowalski's animation review: `/buss
 ```json
 {
   "task": "Export invoices to CSV",
+  "name": "Invoice CSV export",
   "mode": "standard",
   "new_project": false,
   "base": "<HEAD before the init commit>",

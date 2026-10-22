@@ -155,6 +155,10 @@ check "an unknown agent is refused" '[ "$unknown_status" != 0 ] && grep -q "LOOP
 status_out="$(bash "$skill/scripts/loop-status.sh" "$codex")"
 check "loop-status shows progress, agent and outcome" 'grep -q "finished · sequential · codex" <<< "$status_out" && grep -q "2/2" <<< "$status_out"'
 check "loop-status shows tokens, unpriced sessions and the model" 'grep -q "Cost    unknown over 2 sessions · 2 unpriced" <<< "$status_out" && grep -q "Tokens  2.0k in · 150 out" <<< "$status_out" && grep -q "gpt-test" <<< "$status_out"'
+jq '.task = "Export invoices to CSV. Paid ones only."' "$codex/.loop/config.json" > "$tmp/config.json" && cp "$tmp/config.json" "$codex/.loop/config.json"
+check "loop-status names a loop after the start of its task" 'bash "$skill/scripts/loop-status.sh" "$codex" | head -n 1 | grep -q "Export invoices to CSV  finished"'
+jq '.name = "Invoice export"' "$codex/.loop/config.json" > "$tmp/config.json" && cp "$tmp/config.json" "$codex/.loop/config.json"
+check "loop-status prefers the configured name" 'bash "$skill/scripts/loop-status.sh" "$codex" | head -n 1 | grep -q "Invoice export  finished"'
 check "loop-status lists done items" 'grep -q "Done  A2" <<< "$status_out"'
 copilot_status_out="$(bash "$skill/scripts/loop-status.sh" "$copilot")"
 check "loop-status counts copilot premium requests" 'grep -q "4 premium requests" <<< "$copilot_status_out"'

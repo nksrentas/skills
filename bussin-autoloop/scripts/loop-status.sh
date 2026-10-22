@@ -139,14 +139,31 @@ loop_dirs() {
   git rev-parse --show-toplevel 2> /dev/null || pwd
 }
 
+label_query='
+def clean: tostring | gsub("[\u0000-\u001f\u007f-\u009f]"; "") | gsub("^\\s+|\\s+$"; "");
+def title: (split(": ")[0]) as $head
+  | (if ($head | length) > 0 and ($head | length) <= 40 then $head else . end)
+  | if length > 40 then (.[0:41] | sub("\\s+\\S*$"; "")) + "…" else . end;
+((.name // "") | clean) as $name
+| ((.task // "") | clean | split(". ")[0]) as $task
+| if $name != "" then ($name | title) elif $task != "" then ($task | title) else $folder end'
+
+loop_label() {
+  jq -r --arg folder "$(basename "$1")" "$label_query" "$1/.loop/config.json" 2> /dev/null || basename "$1"
+}
+
 show_all() {
-  local dir shown=0
+  local dir label shown=0
   while IFS= read -r dir; do
     [ -f "$dir/.loop/feature_list.json" ] || continue
+    printf '%s\t%s\n' "$(loop_label "$dir")" "$dir"
+  done < <(loop_dirs | awk '!seen[$0]++') > "$scratch/loops"
+  while IFS="$(printf '\t')" read -r label dir; do
     [ "$shown" = 0 ] || echo
-    render "$dir" "$(basename "$dir")"
+    if [ "$(cut -f1 "$scratch/loops" | grep -cxF -- "$label")" -gt 1 ]; then label="$label ($(basename "$dir"))"; fi
+    render "$dir" "$label"
     shown=1
-  done < <(loop_dirs | awk '!seen[$0]++')
+  done < "$scratch/loops"
   [ "$shown" = 1 ] || { echo "No autoloop found here. Run it inside a project with .loop/feature_list.json." >&2; return 1; }
 }
 
@@ -155,7 +172,7 @@ request_stop() {
   dir="$(cd "${target:-.}" && { git rev-parse --show-toplevel 2> /dev/null || pwd; })"
   [ -f "$dir/.loop/feature_list.json" ] || { echo "No autoloop in $dir." >&2; return 1; }
   touch "$dir/.loop/stop"
-  echo "autoloop: $(basename "$dir") stops after its running items finish. Run loop.sh again to resume."
+  echo "autoloop: $(loop_label "$dir") stops after its running items finish. Run loop.sh again to resume."
 }
 
 if [ "$stop" = 1 ]; then

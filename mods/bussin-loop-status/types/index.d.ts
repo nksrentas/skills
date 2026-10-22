@@ -41,7 +41,7 @@ export type LoopSnapshot = {
   recent: SessionRow[]
 }
 
-export type LoopView = { name: string; path: string; snapshot: LoopSnapshot }
+export type LoopView = { name: string; label: string; path: string; snapshot: LoopSnapshot }
 
 declare module 'claude-code' {
   interface PluginState {
