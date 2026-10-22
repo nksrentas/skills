@@ -22,6 +22,14 @@ The parallel driver starts sessions as `run --item <id>` without `--sequential`,
 
   When the item cannot pass, write the same file with `"passes": false` and the reason in `notes`. The driver merges a passing branch into the main branch, runs the gate again on the merged result, then marks the item and copies `notes` into `progress.md`.
 
+## Processes
+
+Other loops run on the same machine at the same time, in other worktrees and repos, and every loop session's command line looks alike. So stop only what you started:
+
+- Never kill by name or pattern: no `pkill`, `killall`, or `pgrep … | xargs kill`. A pattern that matches your gate or dev server also matches other loops' sessions and servers.
+- Stop a process through what you hold for it: its background task id, a PID you saved when you started it, `bash .loop/init.sh stop`, or a PID whose working directory (`lsof -a -d cwd -p <pid>`) you have checked is inside your own checkout.
+- Run the gate in the foreground. A headless session that ends its turn while the gate runs in the background never sees the result.
+
 ## 1. Orient (under two minutes)
 
 Read `.loop/config.json`, `.loop/progress.md`, `.loop/feature_list.json` and `git log --oneline -20`. Run `bash .loop/init.sh`. Do a sixty-second smoke check of the app (the home page loads, login works if there is one). If the previous session left it broken, fixing that is this session's item: record it in `progress.md` and proceed as if it were an item.
@@ -49,7 +57,7 @@ Edge items get at least one example test each. Parsing, escaping, money, dates a
 bash .loop/verify.sh
 ```
 
-Under Copilot, whose allowlist names the loop scripts by path, run them as `.loop/verify.sh` and `.loop/init.sh` without `bash`. It runs the test command, then Stryker on the changed files when `gates.mutation` is on, and creates `.loop/tests-passed` only if everything held. If mutants survive, add the tests that kill them. Do not touch thresholds, do not exclude files. After three attempts on the same item, write what survived into `progress.md`, leave the item `false`, and stop; the driver counts the failed session and moves on once the item runs out of attempts.
+Run it in the foreground and wait for it, however long it takes. Under Copilot, whose allowlist names the loop scripts by path, run them as `.loop/verify.sh` and `.loop/init.sh` without `bash`. It runs the test command, then Stryker on the changed files when `gates.mutation` is on, and creates `.loop/tests-passed` only if everything held. If mutants survive, add the tests that kill them. Do not touch thresholds, do not exclude files. After three attempts on the same item, write what survived into `progress.md`, leave the item `false`, and stop; the driver counts the failed session and moves on once the item runs out of attempts.
 
 ## 5. Review
 

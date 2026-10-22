@@ -2,6 +2,9 @@
 
 agent="${LOOP_AGENT:-claude}"
 agent_model="${LOOP_MODEL:-}"
+agent_settings=""
+remove_agent_settings() { [ -z "$agent_settings" ] || rm -f "$agent_settings"; }
+trap remove_agent_settings EXIT
 protected_files=(.loop/config.json .loop/verify.sh .loop/guard-commit.sh .loop/init.sh)
 
 case "$agent" in
@@ -51,7 +54,10 @@ claude_flags() {
   for path in ".loop/*.sh" ".loop/config.json" ".claude/**" ".git/**"; do
     denied+=("Edit($path)" "Write($path)")
   done
-  agent_flags=(--output-format json --allowedTools "${allowed[@]}" --disallowedTools "${denied[@]}")
+  agent_settings="$(mktemp)"
+  jq -n --arg count "${#allowed[@]}" '($count | tonumber) as $n | {permissions: {allow: $ARGS.positional[:$n], deny: $ARGS.positional[$n:]}}' \
+    --args "${allowed[@]}" "${denied[@]}" > "$agent_settings"
+  agent_flags=(--output-format json --settings "$agent_settings")
 }
 
 copilot_flags() {

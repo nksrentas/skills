@@ -22,6 +22,7 @@ make_project() {
   cat > "$dir/bin/claude" <<EOF
 #!/usr/bin/env bash
 id="\${2##* }"
+printf '%s\n' "\$@" >> "$dir/argv"
 echo "start \$id" >> "$dir/events"
 echo "branch \$(git rev-parse --abbrev-ref HEAD) \$LOOP_NAME" >> "$dir/events"
 if [ "\$(jq -r --arg id "\$id" '.features[] | select(.id == \$id) | .leak // false' .loop/feature_list.json)" = true ]; then
@@ -85,6 +86,7 @@ make_project "$happy" true '{"features": [
 happy_status=0
 run_loop "$happy" LOOP_WORKERS=2 || happy_status=$?
 check "parallel run finishes" '[ "$happy_status" = 0 ]'
+check "no worker session argv names the gate" 'grep -qx -- --settings "$happy/argv" && ! grep -q "verify\.sh" "$happy/argv"'
 check "independent items run at the same time" '[ "$(line_of "$happy" "start B")" -lt "$(line_of "$happy" "end A")" ]'
 check "an item waits for its dependency" '[ "$(line_of "$happy" "start C")" -gt "$(line_of "$happy" "end A")" ]'
 check "items with overlapping touches never overlap" '[ "$(line_of "$happy" "start D")" -gt "$(line_of "$happy" "end B")" ]'
