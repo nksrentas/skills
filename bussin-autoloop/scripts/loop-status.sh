@@ -9,6 +9,7 @@ while [ $# -gt 0 ]; do
     --watch)
       watch_seconds=5
       if [[ "${2:-}" =~ ^[0-9]+$ ]]; then watch_seconds="$2"; shift; fi
+      [ "$watch_seconds" -ge 1 ] || { echo "loop-status.sh: --watch needs 1 or more seconds" >&2; exit 1; }
       ;;
     --stop) stop=1 ;;
     -h | --help)
@@ -35,6 +36,9 @@ def usd: (. * 100 | round) as $c | "$\($c / 100 | floor).\($c % 100 | two)";
 def bar($d; $t; $w): (if $t == 0 then 0 else ($d / $t * $w | round) end) as $f
   | ([range($f)] | map("█") | join("")) + ([range($w - $f)] | map("░") | join(""));
 def clean: tostring | gsub("[\u0000-\u001f\u007f-\u009f]"; "");
+def num: if type == "number" then . else 0 end;
+def opt: if type == "number" then . else null end;
+def str: if type == "string" then clean else null end;
 def cut($n): if length > $n then .[0:$n - 1] + "…" else . end;
 def pad($n): if length >= $n then . else . + (" " * ($n - length)) end;
 def title: (.description // "" | clean) as $d | ($d | split(": ")[0]) as $h
@@ -42,18 +46,28 @@ def title: (.description // "" | clean) as $d | ($d | split(": ")[0]) as $h
 def sum(f): map(f // 0) | add // 0;
 def row($label; $id; $title; $note): "  \($label | pad(6))\($id | clean | pad(6)) \($title | pad(57))\($dim)\($note)\($reset)";
 
-(.features // []) as $features
-| ($live[0] // {}) as $l
-| ($features | map(select(.passes == true) | .id)) as $passed
+(.features | map(objects)) as $features
+| ($usage | map(. + {
+    item: (.item | clean), duration_ms: (.duration_ms | num), cost_usd: (.cost_usd | opt), premium_requests: (.premium_requests | num),
+    input_tokens: (.input_tokens | num), output_tokens: (.output_tokens | num), cache_read_tokens: (.cache_read_tokens | num), cache_write_tokens: (.cache_write_tokens | num),
+    started_at: (.started_at | opt), ended_at: (.ended_at | opt),
+    models: (.models | objects // {} | map_values(objects // {} | {input_tokens: (.input_tokens | num), output_tokens: (.output_tokens | num), cost_usd: (.cost_usd | num)}))
+  })) as $usage
+| ($live[0] // {}) as $raw
+| { state: ($raw.state | str), mode: ($raw.mode | str // "sequential"), agent: ($raw.agent | str),
+    workers: ([1, ($raw.workers | num | floor)] | max), started_at: ($raw.started_at | opt), updated_at: ($raw.updated_at | opt),
+    running: [($raw.running | arrays // [])[] | objects | {item: (.item | clean), worker: (.worker | num | floor), started_at: (.started_at | opt // $now)}] } as $l
+| ($features | map(select(.passes == true) | .id) | unique) as $passed
 | ($features | length) as $total
 | ($passed | length) as $done
-| ($driver_exited and (["running", "stopping"] | index($l.state) != null)) as $exited
+| ($l.running | length > 0 and $now - ($l.updated_at // $now) > 900) as $silent
+| (($driver == "exited" or ($driver == "unknown" and $silent)) and (["running", "stopping"] | index($l.state) != null)) as $exited
 | (if $exited then "stopped"
    elif $l.state == "running" and $stop_requested then "stopping"
    elif ["running", "stopping", "finished", "stopped"] | index($l.state) then $l.state
    elif $done == $total and $total > 0 then "finished" else "idle" end) as $state
 | (["running", "stopping"] | index($state) != null) as $active
-| (if $active then ($l.running // []) else [] end) as $running
+| (if $active then $l.running else [] end) as $running
 | ($running | map(.item)) as $running_ids
 | ($usage | map(select(.cost_usd != null))) as $priced
 | ($usage | sum(.duration_ms) / 1000) as $session_sec
@@ -67,17 +81,17 @@ def row($label; $id; $title; $note): "  \($label | pad(6))\($id | clean | pad(6)
 | def spend($id): ($usage | map(select(.item == $id))) as $s
     | [ (if ($s | map(select(.cost_usd != null)) | length) > 0 then ($s | sum(.cost_usd) | usd)
          elif ($s | length) > 0 then "cost unknown" else empty end),
-        (($s | sum(.duration_ms) / 60000 | floor) | select(. > 0) | "\(.)m") ] | join(" · ");
+        (($s | sum(.duration_ms) / 60000 | round) | select(. > 0) | "\(.)m") ] | join(" · ");
   def note: . as $f
     | ($usage | map(select(.item == $f.id)) | length) as $tries
-    | (($f.depends_on // []) - $passed) as $waiting
+    | (($f.depends_on | arrays // []) - $passed) as $waiting
     | if $tries > 0 then ([if $tries == 1 then "1 attempt" else "\($tries) attempts" end, spend($f.id)] | map(select(. != "")) | join(" · "))
       elif ($waiting | length) > 0 then "waiting for \($waiting | map(clean) | join(", "))"
       else "ready" end;
   ({running: "▶", stopping: "□", finished: "✓", stopped: "■", idle: "·"}[$state]) as $icon
-| [ "\($bold)\($icon) \($name)\($reset)  \($state)\(if $exited then " (driver exited)" else "" end) · \($l.mode // "sequential")"
-    + (if ($l.workers // 1) > 1 then " ×\($l.workers)" else "" end)
-    + (if $l.agent then " · \($l.agent | clean)" else "" end),
+| [ "\($bold)\($icon) \($name)\($reset)  \($state)\(if $exited then " (driver exited)" else "" end) · \($l.mode)"
+    + (if $l.workers > 1 then " ×\($l.workers)" else "" end)
+    + (if $l.agent then " · \($l.agent)" else "" end),
     "  \(bar($done; $total; 24)) \($done)/\($total)"
     + (if $elapsed > 0 then " · \($elapsed | dur) elapsed" else "" end)
     + (if $state == "running" then (if $eta then " · ETA \($eta | dur) (\($now + $eta | strflocaltime("%H:%M")))" else " · ETA after first item" end) else "" end)
@@ -109,23 +123,39 @@ def row($label; $id; $title; $note): "  \($label | pad(6))\($id | clean | pad(6)
      | if length == 0 then [] else [""] + (to_entries | map("  \(if .key == 0 then "Recent" else "" end | pad(8))\(.value | cut(80))")) end)
 | .[]'
 
-driver_exited() {
+driver_state() {
   local pid
-  pid="$(jq -r 'select(.state == "running" or .state == "stopping") | .pid // empty' "$1/.loop/live.json" 2> /dev/null || true)"
-  [ -n "$pid" ] || return 1
-  ! ps -p "$pid" -o command= 2> /dev/null | grep -q 'loop\.sh'
+  pid="$(jq -r 'select(.state == "running" or .state == "stopping") | .pid | select(type == "number" and . > 0 and . == floor)' "$1/.loop/live.json" 2> /dev/null || true)"
+  if [ -z "$pid" ]; then
+    echo unknown
+  elif ps -p "$pid" -o command= 2> /dev/null | head -n 1 | grep -qE '(^|[[:space:]/])loop\.sh([[:space:]]|$)'; then
+    echo alive
+  else
+    echo exited
+  fi
+}
+
+error_note() {
+  local first
+  first="$(head -n 1 "$scratch/error")"
+  [ -z "$first" ] || echo " ($first)"
 }
 
 render() {
   local dir="$1" name="$2"
+  if ! jq -e '.features | arrays' "$dir/.loop/feature_list.json" > /dev/null 2> "$scratch/error"; then
+    echo "$name: cannot read .loop/feature_list.json, which needs a features array$(error_note)" >&2
+    return 1
+  fi
   { cat "$dir/.loop/usage.jsonl" 2> /dev/null || true; } \
     | jq -c -s -R '[split("\n")[] | fromjson? | objects | select(.item | type == "string")]' > "$scratch/usage"
   { cat "$dir/.loop/live.json" 2> /dev/null || true; } | jq -c -s -R '[fromjson? | objects]' > "$scratch/live"
   { cat "$dir/.loop/progress.md" 2> /dev/null || true; } > "$scratch/progress"
   if ! jq -r --arg name "$name" --argjson now "$(date +%s)" --slurpfile usage "$scratch/usage" --slurpfile live "$scratch/live" \
-    --rawfile progress "$scratch/progress" --argjson stop_requested "$([ -e "$dir/.loop/stop" ] && echo true || echo false)" --argjson driver_exited "$(driver_exited "$dir" && echo true || echo false)" --arg bold "$bold" --arg dim "$dim" --arg reset "$reset" \
+    --rawfile progress "$scratch/progress" --argjson stop_requested "$([ -e "$dir/.loop/stop" ] && echo true || echo false)" --arg driver "$(driver_state "$dir")" --arg bold "$bold" --arg dim "$dim" --arg reset "$reset" \
     '. as $list | ($usage[0]) as $usage | ($live[0]) as $live | $list | '"$render_query" "$dir/.loop/feature_list.json" 2> "$scratch/error"; then
-    echo "$name: cannot read .loop/feature_list.json ($(head -n 1 "$scratch/error"))" >&2
+    echo "$name: cannot render the status from its .loop/ files$(error_note)" >&2
+    return 1
   fi
 }
 
@@ -135,7 +165,7 @@ loop_dirs() {
     return
   fi
   git worktree list --porcelain 2> /dev/null \
-    | awk '/^worktree /{path = substr($0, 10)} /^branch refs\/heads\/loop\//{path = ""} /^$/{if (path != "") print path; path = ""} END{if (path != "") print path}' || true
+    | awk '/^worktree /{path = substr($0, 10)} /^branch refs\/heads\/loop\/[^\/]+\/[^\/]+$/{path = ""} /^$/{if (path != "") print path; path = ""} END{if (path != "") print path}' || true
   git rev-parse --show-toplevel 2> /dev/null || pwd
 }
 
@@ -149,30 +179,58 @@ def title: (split(": ")[0]) as $head
 | if $name != "" then ($name | title) elif $task != "" then ($task | title) else $folder end'
 
 loop_label() {
-  jq -r --arg folder "$(basename "$1")" "$label_query" "$1/.loop/config.json" 2> /dev/null || basename "$1"
+  jq -r --arg folder "$2" "$label_query" "$1/.loop/config.json" 2> /dev/null || echo "$2"
+}
+
+repo_name() {
+  local common
+  common="$(cd "$1" && cd "$(git rev-parse --git-common-dir 2> /dev/null)" 2> /dev/null && pwd)" || return 0
+  case "$common" in */.git) basename "$(dirname "$common")" ;; esac
+}
+
+short_name() {
+  local name repo="$2"
+  name="$(basename "$1")"
+  if [ -n "$repo" ] && [ "$name" != "$repo" ] && [ "${name#"$repo"-}" != "$name" ]; then name="${name#"$repo"-}"; fi
+  echo "$name"
 }
 
 show_all() {
-  local dir label shown=0
+  local dir label repo shown=0 rendered=0
+  repo="$(repo_name "${target:-.}")"
   while IFS= read -r dir; do
     [ -f "$dir/.loop/feature_list.json" ] || continue
-    printf '%s\t%s\n' "$(loop_label "$dir")" "$dir"
+    printf '%s\t%s\n' "$(loop_label "$dir" "$(short_name "$dir" "$repo")")" "$dir"
   done < <(loop_dirs | awk '!seen[$0]++') > "$scratch/loops"
   while IFS="$(printf '\t')" read -r label dir; do
     [ "$shown" = 0 ] || echo
-    if [ "$(cut -f1 "$scratch/loops" | grep -cxF -- "$label")" -gt 1 ]; then label="$label ($(basename "$dir"))"; fi
-    render "$dir" "$label"
+    if [ "$(cut -f1 "$scratch/loops" | grep -cxF -- "$label")" -gt 1 ]; then label="$label ($(short_name "$dir" "$repo"))"; fi
+    if render "$dir" "$label"; then rendered=1; fi
     shown=1
   done < "$scratch/loops"
   [ "$shown" = 1 ] || { echo "No autoloop found here. Run it inside a project with .loop/feature_list.json." >&2; return 1; }
+  [ "$rendered" = 1 ]
+}
+
+worker_main_dir() {
+  local name
+  name="$(git symbolic-ref -q --short HEAD 2> /dev/null | sed -n 's|^loop/\([^/]*\)/[^/]*$|\1|p' || true)"
+  [ -n "$name" ] || return 1
+  git worktree list --porcelain | awk -v name="$name" '
+    /^worktree / {
+      path = substr($0, 10); base = path; sub(/.*\//, "", base); gsub(/[^A-Za-z0-9._-]/, "-", base)
+      if (first == "") first = path
+      if (base == name) { print path; found = 1; exit }
+    }
+    END { if (!found) print first }'
 }
 
 request_stop() {
   local dir
-  dir="$(cd "${target:-.}" && { git rev-parse --show-toplevel 2> /dev/null || pwd; })"
+  dir="$(cd "${target:-.}" && { worker_main_dir || git rev-parse --show-toplevel 2> /dev/null || pwd; })"
   [ -f "$dir/.loop/feature_list.json" ] || { echo "No autoloop in $dir." >&2; return 1; }
   touch "$dir/.loop/stop"
-  echo "autoloop: $(loop_label "$dir") stops after its running items finish. Run loop.sh again to resume."
+  echo "autoloop: $(loop_label "$dir" "$(basename "$dir")") stops after its running items finish. Run loop.sh again to resume."
 }
 
 if [ "$stop" = 1 ]; then

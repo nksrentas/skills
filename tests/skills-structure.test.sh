@@ -44,7 +44,7 @@ readme_skills() {
 kebab_file_names() {
   local bad
   [ -d "$root" ] || return 1
-  bad="$(cd "$root" && { find bussin-* tests -type f ! -name SKILL.md ! -name .DS_Store 2>/dev/null || true; } | LC_ALL=C grep -v '/[a-z0-9.-]*$')" || return 0
+  bad="$(git -C "$root" ls-files -- 'bussin-*' tests ':(exclude)*/SKILL.md' | LC_ALL=C grep -v '/[a-z0-9.-]*$')" || return 0
   printf '%s\n' "$bad" | sed 's/^/     not kebab-case: /'
   return 1
 }
@@ -58,11 +58,10 @@ pocock_refs="$before/$pocock$after|$before\`?$pocock\`?[[:space:]]+skill|$before
 no_retired_skill_refs() {
   local bad
   [ -d "$root" ] || return 1
-  bad="$(cd "$root" && find . \( -path ./.git -o -path ./.loop -o -path ./evals/results \) -prune -o \
-    -type f ! -path ./tests/skills-structure.test.sh -print0 |
+  bad="$(cd "$root" && git ls-files -z -- . ':(exclude).loop' ':(exclude)evals/results' ':(exclude)tests/skills-structure.test.sh' |
     xargs -0 grep -lIE "$retired_names|$pocock_refs" 2>/dev/null || true)"
   [ -n "$bad" ] || return 0
-  printf '%s\n' "$bad" | sed 's|^\./|     retired skill reference: |'
+  printf '%s\n' "$bad" | sed 's|^|     retired skill reference: |'
   return 1
 }
 
@@ -99,9 +98,9 @@ relative_links_resolve() {
   local file target missing=0
   while IFS= read -r -d '' file; do
     while IFS= read -r target; do
-      [ -e "$(dirname "$file")/$target" ] || { echo "    broken link in $file: $target"; missing=1; }
-    done < <(grep -oE '\]\([^)#[:space:]]+' "$file" | sed 's/^](//' | grep -vE '^(https?:|mailto:)')
-  done < <(find "$root"/bussin-* -name '*.md' -print0)
+      [ -e "$root/$(dirname "$file")/$target" ] || { echo "    broken link in $file: $target"; missing=1; }
+    done < <(grep -oE '\]\([^)#[:space:]]+' "$root/$file" | sed 's/^](//' | grep -vE '^(https?:|mailto:)')
+  done < <(git -C "$root" ls-files -z -- 'bussin-*.md')
   [ "$missing" = 0 ]
 }
 check "relative links in bussin-* markdown resolve" relative_links_resolve

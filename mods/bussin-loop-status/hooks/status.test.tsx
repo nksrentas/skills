@@ -246,6 +246,10 @@ const FINISHED = JSON.stringify({ features: [{ id: 'T1', description: 'Old', pas
 const REPO_FILES: Record<string, string> = {
   '/repo/.loop/feature_list.json': FINISHED,
   '/repo/.git/worktrees/wt-a/gitdir': '/elsewhere/wt-a/.git\n',
+  '/repo/.git/worktrees/wt-a/HEAD': 'ref: refs/heads/loop/payments\n',
+  '/repo/.git/worktrees/w1/gitdir': '/repo.loop-workers/w1/.git\n',
+  '/repo/.git/worktrees/w1/HEAD': 'ref: refs/heads/loop/repo/F2\n',
+  '/repo.loop-workers/w1/.loop/feature_list.json': FEATURES,
   '/repo/.git/worktrees/wt-b/gitdir': '/elsewhere/wt-b/.git\n',
   '/repo/.git/worktrees/wt-c/gitdir': '/elsewhere/wt-c/.git\n',
   '/elsewhere/wt-c/.loop/feature_list.json': FEATURES,
@@ -273,7 +277,7 @@ function answerRepo(on: On, root: string, statuses: (string | undefined)[], file
   })
   on('fs.list', async (_, e) =>
     e.path === '/repo/.git/worktrees'
-      ? { value: [{ ...ENTRY, name: 'wt-a' }, { ...ENTRY, name: 'wt-b' }, { ...ENTRY, name: 'wt-c' }] }
+      ? { value: [{ ...ENTRY, name: 'wt-a' }, { ...ENTRY, name: 'wt-b' }, { ...ENTRY, name: 'wt-c' }, { ...ENTRY, name: 'w1' }] }
       : { deny: `ENOENT: ${e.path}` },
   )
   on('ui.status', async (_, e) => {
@@ -306,6 +310,7 @@ test('finds loops in every worktree from the main checkout, running ones first',
     expect(await ui.find({ key: 'select-wt-b' })).toBeUndefined()
     expect(await ui.find({ type: 'Text', text: /wt-a · running · parallel × 2/ })).toBeDefined()
     await ui.press({ key: 'show-idle' })
+    expect(await ui.find({ key: 'select-w1' })).toBeUndefined()
     await ui.press({ key: 'select-repo' })
     expect(await ui.find({ type: 'Text', text: /^✓ repo · finished · sequential$/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /elapsed|\$0\.00/ })).toBeUndefined()
@@ -587,7 +592,7 @@ test('the resume command only runs a bussin-autoloop loop.sh outside the project
 test('a running loop counts as stale from a dead pid, or from a live.json silent for 15 minutes when the pid cannot be checked', () => {
   const snapshot = (live: Record<string, unknown>, driverAlive?: boolean) =>
     compute({ features: FEATURES, live: JSON.stringify({ ...JSON.parse(LIVE), ...live }), driverAlive, now: NOW })
-  expect(snapshot({}, false)).toMatchObject({ loopState: 'running', stale: true, etaSec: null })
+  expect(snapshot({}, false)).toMatchObject({ loopState: 'running', stale: true, etaSec: null, elapsedSec: 2990 })
   expect(snapshot({ state: 'stopping' }, false)).toMatchObject({ stale: true })
   expect(snapshot({ updated_at: NOW - 901 })).toMatchObject({ stale: true, etaSec: null })
   expect(snapshot({ updated_at: NOW - 600 })).toMatchObject({ stale: false })
@@ -611,4 +616,9 @@ test('adds the folder only when two loops share a name', async () => {
     { name: 'c', label: 'Invoices' },
   ]).map(loop => loop.label)
   expect(labels.join('|')).toBe('Landing page (a)|Landing page (b)|Invoices')
+})
+
+test('a running row without a start time counts from now', () => {
+  const live = JSON.stringify({ ...JSON.parse(LIVE), running: [{ item: 'F2', worker: 1 }] })
+  expect(compute({ features: FEATURES, live, now: NOW })?.runningRows[0]?.seconds).toBe(0)
 })

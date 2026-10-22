@@ -102,6 +102,11 @@ write_live() {
   mv "$live_file.tmp" "$live_file"
 }
 
+pause() {
+  local until=$((SECONDS + $1))
+  while [ "$SECONDS" -lt "$until" ] && [ ! -e "$stop_file" ]; do sleep 1; done
+}
+
 closing_state() {
   if [ "$(remaining 2>/dev/null || echo 1)" = 0 ]; then echo finished; else echo stopped; fi
 }

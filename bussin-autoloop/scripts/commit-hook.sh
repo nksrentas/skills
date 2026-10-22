@@ -6,7 +6,7 @@ hook_warned=0
 
 install_commit_hook() {
   local hook
-  if [ -n "$(env -u GIT_CONFIG_COUNT git config core.hooksPath || true)" ]; then
+  if [ -n "$("${user_git_env[@]}" git config core.hooksPath || true)" ]; then
     [ "$hook_warned" = 1 ] || echo "autoloop: core.hooksPath is set, so the git pre-commit guard is not installed; the driver still audits every session" >&2
     hook_warned=1
     return 0
@@ -82,7 +82,7 @@ audit_session() {
   fi
   echo "autoloop: re-running the gate on the new passing items, because $agent has no tool-level commit guard"
   gate_log="$(mktemp)"
-  if ! bash <(git show HEAD:.loop/verify.sh) > "$gate_log" 2>&1; then
+  if ! "${user_git_env[@]}" bash <(git show HEAD:.loop/verify.sh) > "$gate_log" 2>&1; then
     tail -n 10 "$gate_log" | sed 's/^/    /' >&2
     rm -f "$gate_log"
     audit_failed "$from" "an item was marked passing but the gate fails on the committed code"

@@ -12,8 +12,9 @@ Adapted from [AgriciDaniel/claude-seo](https://github.com/AgriciDaniel/claude-se
 
 ## Detection
 
-1. Extract JSON-LD with `"${CLAUDE_PLUGIN_ROOT}/scripts/claude-seo" run parse_html.py --url <url> --json`
-   (or scan `<script type="application/ld+json">` in the page source). Flag any
+1. Extract JSON-LD from the rendered page source: fetch the page (or read the
+   built HTML), collect every `<script type="application/ld+json">` block, and
+   parse each one as JSON. A block that does not parse is an error. Flag any
    block without `@context` or `@type`: Google cannot attach it to an entity (a
    rating in such a block does not reach the Product).
 2. Check for Microdata (`itemscope`, `itemprop`)

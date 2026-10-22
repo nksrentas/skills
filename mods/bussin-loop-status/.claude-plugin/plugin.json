@@ -1,6 +1,6 @@
 {
   "name": "bussin-loop-status",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Live status of a bussin-autoloop run: progress, running items, elapsed time, ETA, tokens, cost and models, in the status line and a pane, with a Stop button that drains the loop.",
   "types": "./types/index.d.ts",
   "author": {

@@ -18,7 +18,7 @@ make_project() {
   jq -n --arg test "$test_command" '{commands: {test: $test, lint: "npm run lint"}, gates: {mutation: false}}' > "$dir/.loop/config.json"
   echo '{"features":[{"id":"A1","description":"first","passes":false,"evidence":null},{"id":"A2","description":"second","passes":false,"evidence":null}]}' \
     | jq . > "$dir/.loop/feature_list.json"
-  printf '.loop/tests-passed\nout\nargv\nsettings\nhook-said\nchained\n' > "$dir/.gitignore"
+  printf '.loop/tests-passed\nout\nargv\nsettings\nhook-said\nchained\ngit-env\n' > "$dir/.gitignore"
   git -C "$dir" init -q
   git -C "$dir" add -A
   git -C "$dir" commit -qm init
@@ -26,6 +26,7 @@ make_project() {
 
 session_body='
 printf "%s\n" "$@" > "$PROJECT/argv"
+echo "$(git config user.name || true) ${GIT_CONFIG_COUNT:-unset}" > "$PROJECT/git-env"
 previous=""
 for arg in "$@"; do
   [ "$previous" != --settings ] || cp "$arg" "$PROJECT/settings"
@@ -141,6 +142,21 @@ write_agent "$bypass" codex "$codex_output"
 bypass_status=0
 run_loop "$bypass" LOOP_AGENT=codex MOCK_BEHAVIOUR=bypass || bypass_status=$?
 check "a pass committed with --no-verify is re-gated and stops the loop" '[ "$bypass_status" != 0 ] && grep -q "gate fails on the committed code" "$bypass/out"'
+check "a session the audit stops is not recorded as passed" '[ "$(jq -r .outcome "$bypass/.loop/usage.jsonl")" = failed ]'
+
+regate="$tmp/regate"
+make_project "$regate" '[ -z "${GIT_CONFIG_COUNT:-}" ]'
+write_agent "$regate" codex "$codex_output"
+regate_status=0
+run_loop "$regate" LOOP_AGENT=codex || regate_status=$?
+check "the audit re-gate runs without the driver's own git overrides" '[ "$regate_status" = 0 ]'
+
+userconf="$tmp/userconf"
+make_project "$userconf" true
+write_agent "$userconf" claude "$claude_output"
+userconf_status=0
+run_loop "$userconf" GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=user.name GIT_CONFIG_VALUE_0=from-ci || userconf_status=$?
+check "sessions keep the user's own GIT_CONFIG entries" '[ "$userconf_status" = 0 ] && [ "$(cat "$userconf/git-env")" = "from-ci 1" ]'
 
 reword="$tmp/reword"
 make_project "$reword" true

@@ -253,7 +253,7 @@ Treat title-link rewriting separately from truncation. Google may build a differ
 
 ## Structured data (JSON-LD)
 
-Read [the structured data reference](references/structured-data.md) when the user requests schema markup or an audit surfaces a structured-data issue. It contains Organization, Article, Product, FAQ, and Breadcrumb examples plus validation links.
+Read [the structured data reference](references/structured-data.md) when the user requests schema markup or an audit surfaces a structured-data issue. It contains Organization, Article, Product and Breadcrumb examples, a note on retired FAQ markup, and validation links.
 
 * **Describe visible, accurate content.** Do not add a type or claim solely to obtain a rich result.
 * **Use the most specific applicable type.** Keep identifiers and absolute URLs stable across renders.

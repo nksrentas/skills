@@ -110,7 +110,7 @@ agent_command() {
       agent_cmd=(codex exec "${agent_flags[@]}" "${sandbox_dirs[@]}" "$prompt")
       ;;
   esac
-  agent_cmd=(env -u GIT_CONFIG_COUNT "${agent_cmd[@]}")
+  agent_cmd=("${user_git_env[@]}" "${agent_cmd[@]}")
 }
 
 model_label() {
