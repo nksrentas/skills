@@ -2,7 +2,7 @@ import type { On } from 'claude-code'
 import { expect, test } from 'claude-code/testing'
 
 import { PANE } from './register'
-import { commonDirFromGitFile, compactLine, compute, isDriverCommand, resumeCommand, formatDuration, formatTokens, shortModel, shortName, shortTitle, statusLine } from './snapshot'
+import { commonDirFromGitFile, compactLine, compute, distinctLabels, isDriverCommand, loopLabel, resumeCommand, formatDuration, formatTokens, shortModel, shortName, shortTitle, statusLine } from './snapshot'
 
 const NOW = 4000
 
@@ -593,4 +593,22 @@ test('a running loop counts as stale from a dead pid, or from a live.json silent
   expect(snapshot({ updated_at: NOW - 600 })).toMatchObject({ stale: false })
   expect(snapshot({ updated_at: NOW - 901 }, true)).toMatchObject({ stale: false })
   expect(snapshot({ updated_at: NOW - 901, running: [] })).toMatchObject({ stale: false })
+})
+
+test('names a loop by its config name, else the start of its task, else its folder', async () => {
+  expect(loopLabel(JSON.stringify({ name: 'Invoice reminders', task: 'Build invoice reminders' }), 'stage4-6')).toBe('Invoice reminders')
+  expect(loopLabel(JSON.stringify({ task: 'Export invoices to CSV. Paid ones only.' }), 'stage4-6')).toBe('Export invoices to CSV')
+  expect(loopLabel(JSON.stringify({ task: 'Rebuild the apps/site landing page as a static export with the house look' }), 'w')).toBe('Rebuild the apps/site landing page as a…')
+  expect(loopLabel(JSON.stringify({ name: 'Bad\u001b[31m name' }), 'w')).toBe('Bad[31m name')
+  expect(loopLabel(undefined, 'stage4-6')).toBe('stage4-6')
+  expect(loopLabel('not json', 'stage4-6')).toBe('stage4-6')
+})
+
+test('adds the folder only when two loops share a name', async () => {
+  const labels = distinctLabels([
+    { name: 'a', label: 'Landing page' },
+    { name: 'b', label: 'Landing page' },
+    { name: 'c', label: 'Invoices' },
+  ]).map(loop => loop.label)
+  expect(labels.join('|')).toBe('Landing page (a)|Landing page (b)|Invoices')
 })

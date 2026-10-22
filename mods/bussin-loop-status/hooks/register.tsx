@@ -7,6 +7,7 @@ import {
   commonDirFromGitFile,
   compactLine,
   compute,
+  distinctLabels,
   formatClock,
   formatCost,
   formatDuration,
@@ -14,6 +15,7 @@ import {
   isActive,
   isDriverCommand,
   livePid,
+  loopLabel,
   orderLoops,
   parentDir,
   progressBar,
@@ -63,8 +65,8 @@ function summaryText(loops: LoopView[]) {
   if (primary === undefined) return undefined
   if (loops.length === 1) return statusLine(primary.snapshot)
   const running = runningLoops(loops)
-  if (running.length === 0) return `${primary.name}: ${statusLine(primary.snapshot)}`
-  return `autoloop ${running.map(loop => compactLine(loop.name, loop.snapshot)).join(' │ ')}`
+  if (running.length === 0) return `${primary.label}: ${statusLine(primary.snapshot)}`
+  return `autoloop ${running.map(loop => compactLine(loop.label, loop.snapshot)).join(' │ ')}`
 }
 
 function statusText(loops: LoopView[]) {
@@ -132,7 +134,9 @@ async function loadLoop($: EngineInterface, dir: string, repoName: string, now: 
     driverAlive: await driverAlive($, livePid(live)),
     now,
   })
-  return snapshot === null ? null : { name: shortName(baseName(dir), repoName), path: dir, snapshot }
+  if (snapshot === null) return null
+  const name = shortName(baseName(dir), repoName)
+  return { name, label: loopLabel(await readOptional($, `${dir}/.loop/config.json`), name), path: dir, snapshot }
 }
 
 async function loadLoops($: EngineInterface) {
@@ -143,7 +147,7 @@ async function loadLoops($: EngineInterface) {
     const view = await loadLoop($, dir, repoName, now)
     if (view !== null) views.push(view)
   }
-  return orderLoops(views)
+  return orderLoops(distinctLabels(views))
 }
 
 async function refresh($: EngineInterface) {
@@ -157,10 +161,10 @@ async function requestStop($: EngineInterface, loop: LoopView) {
   try {
     await $.fs.write(`${loop.path}/.loop/stop`, '')
   } catch (error) {
-    $.ui.toast(`Could not stop ${loop.name}: ${error instanceof Error ? error.message : String(error)}`)
+    $.ui.toast(`Could not stop ${loop.label}: ${error instanceof Error ? error.message : String(error)}`)
     return
   }
-  $.ui.toast(`${loop.name} stops after its running items finish`)
+  $.ui.toast(`${loop.label} stops after its running items finish`)
   await refresh($)
 }
 
@@ -194,7 +198,7 @@ export const register: Register = on => {
     if (running.length > room && room === 1) {
       return (
         <Text color="claude" wrap="truncate-end">
-          autoloop {running.map(loop => compactLine(loop.name, loop.snapshot)).join(' │ ')}
+          autoloop {running.map(loop => compactLine(loop.label, loop.snapshot)).join(' │ ')}
         </Text>
       )
     }
@@ -204,7 +208,7 @@ export const register: Register = on => {
         {shown.map(loop => (
           <Box key={`band-${loop.path}`} flexDirection="row" gap={1}>
             <Text color={loop.snapshot.stale ? 'warning' : 'claude'} wrap="truncate-end">
-              {loopIcon(loop.snapshot)} {loop.name}
+              {loopIcon(loop.snapshot)} {loop.label}
               {loop.snapshot.stale ? ' driver not running' : loop.snapshot.loopState === 'stopping' ? ' stopping' : ''} {progressBar(loop.snapshot.done, loop.snapshot.total, 10)} {loop.snapshot.done}/{loop.snapshot.total}
               {loop.snapshot.runningRows.length > 0 ? ` · on ${loop.snapshot.runningRows.map(row => row.item).join(', ')}` : ''}
               {loop.snapshot.loopState === 'stopping' || loop.snapshot.stale ? '' : loop.snapshot.etaSec === null ? ' · ETA after first item' : ` · ETA ${formatDuration(loop.snapshot.etaSec)}`}
@@ -250,7 +254,7 @@ export const register: Register = on => {
           .map(loop => (
             <Button
               key={`select-${loop.name}`}
-              label={`${loop.path === view.path ? '● ' : ''}${loopIcon(loop.snapshot)} ${loop.name} ${loop.snapshot.done}/${loop.snapshot.total}`}
+              label={`${loop.path === view.path ? '● ' : ''}${loopIcon(loop.snapshot)} ${loop.label} ${loop.snapshot.done}/${loop.snapshot.total}`}
               onPress={() => update($, selectedAtom, () => loop.path)}
             />
           ))}
@@ -351,7 +355,7 @@ export const register: Register = on => {
         <Box flexDirection="column">
           <Box flexDirection="row" justifyContent="space-between" gap={1}>
             <Text bold color={color} wrap="truncate-end">
-              {loopIcon(snapshot)} {view.name} · {state} · {mode}
+              {loopIcon(snapshot)} {view.label} · {state} · {mode}
             </Text>
             {snapshot.loopState === 'running' && !snapshot.stale && <Button key="pane-stop" label="Stop" onPress={() => requestStop($, view)} />}
           </Box>

@@ -30,7 +30,7 @@ Every skill has a short alias that takes the same arguments, and the slash menu 
 
 | Alias | Skill | Arguments |
 |---|---|---|
-| `/autoloop` | `bussin-autoloop` | `init <task> [--mode fast\|standard\|thorough] [--skills a,b,review:c] [--no-checkpoint] [--new] [--stack <text>] [--base <ref>]`, `run` or `status` |
+| `/autoloop` | `bussin-autoloop` | `init <task> [--mode fast\|standard\|thorough] [--skills a,b,review:c] [--no-checkpoint] [--new] [--stack <text>] [--base <ref>] [--name <text>]`, `run` or `status` |
 | `/feature` | `bussin-feature` | `<feature to build or change>` |
 | `/lean` | `bussin-lean` | `[path, file or commit range to clean up]` |
 | `/arch` | `bussin-ts-architecture` | `[feature to place or wiring question]` |

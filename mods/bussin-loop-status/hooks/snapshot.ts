@@ -327,6 +327,27 @@ const LOOP_ORDER: Record<LoopSnapshot['loopState'], number> = { running: 0, stop
 export const orderLoops = <T extends { name: string; snapshot: LoopSnapshot }>(loops: T[]) =>
   [...loops].sort((a, b) => LOOP_ORDER[a.snapshot.loopState] - LOOP_ORDER[b.snapshot.loopState] || a.name.localeCompare(b.name))
 
+const labelOf = (text: string) => {
+  const head = text.split(': ')[0] ?? text
+  const title = head.length > 0 && head.length <= 40 ? head : text
+  return title.length > 40 ? `${title.slice(0, 41).replace(/\s+\S*$/, '')}…` : title
+}
+
+export const loopLabel = (config: string | undefined, folder: string) => {
+  const parsed = parseJson<unknown>(config)
+  const fields = isRecord(parsed) ? parsed : {}
+  const named = clean(fields.name ?? '').trim()
+  if (named.length > 0) return labelOf(named)
+  const task = clean(fields.task ?? '').trim()
+  if (task.length > 0) return labelOf(task.split(/\.\s/)[0] ?? task)
+  return folder
+}
+
+export const distinctLabels = <T extends { name: string; label: string }>(loops: T[]) =>
+  loops.map(loop =>
+    loops.filter(other => other.label === loop.label).length > 1 ? { ...loop, label: `${loop.label} (${loop.name})` } : loop,
+  )
+
 export const shortName = (name: string, repoName: string | undefined) =>
   repoName !== undefined && name !== repoName && name.startsWith(`${repoName}-`) ? name.slice(repoName.length + 1) : name
 
