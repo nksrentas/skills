@@ -28,7 +28,7 @@ if ! mkdir "$lock_dir" 2>/dev/null; then
   mkdir "$lock_dir" 2>/dev/null || refuse_second_loop "$(cat "$lock_dir/pid" 2>/dev/null || echo unknown)"
 fi
 echo "$$" > "$lock_dir/pid"
-release_lock() { [ "$(cat "$lock_dir/pid" 2>/dev/null || true)" != "$$" ] || rm -rf "$lock_dir"; }
+release_lock() { remove_agent_settings; [ "$(cat "$lock_dir/pid" 2>/dev/null || true)" != "$$" ] || rm -rf "$lock_dir"; }
 trap release_lock EXIT
 rm -f "$stop_file"
 

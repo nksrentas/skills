@@ -18,7 +18,7 @@ make_project() {
   jq -n --arg test "$test_command" '{commands: {test: $test, lint: "npm run lint"}, gates: {mutation: false}}' > "$dir/.loop/config.json"
   echo '{"features":[{"id":"A1","description":"first","passes":false,"evidence":null},{"id":"A2","description":"second","passes":false,"evidence":null}]}' \
     | jq . > "$dir/.loop/feature_list.json"
-  printf '.loop/tests-passed\nout\nargv\nhook-said\nchained\n' > "$dir/.gitignore"
+  printf '.loop/tests-passed\nout\nargv\nsettings\nhook-said\nchained\n' > "$dir/.gitignore"
   git -C "$dir" init -q
   git -C "$dir" add -A
   git -C "$dir" commit -qm init
@@ -26,6 +26,11 @@ make_project() {
 
 session_body='
 printf "%s\n" "$@" > "$PROJECT/argv"
+previous=""
+for arg in "$@"; do
+  [ "$previous" != --settings ] || cp "$arg" "$PROJECT/settings"
+  previous="$arg"
+done
 id="$(jq -r "[.features[] | select(.passes == false)][0].id" .loop/feature_list.json)"
 echo "$id" > "src/$id.txt"
 case "${MOCK_BEHAVIOUR:-honest}" in
@@ -74,6 +79,18 @@ run_loop() {
   shift
   (cd "$dir" && env "$@" PATH="$dir/bin:$PATH" LIMIT_WAIT=0 MAX_STALLS=1 bash "$skill/scripts/loop.sh" > "$dir/out" 2>&1)
 }
+
+claude_output='{"type":"result","num_turns":3,"total_cost_usd":0.1,"modelUsage":{"claude-opus-5-5":{"inputTokens":10,"outputTokens":5,"costUSD":0.1}}}'
+claude="$tmp/claude"
+make_project "$claude" true
+write_agent "$claude" claude "$claude_output"
+claude_status=0
+run_loop "$claude" || claude_status=$?
+claude_settings="$(grep -A1 -x -- --settings "$claude/argv" | tail -n 1)"
+check "a claude loop finishes every item" '[ "$claude_status" = 0 ]'
+check "no claude session argv names the gate, so a pattern kill aimed at it cannot match other loops" '! grep -q "verify\.sh" "$claude/argv"'
+check "claude gets its allowlist from a settings file" 'jq -e ".permissions.allow | index(\"Bash(bash .loop/verify.sh)\") and index(\"Bash(npm run lint *)\")" "$claude/settings" > /dev/null && jq -e ".permissions.deny | index(\"Edit(.loop/*.sh)\")" "$claude/settings" > /dev/null'
+check "the settings file lives outside the repo and is removed when the loop ends" '[ -n "$claude_settings" ] && [ "${claude_settings#"$claude"}" = "$claude_settings" ] && [ ! -e "$claude_settings" ]'
 
 codex="$tmp/codex"
 make_project "$codex" true
