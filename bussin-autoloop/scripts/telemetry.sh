@@ -84,10 +84,10 @@ def copilot:
 if $agent == "codex" then codex elif $agent == "copilot" then copilot else claude end'
 
 record_usage() {
-  local item="$1" worker="$2" started="$3" output="$4" outcome="$5"
+  local item="$1" worker="$2" started="$3" output="$4" outcome="$5" ended="${6:-$(date +%s)}"
   { cat "$output" 2> /dev/null || true; } | jq -c -s -R "$events_query" \
     | jq -c --arg agent "$agent" --arg model "$(model_label)" --arg item "$item" --argjson worker "$worker" \
-      --argjson started "$started" --argjson ended "$(date +%s)" --arg outcome "$outcome" "$usage_query" >> "$usage_file"
+      --argjson started "$started" --argjson ended "$ended" --arg outcome "$outcome" "$usage_query" >> "$usage_file"
   tail -n 1 "$usage_file" | jq -r '"autoloop: \(.item) \(.outcome) after \(.duration_ms / 60000 | floor)m, "
     + (if .cost_usd then "$\(.cost_usd * 100 | round / 100)" else "cost unknown" end)
     + (if .input_tokens then ", \(.input_tokens) in / \(.output_tokens) out tokens" else "" end)'
@@ -103,7 +103,8 @@ write_live() {
 }
 
 pause() {
-  local until=$((SECONDS + $1))
+  [[ "$1" =~ ^[0-9]+$ ]] || { sleep "$1"; return; }
+  local until=$((SECONDS + 10#$1))
   while [ "$SECONDS" -lt "$until" ] && [ ! -e "$stop_file" ]; do sleep 1; done
 }
 

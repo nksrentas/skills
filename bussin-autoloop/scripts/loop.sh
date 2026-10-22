@@ -13,6 +13,7 @@ limit_pattern="hit your .*limit|usage limit reached"
 
 user_config_count="${GIT_CONFIG_COUNT:-0}"
 [[ "$user_config_count" =~ ^[0-9]+$ ]] || { echo "autoloop: GIT_CONFIG_COUNT=$user_config_count is not a number" >&2; exit 1; }
+user_config_count=$((10#$user_config_count))
 if [ -n "${GIT_CONFIG_COUNT:-}" ]; then user_git_env=(env GIT_CONFIG_COUNT="$user_config_count"); else user_git_env=(env -u GIT_CONFIG_COUNT); fi
 source "$script_dir/agents.sh"
 export "GIT_CONFIG_KEY_$user_config_count=core.hooksPath" "GIT_CONFIG_VALUE_$user_config_count=/dev/null"
@@ -93,11 +94,12 @@ while [ "$(remaining)" -gt 0 ]; do
   fi
   if [ "$outcome" = limit ]; then set_attempts "$item" $(($(attempts_of "$item") - 1)); fi
   write_live running sequential 1 "[]"
+  ended="$(date +%s)"
   if ! audit_session "$before_head"; then
-    record_usage "$item" 0 "$started" "$session_output" failed
+    record_usage "$item" 0 "$started" "$session_output" failed "$ended"
     exit 1
   fi
-  record_usage "$item" 0 "$started" "$session_output" "$outcome"
+  record_usage "$item" 0 "$started" "$session_output" "$outcome" "$ended"
   if [ "$before" = "$after" ] && [ "$hit_limit" = true ]; then
     iteration=$((iteration - 1))
     echo "autoloop: usage limit hit, retrying in ${limit_wait}s" >&2
