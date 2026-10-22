@@ -14,6 +14,7 @@ import {
   formatTokens,
   isActive,
   isDriverCommand,
+  isWorkerHead,
   livePid,
   loopLabel,
   orderLoops,
@@ -101,6 +102,7 @@ async function loopDirs($: EngineInterface) {
     if (common.endsWith('/.git')) dirs.push(parentDir(common))
     try {
       for (const entry of await $.fs.list(`${common}/worktrees`)) {
+        if (isWorkerHead(await readOptional($, `${common}/worktrees/${entry.name}/HEAD`))) continue
         const gitdir = await readOptional($, `${common}/worktrees/${entry.name}/gitdir`)
         if (typeof gitdir === 'string' && gitdir.trim() !== '') dirs.push(parentDir(gitdir.trim()))
       }

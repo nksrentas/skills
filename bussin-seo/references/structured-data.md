@@ -86,32 +86,7 @@ Use the type that matches the page's visible content and current search-feature 
 
 ## FAQ
 
-```html
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": "FAQPage",
-  "mainEntity": [
-    {
-      "@type": "Question",
-      "name": "What colors are available?",
-      "acceptedAnswer": {
-        "@type": "Answer",
-        "text": "Our widgets come in blue, red, and green."
-      }
-    },
-    {
-      "@type": "Question",
-      "name": "What is the warranty?",
-      "acceptedAnswer": {
-        "@type": "Answer",
-        "text": "All widgets include a 2-year warranty."
-      }
-    }
-  ]
-}
-</script>
-```
+Google retired FAQ rich results for all sites on May 7, 2026, so `FAQPage` markup no longer earns a rich result. Do not add it for search; use `QAPage` for genuine user Q&A pages. See `bussin-schema` for the current list of active and retired types.
 
 ## Breadcrumbs
 

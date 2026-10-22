@@ -167,4 +167,28 @@ kill "$alive"
 wait "$alive" 2>/dev/null || true
 grep -q "running · sequential" <<< "$alive_out" && grep -q "Now   A1" <<< "$alive_out" || { echo "$alive_out"; echo "FAIL: loop-status does not show a live driver as running"; exit 1; }
 
+budget="$tmp/budget"
+mkdir -p "$budget/.loop" "$budget/bin"
+jq -n '{features: [range(21) | {id: "B\(.)", passes: false}]}' > "$budget/.loop/feature_list.json"
+printf '#!/usr/bin/env bash\necho run >> "%s/calls"\n' "$budget" > "$budget/bin/claude"
+chmod +x "$budget/bin/claude"
+git -C "$budget" init -q
+git -C "$budget" add .loop
+git -C "$budget" -c user.email=t@t -c user.name=t commit -qm init
+budget_status=0
+(cd "$budget" && PATH="$budget/bin:$PATH" MAX_STALLS=100 bash "$loop" > "$budget/out" 2>&1) || budget_status=$?
+[ "$budget_status" = 1 ] && grep -q "reached MAX_ITERATIONS=42 with 21 items left" "$budget/out" && [ "$(wc -l < "$budget/calls" | tr -d ' ')" = 42 ] || { tail -n 3 "$budget/out"; echo "FAIL: the session budget does not scale with the list"; exit 1; }
+
+pause="$tmp/pause"
+make_project "$pause" pass
+cat > "$pause/bin/claude" <<'EOF'
+#!/usr/bin/env bash
+touch .loop/stop
+echo "You've hit your session limit"
+exit 1
+EOF
+pause_started=$SECONDS
+(cd "$pause" && PATH="$pause/bin:$PATH" LIMIT_WAIT=30 bash "$loop" > "$pause/out" 2>&1) || true
+[ $((SECONDS - pause_started)) -lt 15 ] && grep -q "stopped on request" "$pause/out" || { cat "$pause/out"; echo "FAIL: a stop request did not cut the usage-limit wait short"; exit 1; }
+
 echo "autoloop-loop.test.sh: ok"

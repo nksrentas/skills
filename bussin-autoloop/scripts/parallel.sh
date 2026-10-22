@@ -37,6 +37,7 @@ blocked_query='
 | .id as $id
 | "  \($id): " + (
     if ($skip | index($id)) then "gave up after \($attempts) attempts, see .loop/progress.md and branch loop/\($name)/\($id)"
+    elif ($held | index($id)) then "blocked by a Blocked: line in .loop/progress.md"
     else ((.depends_on // []) - $done | map(. as $dep | if ($all | index($dep)) then $dep else $dep + " (unknown id)" end) | join(", ")) as $waiting
       | if $waiting == "" then "ready" else "waiting for " + $waiting end
     end)'
@@ -51,7 +52,7 @@ running_items() {
 }
 
 next_ready() {
-  jq -r --argjson running "$(json_array $(running_items))" --argjson skip "$(json_array $(exhausted_items))" "$ready_query" "$list"
+  jq -r --argjson running "$(json_array $(running_items))" --argjson skip "$(json_array $(blocked_items))" "$ready_query" "$list"
 }
 
 launch() {
@@ -126,7 +127,7 @@ merge_item() {
   log "merged $id"
 }
 
-merge_gate() { bash <(git show HEAD:.loop/verify.sh) >> "$state_dir/merge.log" 2>&1; }
+merge_gate() { "${user_git_env[@]}" bash <(git show HEAD:.loop/verify.sh) >> "$state_dir/merge.log" 2>&1; }
 
 refund_merge_failure() {
   local id="$1" used
@@ -279,7 +280,7 @@ report_blocked() {
     echo "autoloop: reached MAX_ITERATIONS=$max_iterations sessions with $(remaining) items left" >&2
   fi
   echo "autoloop: no item can start. Items still failing:" >&2
-  jq -r --argjson skip "$(json_array $(exhausted_items))" --arg attempts "$item_attempts" --arg name "$LOOP_NAME" "$blocked_query" "$list" >&2
+  jq -r --argjson skip "$(json_array $(exhausted_items))" --argjson held "$(json_array $(held_items))" --arg attempts "$item_attempts" --arg name "$LOOP_NAME" "$blocked_query" "$list" >&2
 }
 
 run_parallel() {
@@ -316,7 +317,7 @@ run_parallel() {
       if [ -n "${slot_pid[$i]}" ] && ! kill -0 "${slot_pid[$i]}" 2>/dev/null; then finish "$i"; fi
     done
     if [ "$pause_after_poll" = 1 ]; then
-      sleep "$limit_wait"
+      pause "$limit_wait"
       pause_after_poll=0
     fi
     if ! left="$(remaining 2>/dev/null)"; then

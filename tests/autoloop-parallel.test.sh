@@ -25,6 +25,11 @@ id="\${2##* }"
 printf '%s\n' "\$@" >> "$dir/argv"
 echo "start \$id" >> "$dir/events"
 echo "branch \$(git rev-parse --abbrev-ref HEAD) \$LOOP_NAME" >> "$dir/events"
+if [ "\$(jq -r --arg id "\$id" '.features[] | select(.id == \$id) | .limit // false' .loop/feature_list.json)" = true ]; then
+  touch "\$LOOP_MAIN_DIR/.loop/stop"
+  echo "You've hit your session limit"
+  exit 1
+fi
 if [ "\$(jq -r --arg id "\$id" '.features[] | select(.id == \$id) | .leak // false' .loop/feature_list.json)" = true ]; then
   mkdir -p .cache
   nohup perl -e 'setpgrp(0, 0); exec @ARGV' bash -c 'while :; do touch .cache/\$RANDOM; sleep 0.1; done' > /dev/null 2>&1 &
@@ -232,6 +237,31 @@ wait "$two_pid" || two_status=$?
 check "two parallel loops in worktrees of one repo with the same item ids both finish" '[ "$one_status" = 0 ] && [ "$two_status" = 0 ] && [ "$(jq "[.features[] | select(.passes)] | length" "$multi/one/.loop/feature_list.json")" = 2 ] && [ "$(jq "[.features[] | select(.passes)] | length" "$multi/two/.loop/feature_list.json")" = 2 ] && [ -f "$multi/two/src/f1.txt" ]'
 check "each loop names its worker branches after itself and exports LOOP_NAME" 'grep -qx "branch loop/one/F1 one" "$multi/one/events" && grep -qx "branch loop/two/F1 two" "$multi/one/events"'
 check "both loops clean up their own branches" '[ -z "$(git -C "$multi/one" branch --list "loop/*")" ]'
+
+held="$tmp/held"
+make_project "$held" true '{"features": [
+  {"id": "H", "passes": false, "evidence": null, "touches": ["src/h.txt"], "writes": "src/h.txt"},
+  {"id": "I", "passes": false, "evidence": null, "touches": ["src/i.txt"], "writes": "src/i.txt"}
+]}'
+printf 'Blocked: H needs a human\n' > "$held/.loop/progress.md"
+git -C "$held" add .loop/progress.md
+git -C "$held" commit -qm blocked
+held_status=0
+run_loop "$held" LOOP_WORKERS=2 || held_status=$?
+check "parallel mode skips an item named on a Blocked: line" '! grep -q "^start H$" "$held/events" && grep -q "^start I$" "$held/events"'
+check "parallel mode reports the item as blocked by progress.md" '[ "$held_status" != 0 ] && grep -q "H: blocked by a Blocked: line in .loop/progress.md" "$held/out"'
+
+clean_env="$tmp/clean-env"
+make_project "$clean_env" '[ -z "${GIT_CONFIG_COUNT:-}" ]' '{"features": [{"id": "V", "passes": false, "evidence": null, "writes": "src/v.txt"}]}'
+clean_env_status=0
+run_loop "$clean_env" LOOP_WORKERS=2 LOOP_ITEM_ATTEMPTS=1 LOOP_MERGE_RETRIES=0 || clean_env_status=$?
+check "the merge gate runs without the driver's own git overrides" '[ "$clean_env_status" = 0 ] && [ -f "$clean_env/src/v.txt" ]'
+
+wake="$tmp/wake"
+make_project "$wake" true '{"features": [{"id": "W", "passes": false, "evidence": null, "limit": true, "writes": "src/w.txt"}]}'
+wake_started=$SECONDS
+(cd "$wake" && env LOOP_WORKERS=2 PATH="$wake/bin:$PATH" LOOP_POLL_SECONDS=1 LIMIT_WAIT=30 bash "$skill/scripts/loop.sh" > "$wake/out" 2>&1) || true
+check "a stop request cuts the usage-limit pause short" '[ $((SECONDS - wake_started)) -lt 15 ] && grep -q "stopped on request" "$wake/out"'
 
 cap="$tmp/cap"
 make_project "$cap" true '{"features": [{"id": "A", "passes": false, "evidence": null, "writes": "src/a.txt"}]}'

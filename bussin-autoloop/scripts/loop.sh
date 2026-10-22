@@ -7,21 +7,29 @@ LOOP_NAME="$(basename "$PWD" | tr -c 'A-Za-z0-9._\n-' '-')"
 export LOOP_NAME
 
 list=.loop/feature_list.json
-max_iterations="${MAX_ITERATIONS:-40}"
 max_stalls="${MAX_STALLS:-3}"
 limit_wait="${LIMIT_WAIT:-600}"
 limit_pattern="hit your .*limit|usage limit reached"
 
+user_config_count="${GIT_CONFIG_COUNT:-0}"
+[[ "$user_config_count" =~ ^[0-9]+$ ]] || { echo "autoloop: GIT_CONFIG_COUNT=$user_config_count is not a number" >&2; exit 1; }
+user_config_count=$((10#$user_config_count))
+if [ -n "${GIT_CONFIG_COUNT:-}" ]; then user_git_env=(env GIT_CONFIG_COUNT="$user_config_count"); else user_git_env=(env -u GIT_CONFIG_COUNT); fi
 source "$script_dir/agents.sh"
-export GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=/dev/null GIT_CONFIG_KEY_1=core.fsmonitor GIT_CONFIG_VALUE_1=false
+export "GIT_CONFIG_KEY_$user_config_count=core.hooksPath" "GIT_CONFIG_VALUE_$user_config_count=/dev/null"
+export "GIT_CONFIG_KEY_$((user_config_count + 1))=core.fsmonitor" "GIT_CONFIG_VALUE_$((user_config_count + 1))=false"
+export GIT_CONFIG_COUNT=$((user_config_count + 2))
 skill_command="${LOOP_SKILL_COMMAND:-$(default_skill_command "$0")}"
 
 git cat-file -e "HEAD:$list" 2> /dev/null || { echo "autoloop: $list is not committed, run $skill_command init first" >&2; exit 1; }
 
 remaining() { git show "HEAD:$list" | jq '[.features[] | select(.passes == false)] | length'; }
+items_at_start="$(remaining)"
+max_iterations="${MAX_ITERATIONS:-$((items_at_start > 20 ? 2 * items_at_start : 40))}"
 session_tail() { tail -n 5 "$1"; cat "$2"; }
 snapshot() { echo "$(remaining)@$(git rev-parse HEAD)"; }
-blocked_items() { exhausted_items; sed -n 's/^Blocked: *\([^ ]*\).*/\1/p' .loop/progress.md 2> /dev/null || true; }
+held_items() { sed -n 's/^Blocked: *\([^ ]*\).*/\1/p' .loop/progress.md 2> /dev/null || true; }
+blocked_items() { exhausted_items; held_items; }
 next_item() { jq -r --argjson skip "$(json_array $(blocked_items))" '[.features[] | select(.passes == false) | select(.id as $id | $skip | index($id) | not)][0].id // empty' "$list"; }
 
 source "$script_dir/telemetry.sh"
@@ -85,13 +93,17 @@ while [ "$(remaining)" -gt 0 ]; do
     outcome=failed
   fi
   if [ "$outcome" = limit ]; then set_attempts "$item" $(($(attempts_of "$item") - 1)); fi
-  record_usage "$item" 0 "$started" "$session_output" "$outcome"
   write_live running sequential 1 "[]"
-  audit_session "$before_head" || exit 1
+  ended="$(date +%s)"
+  if ! audit_session "$before_head"; then
+    record_usage "$item" 0 "$started" "$session_output" failed "$ended"
+    exit 1
+  fi
+  record_usage "$item" 0 "$started" "$session_output" "$outcome" "$ended"
   if [ "$before" = "$after" ] && [ "$hit_limit" = true ]; then
     iteration=$((iteration - 1))
     echo "autoloop: usage limit hit, retrying in ${limit_wait}s" >&2
-    sleep "$limit_wait"
+    pause "$limit_wait"
     continue
   fi
   if [ "$before" = "$after" ]; then

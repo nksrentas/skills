@@ -25,7 +25,7 @@ type Live = {
   workers?: number
   started_at?: number
   updated_at?: number
-  running?: { item: string; worker: number; started_at: number }[]
+  running?: { item: string; worker: number; started_at?: number }[]
 }
 
 export type LoopFiles = {
@@ -92,7 +92,7 @@ const toLive = (value: unknown): Live | undefined => {
     updated_at: optionalNum(value.updated_at),
     running: (Array.isArray(value.running) ? value.running : [])
       .filter(isRecord)
-      .map(row => ({ item: clean(row.item), worker: Math.floor(num(row.worker)), started_at: num(row.started_at) })),
+      .map(row => ({ item: clean(row.item), worker: Math.floor(num(row.worker)), started_at: optionalNum(row.started_at) })),
   }
 }
 
@@ -218,15 +218,15 @@ export const compute = (files: LoopFiles): LoopSnapshot | null => {
   const loopState = loopStateOf(live, done, total, files.stopRequested === true)
   const mode = live?.mode ?? 'sequential'
   const workers = live?.workers ?? 1
+  const silent = files.driverAlive === undefined && runningList.length > 0 && files.now - (live?.updated_at ?? files.now) > SILENT_DRIVER_SEC
+  const stale = isActive(loopState) && (files.driverAlive === false || silent)
   const firstStart = live?.started_at ?? usage[0]?.started_at
-  const lastSeen = isActive(loopState) ? files.now : (live?.updated_at ?? usage[usage.length - 1]?.ended_at ?? files.now)
+  const lastSeen = isActive(loopState) && !stale ? files.now : (live?.updated_at ?? usage[usage.length - 1]?.ended_at ?? files.now)
   const elapsedSec = firstStart === undefined ? 0 : Math.max(0, lastSeen - firstStart)
   const remaining = total - done
   const sessionSec = sum(usage, row => row.duration_ms) / 1000
   const parallelism = mode === 'parallel' ? Math.max(1, Math.min(workers, remaining)) : 1
   const doneByLoop = new Set(usage.filter(row => passed.has(row.item)).map(row => row.item)).size
-  const silent = files.driverAlive === undefined && runningList.length > 0 && files.now - (live?.updated_at ?? files.now) > SILENT_DRIVER_SEC
-  const stale = isActive(loopState) && (files.driverAlive === false || silent)
   const attempts = attemptCounts(files.attempts)
   const etaSec =
     loopState === 'running' && !stale && doneByLoop > 0 && remaining > 0 ? Math.round((remaining * sessionSec) / doneByLoop / parallelism) : null
@@ -234,7 +234,7 @@ export const compute = (files: LoopFiles): LoopSnapshot | null => {
     item: row.item,
     title: title(features.find(feature => feature.id === row.item)),
     worker: row.worker,
-    seconds: Math.max(0, files.now - row.started_at),
+    seconds: Math.max(0, files.now - (row.started_at ?? files.now)),
     attempt: Math.floor(num(attempts[row.item])),
   }))
   return {
@@ -383,6 +383,8 @@ export const resumeCommand = (path: string, snapshot: LoopSnapshot) => {
   ].filter(Boolean)
   return `cd ${shellQuote(path)} && ${[...env, 'bash', shellQuote(snapshot.script)].join(' ')}`
 }
+
+export const isWorkerHead = (head: string | undefined) => /^ref: refs\/heads\/loop\/[^/\s]+\/[^/\s]+\s*$/.test(head ?? '')
 
 export const isDriverCommand = (command: string) => /(^|[\s/])loop\.sh(\s|$)/.test(command.trim().split('\n')[0] ?? '')
 
