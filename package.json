@@ -1,0 +1,12 @@
+{
+  "name": "bussin-skills",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Install or update the bussin skills, aliases and loop status mod with one command",
+  "bin": {
+    "bussin-skills": "install.sh"
+  },
+  "files": [
+    "install.sh"
+  ]
+}
