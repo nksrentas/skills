@@ -3,6 +3,7 @@ set -euo pipefail
 
 skill="$(cd "$(dirname "$0")/../bussin-autoloop" && pwd)"
 tmp="$(mktemp -d)"
+export LOOP_SLOTS_DIR="$tmp/slots" LOOP_MACHINE_SESSIONS=8
 trap '[ ! -f "$tmp/leak/leak.pid" ] || kill -9 "$(cat "$tmp/leak/leak.pid")" 2>/dev/null || true; rm -rf "$tmp"' EXIT
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
 failures=0
@@ -126,6 +127,16 @@ make_project "$requeue" "$(flaky_gate "$tmp/requeue.count" 2)" '{"features": [{"
 requeue_status=0
 run_loop "$requeue" LOOP_WORKERS=2 LOOP_ITEM_ATTEMPTS=1 || requeue_status=$?
 check "a merge-gate failure after the worker's gate passed spends no attempt" '[ "$requeue_status" = 0 ] && [ -f "$requeue/src/q.txt" ] && [ "$(grep -c "^start Q$" "$requeue/events")" = 2 ] && grep -q "does not count as an attempt (merge retry 1 of 2)" "$requeue/out"'
+
+capped="$tmp/capped"
+make_project "$capped" true '{"features": [
+  {"id": "A", "passes": false, "evidence": null, "touches": ["src/a/**"], "writes": "src/a/a.txt"},
+  {"id": "B", "passes": false, "evidence": null, "touches": ["src/b/**"], "writes": "src/b/b.txt"}
+]}'
+capped_status=0
+run_loop "$capped" LOOP_WORKERS=2 LOOP_MACHINE_SESSIONS=1 LOOP_SLOT_WAIT=1 || capped_status=$?
+check "the machine cap holds parallel workers to one session at a time" '[ "$capped_status" = 0 ] && { [ "$(line_of "$capped" "start B")" -gt "$(line_of "$capped" "end A")" ] || [ "$(line_of "$capped" "start A")" -gt "$(line_of "$capped" "end B")" ]; }'
+check "each worker session writes its own log" '[ -f "$happy/.loop/logs/A.log" ] && [ -f "$happy/.loop/logs/D.log" ]'
 
 cycle="$tmp/cycle"
 make_project "$cycle" true '{"features": [

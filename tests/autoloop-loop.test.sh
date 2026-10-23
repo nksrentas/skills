@@ -31,6 +31,8 @@ run_loop() {
 }
 
 tmp="$(mktemp -d)"
+export LOOP_SLOTS_DIR="$tmp/slots" LOOP_MACHINE_SESSIONS=8
+export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
 trap 'rm -rf "$tmp"' EXIT
 
 make_project "$tmp/limit" limit-then-pass
@@ -190,5 +192,41 @@ EOF
 pause_started=$SECONDS
 (cd "$pause" && PATH="$pause/bin:$PATH" LIMIT_WAIT=30 bash "$loop" > "$pause/out" 2>&1) || true
 [ $((SECONDS - pause_started)) -lt 15 ] && grep -q "stopped on request" "$pause/out" || { cat "$pause/out"; echo "FAIL: a stop request did not cut the usage-limit wait short"; exit 1; }
+
+full="$tmp/full"
+make_project "$full" pass
+mkdir -p "$tmp/full-slots/1"
+sleep 4 &
+holder=$!
+echo "$holder other-loop F9" > "$tmp/full-slots/1/owner"
+(cd "$full" && PATH="$full/bin:$PATH" LOOP_SLOTS_DIR="$tmp/full-slots" LOOP_MACHINE_SESSIONS=1 LOOP_SLOT_WAIT=1 bash "$loop" > "$full/out" 2>&1) || { cat "$full/out"; echo "FAIL: a queued loop did not run once the machine had room"; exit 1; }
+grep -q "already runs 1 loop sessions; A1 waits" "$full/out" || { cat "$full/out"; echo "FAIL: a full machine did not queue the session"; exit 1; }
+[ ! -e "$tmp/full-slots/1" ] || { echo "FAIL: the session slot was not released"; exit 1; }
+wait "$holder" 2> /dev/null || true
+
+stale="$tmp/stale"
+make_project "$stale" pass
+mkdir -p "$tmp/stale-slots/1"
+echo "999999 gone F1" > "$tmp/stale-slots/1/owner"
+(cd "$stale" && PATH="$stale/bin:$PATH" LOOP_SLOTS_DIR="$tmp/stale-slots" LOOP_MACHINE_SESSIONS=1 LOOP_SLOT_WAIT=1 bash "$loop" > "$stale/out" 2>&1) || { cat "$stale/out"; echo "FAIL: a slot held by a dead driver blocked the loop"; exit 1; }
+! grep -q "waits for one to finish" "$stale/out" || { echo "FAIL: a dead driver's slot was not reclaimed"; exit 1; }
+[ -f "$stale/.loop/logs/A1.log" ] || { echo "FAIL: no session log was written"; exit 1; }
+
+unsafe="$tmp/unsafe"
+make_project "$unsafe" pass
+echo '{"features":[{"id":"../../escape","passes":false}]}' > "$unsafe/.loop/feature_list.json"
+git -C "$unsafe" -c user.email=t@t -c user.name=t commit -qam unsafe
+if run_loop "$unsafe"; then echo "FAIL: an item id with a path in it was accepted"; exit 1; fi
+grep -q "item ids may only use" "$unsafe/out" && [ ! -e "$unsafe/calls" ] || { cat "$unsafe/out"; echo "FAIL: an unsafe item id did not stop the loop before any session"; exit 1; }
+
+run_session="$(dirname "$loop")/run-session.sh"
+hang_started=$SECONDS
+hang_status=0
+bash "$run_session" "$tmp/hang.raw" "$tmp/hang/.loop/logs/H1.log" claude \
+  bash -c 'echo "{\"type\":\"result\",\"subtype\":\"success\",\"num_turns\":1}"; sleep 30 & exit 3' || hang_status=$?
+[ "$hang_status" = 3 ] && [ $((SECONDS - hang_started)) -lt 10 ] || { echo "FAIL: a session that left a child running did not end with the agent ($hang_status after $((SECONDS - hang_started))s)"; exit 1; }
+grep -q "Done	success after 1 turns" "$tmp/hang/.loop/logs/H1.log" || { cat "$tmp/hang/.loop/logs/H1.log"; echo "FAIL: the session log missed the last event"; exit 1; }
+if bash "$run_session" "$tmp/x.raw" "$tmp/p/.loop/logs/../../escape.log" claude true 2> /dev/null; then echo "FAIL: a log path outside .loop/logs was accepted"; exit 1; fi
+[ ! -e "$tmp/escape.log" ] || { echo "FAIL: a log was written outside .loop/logs"; exit 1; }
 
 echo "autoloop-loop.test.sh: ok"

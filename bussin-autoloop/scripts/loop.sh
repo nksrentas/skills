@@ -23,6 +23,9 @@ skill_command="${LOOP_SKILL_COMMAND:-$(default_skill_command "$0")}"
 
 git cat-file -e "HEAD:$list" 2> /dev/null || { echo "autoloop: $list is not committed, run $skill_command init first" >&2; exit 1; }
 
+bad_ids="$(git show "HEAD:$list" | jq -r '[.features[]?.id | select(type != "string" or test("^[A-Za-z0-9_-][A-Za-z0-9._-]*$") | not or . == "." or . == "..")] | map(tostring) | join(", ")')"
+[ -z "$bad_ids" ] || { echo "autoloop: item ids may only use letters, digits, dot, dash and underscore; fix these in $list: $bad_ids" >&2; exit 1; }
+
 remaining() { git show "HEAD:$list" | jq '[.features[] | select(.passes == false)] | length'; }
 items_at_start="$(remaining)"
 max_iterations="${MAX_ITERATIONS:-$((items_at_start > 20 ? 2 * items_at_start : 40))}"
@@ -33,6 +36,7 @@ blocked_items() { exhausted_items; held_items; }
 next_item() { jq -r --argjson skip "$(json_array $(blocked_items))" '[.features[] | select(.passes == false) | select(.id as $id | $skip | index($id) | not)][0].id // empty' "$list"; }
 
 source "$script_dir/telemetry.sh"
+source "$script_dir/capacity.sh"
 source "$script_dir/commit-hook.sh"
 
 if [ "${LOOP_WORKERS:-1}" -gt 1 ]; then
@@ -43,7 +47,8 @@ fi
 
 session_output="$(mktemp)"
 session_errors="$(mktemp)"
-trap 'rm -f "$session_output" "$session_errors"; write_live "$(closing_state)" sequential 1 "[]"; release_lock' EXIT
+held_slot=""
+trap 'rm -f "$session_output" "$session_errors"; release_slot "$held_slot"; write_live "$(closing_state)" sequential 1 "[]"; release_lock' EXIT
 write_live running sequential 1 "[]"
 
 iteration=0
@@ -65,6 +70,14 @@ while [ "$(remaining)" -gt 0 ]; do
     echo "autoloop: every remaining item is blocked (a Blocked: line in .loop/progress.md, or $item_attempts failed attempts in .loop/attempts.json)" >&2
     exit 1
   fi
+  queued_notice=0
+  until held_slot="$(take_slot "$item")"; do
+    [ "$queued_notice" = 1 ] || echo "autoloop: this machine already runs $max_sessions loop sessions; $item waits for one to finish"
+    queued_notice=1
+    write_live queued sequential 1 "[]"
+    pause "$slot_wait"
+    if [ -e "$stop_file" ]; then rm -f "$stop_file"; echo "autoloop: stopped on request while queued"; exit 0; fi
+  done
   echo "autoloop: iteration $iteration, $(remaining) items remaining, working on $item"
   before="$(snapshot)"
   before_head="$(git rev-parse HEAD)"
@@ -75,7 +88,9 @@ while [ "$(remaining)" -gt 0 ]; do
   install_commit_hook
   remember_git_controls
   agent_command "$skill_command run --item $item --sequential"
-  AUTOLOOP_SESSION=1 "${agent_cmd[@]}" > "$session_output" 2> "$session_errors" < /dev/null || status=$?
+  AUTOLOOP_SESSION=1 bash "$script_dir/run-session.sh" "$session_output" "$PWD/.loop/logs/$item.log" "$agent" "${agent_cmd[@]}" 2> "$session_errors" || status=$?
+  release_slot "$held_slot"
+  held_slot=""
   if git_controls_changed; then exit 1; fi
   restore_uncommitted_list
   after="$(snapshot)"

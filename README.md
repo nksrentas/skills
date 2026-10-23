@@ -122,13 +122,17 @@ From any terminal, whichever agent runs the loop:
 bash ~/.claude/skills/bussin-autoloop/scripts/loop-status.sh --watch
 ```
 
-It shows every loop in the repository and its worktrees: progress, ETA, what runs now and next, cost, tokens and models.
+It shows every loop in the repository and its worktrees: progress, ETA, each running item's step (Orient, Implement, Gate, Review, Browser, Commit) and its latest log lines, what runs next, cost, tokens, models, and how many loop sessions this Mac runs. Follow one item's full log with `tail -f .loop/logs/<item>.log`. Give a loop a better name with `--rename "Landing page"`.
+
+Run as many loops as you like, in different projects or worktrees: they share one machine-wide limit on agent sessions (half the CPU cores or (RAM − 4 GB) ÷ 2 GB, whichever is lower; `LOOP_MACHINE_SESSIONS` overrides it). A loop that would go over the limit waits as queued instead of slowing everything down.
 
 To stop a loop without losing in-flight work, run `bash ~/.claude/skills/bussin-autoloop/scripts/loop-status.sh --stop`. Running sessions finish and parallel workers merge, then the loop exits. Run `loop.sh` again to resume.
 
 Inside Claude Code, the `bussin-loop-status` mod puts every running loop in a band above the prompt, one row per loop, including loops in git worktrees. The status line stays empty while loops run and shows a loop's outcome once none is running. `/autoloop-status`, or a row's Details button, opens a pane. The band rows and the pane each have a Stop button that works like `--stop`. The pane shows:
-- progress and what each worker is running, with its attempt
+- a card per loop on the left, and the selected loop's task, progress and ETA
+- each running item's step strip and its last log lines, with worker and attempt
 - elapsed time and the estimated finish
+- Rename and Stop, and how many loop sessions this Mac runs
 - a warning, and a copyable resume command, when the driver process is gone
 - blocked items grouped by what they wait for, and the latest sessions
 - input, output and cache tokens

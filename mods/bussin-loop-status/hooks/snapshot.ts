@@ -26,6 +26,7 @@ type Live = {
   started_at?: number
   updated_at?: number
   running?: { item: string; worker: number; started_at?: number }[]
+  machine?: { sessions: number; inUse: number }
 }
 
 export type LoopFiles = {
@@ -51,7 +52,7 @@ const SILENT_DRIVER_SEC = 15 * 60
 
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f-\u009f]/g
 
-const clean = (text: unknown) => String(text ?? '').replace(CONTROL_CHARACTERS, '')
+export const clean = (text: unknown) => String(text ?? '').replace(CONTROL_CHARACTERS, '')
 
 const num = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? value : 0)
 
@@ -93,6 +94,9 @@ const toLive = (value: unknown): Live | undefined => {
     running: (Array.isArray(value.running) ? value.running : [])
       .filter(isRecord)
       .map(row => ({ item: clean(row.item), worker: Math.floor(num(row.worker)), started_at: optionalNum(row.started_at) })),
+    machine: isRecord(value.machine)
+      ? { sessions: Math.max(1, Math.floor(num(value.machine.sessions) || 1)), inUse: Math.max(0, Math.floor(num(value.machine.in_use))) }
+      : undefined,
   }
 }
 
@@ -118,11 +122,11 @@ const title = (feature: Feature | undefined) => feature?.description ?? ''
 
 const loopStateOf = (live: Live | undefined, done: number, total: number, stopRequested: boolean): LoopSnapshot['loopState'] => {
   if (live?.state === 'running' && stopRequested) return 'stopping'
-  if (live?.state === 'running' || live?.state === 'stopping' || live?.state === 'finished' || live?.state === 'stopped') return live.state
+  if (live?.state === 'running' || live?.state === 'stopping' || live?.state === 'queued' || live?.state === 'finished' || live?.state === 'stopped') return live.state
   return done === total && total > 0 ? 'finished' : 'idle'
 }
 
-export const isActive = (loopState: LoopSnapshot['loopState']) => loopState === 'running' || loopState === 'stopping'
+export const isActive = (loopState: LoopSnapshot['loopState']) => loopState === 'running' || loopState === 'stopping' || loopState === 'queued'
 
 const modelRows = (usage: Usage[]): ModelRow[] => {
   const byName = new Map<string, ModelRow>()
@@ -266,6 +270,7 @@ export const compute = (files: LoopFiles): LoopSnapshot | null => {
     items,
     blockedGroups: blockedGroups(items),
     recent: sessionRows(usage),
+    machine: live?.machine ?? null,
   }
 }
 
@@ -308,6 +313,7 @@ export const statusLine = (snapshot: LoopSnapshot) => {
     return parts(`autoloop ${progress} done`, `${snapshot.running} running`, eta, cost)
   }
   if (snapshot.loopState === 'stopping') return parts(`autoloop stopping at ${progress}`, `${snapshot.running} running`, cost)
+  if (snapshot.loopState === 'queued') return parts(`autoloop queued at ${progress}`, 'waiting for a free session on this Mac', cost)
   if (snapshot.loopState === 'finished') return parts(`autoloop finished ${progress}`, elapsed, cost)
   if (snapshot.loopState === 'stopped') return parts(`autoloop stopped at ${progress}`, cost)
   return parts(`autoloop ${progress} done`, snapshot.hasLiveData ? 'not running' : 'no live data')
@@ -322,7 +328,7 @@ export const commonDirFromGitFile = (text: string) => {
   return match?.[1] === undefined ? undefined : parentDir(parentDir(match[1].trim()))
 }
 
-const LOOP_ORDER: Record<LoopSnapshot['loopState'], number> = { running: 0, stopping: 0, stopped: 1, idle: 2, finished: 3 }
+const LOOP_ORDER: Record<LoopSnapshot['loopState'], number> = { running: 0, stopping: 0, queued: 0, stopped: 1, idle: 2, finished: 3 }
 
 export const orderLoops = <T extends { name: string; snapshot: LoopSnapshot }>(loops: T[]) =>
   [...loops].sort((a, b) => LOOP_ORDER[a.snapshot.loopState] - LOOP_ORDER[b.snapshot.loopState] || a.name.localeCompare(b.name))
@@ -333,7 +339,16 @@ const labelOf = (text: string) => {
   return title.length > 40 ? `${title.slice(0, 41).replace(/\s+\S*$/, '')}…` : title
 }
 
-export const loopLabel = (config: string | undefined, folder: string) => {
+export const customName = (text: string | undefined) => clean((text ?? '').split('\n')[0]).trim().slice(0, 60)
+
+export const loopTask = (config: string | undefined) => {
+  const parsed = parseJson<unknown>(config)
+  return isRecord(parsed) ? clean(parsed.task ?? '').trim() : ''
+}
+
+export const loopLabel = (config: string | undefined, folder: string, nameFile?: string) => {
+  const custom = customName(nameFile)
+  if (custom.length > 0) return custom
   const parsed = parseJson<unknown>(config)
   const fields = isRecord(parsed) ? parsed : {}
   const named = clean(fields.name ?? '').trim()
@@ -353,9 +368,10 @@ export const shortName = (name: string, repoName: string | undefined) =>
 
 export const compactLine = (name: string, snapshot: LoopSnapshot) => {
   if (snapshot.stale) return [`⚠ ${name} ${snapshot.done}/${snapshot.total} driver not running`, pricedCost(snapshot)].filter(Boolean).join(' · ')
-  if (snapshot.loopState === 'stopping') return [`□ ${name} ${snapshot.done}/${snapshot.total} stopping`, pricedCost(snapshot)].filter(Boolean).join(' · ')
+  if (snapshot.loopState === 'stopping') return [`◌ ${name} ${snapshot.done}/${snapshot.total} stopping`, pricedCost(snapshot)].filter(Boolean).join(' · ')
+  if (snapshot.loopState === 'queued') return [`◌ ${name} ${snapshot.done}/${snapshot.total} queued`, pricedCost(snapshot)].filter(Boolean).join(' · ')
   const eta = snapshot.etaSec === null ? 'ETA after first item' : `ETA ${formatDuration(snapshot.etaSec)}`
-  return [`▶ ${name} ${snapshot.done}/${snapshot.total}`, eta, pricedCost(snapshot)].filter(Boolean).join(' · ')
+  return [`● ${name} ${snapshot.done}/${snapshot.total}`, eta, pricedCost(snapshot)].filter(Boolean).join(' · ')
 }
 
 export const shortTitle = (text: string, max = 64) => {
