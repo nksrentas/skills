@@ -54,6 +54,12 @@ It creates `.loop/stop`, which git never sees. The driver never interrupts a run
 LOOP_AGENT=codex LOOP_MODEL=gpt-5.6-luna bash <skill directory>/scripts/loop.sh
 ```
 
+### Loops at once on one machine
+
+Every loop on the machine, sequential or parallel, from any project or chat, shares one limit on how many agent sessions run at the same time. The default is whichever is lower: half the CPU cores, or (RAM − 4 GB) ÷ 2 GB, and at least 1. On a 10-core, 16 GB Mac that is 5. Set `LOOP_MACHINE_SESSIONS` to change it. Before each session a driver takes a free slot in `~/.cache/bussin-autoloop/sessions` (`LOOP_SLOTS_DIR`), and gives it back when the session ends. A slot whose driver has died is reclaimed. When none is free, a sequential loop waits as `queued`, checking every `LOOP_SLOT_WAIT` seconds (default 15), and a parallel loop starts fewer workers until one frees up. So starting a new loop never overloads the machine; it just waits its turn.
+
+Two loops still need two checkouts (worktrees or repos): one checkout holds one loop, which the run lock enforces.
+
 ### Parallel workers
 
 `LOOP_WORKERS=3 bash <skill directory>/scripts/loop.sh` runs up to three sessions at once. The cap is whatever you set, up to 8, and the default of 1 keeps the sequential loop. Init writes two scheduling fields on every item: `depends_on`, the items that must pass first, and `touches`, the paths it will change. An item starts when its dependencies pass and its `touches` overlap no running item. Edit either field in `.loop/feature_list.json` at any time; the driver re-reads them before each launch, and the commit guard ignores them.
@@ -64,7 +70,9 @@ The speed-up depends on the list's shape, not on the cap. Items that all edit on
 
 ### Status view
 
-Each loop is shown by its name: `name` in `.loop/config.json` (set by init, or `--name`), else the start of its task, else its folder. When two loops share a name, the folder is added in brackets.
+Each loop is shown by its name: `.loop/name` if you renamed it, else `name` in `.loop/config.json` (set by init, or `--name`), else the start of its task, else its folder. When two loops share a name, the folder is added in brackets. Rename a running loop at any time with `bash <skill directory>/scripts/loop-status.sh --rename "Landing page"`, or with Rename in the pane. `.loop/name` is never committed.
+
+Every session writes a live log to `.loop/logs/<item>.log`, one line per action: time, step, kind and text, separated by tabs. The step is derived from what the session does: running `verify.sh` is Gate, a review subagent is Review, a browser tool is Browser, `git commit` is Commit, and file edits are Implement. Both status views show each running item's step strip (Orient, Implement, Gate, Review, Browser, Commit) and its last few log lines; `tail -f .loop/logs/<item>.log` follows one in full. Claude sessions run with `--output-format stream-json` so the log fills while they work; Codex and Copilot already stream JSON events.
 
 In any terminal, whichever agent runs the loop:
 
@@ -77,15 +85,16 @@ It prints the same view as the pane below: progress bar, elapsed time, ETA and i
 
 In Claude Code, the `bussin-loop-status` mod shows a run as it happens. Install it with `claude plugin marketplace add nksrentas/skills` and `claude plugin install bussin-loop-status@bussin`.
 - **Status line:** shows a loop's outcome once nothing is running, for example `autoloop finished 59/59 · 9h 12m · $41.20`. While loops run it stays empty, because the band below already shows them.
-- **Band above the prompt:** with several loops in the repository, every running one gets its own row, for example `▶ stage1-auth-site ███░░ 36/59 · on F31 · ETA 40m · $6.09`, with a Details button that opens it in the pane and a Stop button that requests a stop. A loop that is finishing its running items after a stop shows as `□ … stopping`. A loop whose `live.json` says running but whose driver process is gone shows as `⚠ … driver not running`.
+- **Band above the prompt:** with several loops in the repository, every running one gets its own row, for example `● Landing page ███░░ 36/59 · F31 gate · ETA 40m · $6.09`, with a Details button that opens it in the pane and a Stop button that requests a stop. A loop that is finishing its running items after a stop shows as `◌ … stopping`, one waiting for a free session on this Mac as `◌ … queued: this Mac is full`, and one whose `live.json` says running but whose driver process is gone as `⚠ … driver not running`.
 - **Pane:** `/autoloop-status` or a band row's Details button opens it.
-  - **Loop chips:** running loops show as chips. Loops that are not running fold behind a `+N not running` button.
-  - **Header:** a Stop button, progress, ETA, elapsed time, cost so far, and counts of done, running, ready, blocked and failing items.
+  - **Loop cards:** with more than one loop, a column of cards on the left, one per loop with its name, progress and ETA or state; pressing a card selects that loop. Running loops come first.
+  - **Header:** the loop's name with Rename and Stop buttons, its task in full, state, mode and agent, progress, ETA, elapsed time and cost so far.
   - **Dead driver:** when the driver's process (the `pid` in `live.json`) has exited, a warning replaces the Stop button. It has a button that copies the command to resume.
-  - **Now:** the running items, with worker, time and attempt.
-  - **Next:** the next ready or failing items. Blocked items are grouped by what they wait for (`▸ 43 wait for R0`), and each group expands.
+  - **Now:** one box per running item with its title, worker, time and attempt, its step strip and its last six log lines.
+  - **Up next:** the next ready or failing items, then one line per group of blocked items (`43 wait for R0: …`).
   - **Recent:** the latest sessions with their outcome, time and cost.
   - **Spend:** cost and models on one line. A button shows tokens.
+  - **This Mac:** how many loop sessions run on this machine against its limit, and whether new ones have room.
 
 It reads only `.loop/` folders, and it finds them in the session's project and in every git worktree of the same repository. A session opened in the main checkout therefore sees loops running in worktrees, with buttons to switch between them. A loop started before this telemetry existed has no `usage.jsonl` or `live.json`, so the view shows progress and items only. Two steps fill it in:
 - Run `bash <skill directory>/scripts/backfill-usage.sh` in the project. It rebuilds `usage.jsonl` from Claude Code's own transcripts of past loop sessions: tokens, models, time and item per session. Cost isn't in transcripts, so it shows as unknown.
@@ -114,7 +123,9 @@ The guard and `verify.sh` read the loop scripts and config from the last commit,
 | `guard-commit.sh` | init copies from `assets/` | The commit guard, run as a Claude Code PreToolUse hook and as the git `pre-commit` hook the driver installs. Both run the committed copy (`git show HEAD:`); until a commit holds one, the Claude Code hook runs the working-tree copy instead. It blocks any commit unless the marker matches the current code, items are unchanged apart from `passes`, `evidence`, `depends_on` and `touches`, and the loop config and scripts are untouched |
 | `progress.md` | run, or the driver in parallel mode | What each session did, learned about the codebase, and what is next |
 | `usage.jsonl` | the driver | One line per session: agent, item, worker, outcome, duration, input, output and cache tokens, cost, and a per-model breakdown. `cost_usd` is absent when the agent does not report it |
-| `live.json` | the driver | Whether the loop is running, its mode, agent and workers, when it started, and which items are running now |
+| `live.json` | the driver | Whether the loop is running, queued or stopping, its mode, agent and workers, when it started, which items are running now, and this Mac's session use (`machine.sessions`, `machine.in_use`) |
+| `logs/<item>.log` | the driver | The latest session's live log for that item, one tab-separated line per action: time, step, kind, text |
+| `name` | you, through `--rename` or the pane | The loop's display name, overriding `name` in `config.json` |
 | `results/<id>.json` | a parallel worker | One item's outcome, merged and then folded into `feature_list.json` and `progress.md` by the driver |
 | `retro.md` | run, thorough mode | Proposed environment improvements, never applied by the loop |
 

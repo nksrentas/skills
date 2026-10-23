@@ -31,6 +31,7 @@ run_loop() {
 }
 
 tmp="$(mktemp -d)"
+export LOOP_SLOTS_DIR="$tmp/slots" LOOP_MACHINE_SESSIONS=8
 trap 'rm -rf "$tmp"' EXIT
 
 make_project "$tmp/limit" limit-then-pass
@@ -190,5 +191,24 @@ EOF
 pause_started=$SECONDS
 (cd "$pause" && PATH="$pause/bin:$PATH" LIMIT_WAIT=30 bash "$loop" > "$pause/out" 2>&1) || true
 [ $((SECONDS - pause_started)) -lt 15 ] && grep -q "stopped on request" "$pause/out" || { cat "$pause/out"; echo "FAIL: a stop request did not cut the usage-limit wait short"; exit 1; }
+
+full="$tmp/full"
+make_project "$full" pass
+mkdir -p "$tmp/full-slots/1"
+sleep 4 &
+holder=$!
+echo "$holder other-loop F9" > "$tmp/full-slots/1/owner"
+(cd "$full" && PATH="$full/bin:$PATH" LOOP_SLOTS_DIR="$tmp/full-slots" LOOP_MACHINE_SESSIONS=1 LOOP_SLOT_WAIT=1 bash "$loop" > "$full/out" 2>&1) || { cat "$full/out"; echo "FAIL: a queued loop did not run once the machine had room"; exit 1; }
+grep -q "already runs 1 loop sessions; A1 waits" "$full/out" || { cat "$full/out"; echo "FAIL: a full machine did not queue the session"; exit 1; }
+[ ! -e "$tmp/full-slots/1" ] || { echo "FAIL: the session slot was not released"; exit 1; }
+wait "$holder" 2> /dev/null || true
+
+stale="$tmp/stale"
+make_project "$stale" pass
+mkdir -p "$tmp/stale-slots/1"
+echo "999999 gone F1" > "$tmp/stale-slots/1/owner"
+(cd "$stale" && PATH="$stale/bin:$PATH" LOOP_SLOTS_DIR="$tmp/stale-slots" LOOP_MACHINE_SESSIONS=1 LOOP_SLOT_WAIT=1 bash "$loop" > "$stale/out" 2>&1) || { cat "$stale/out"; echo "FAIL: a slot held by a dead driver blocked the loop"; exit 1; }
+! grep -q "waits for one to finish" "$stale/out" || { echo "FAIL: a dead driver's slot was not reclaimed"; exit 1; }
+[ -f "$stale/.loop/logs/A1.log" ] || { echo "FAIL: no session log was written"; exit 1; }
 
 echo "autoloop-loop.test.sh: ok"

@@ -57,7 +57,7 @@ claude_flags() {
   agent_settings="$(mktemp)"
   jq -n --arg count "${#allowed[@]}" '($count | tonumber) as $n | {permissions: {allow: $ARGS.positional[:$n], deny: $ARGS.positional[$n:]}}' \
     --args "${allowed[@]}" "${denied[@]}" > "$agent_settings"
-  agent_flags=(--output-format json --settings "$agent_settings")
+  agent_flags=(--output-format stream-json --verbose --settings "$agent_settings")
 }
 
 copilot_flags() {

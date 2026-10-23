@@ -10,7 +10,7 @@ loop_started="$(date +%s)"
 
 exclude_file="$(git rev-parse --git-path info/exclude)"
 mkdir -p "$(dirname "$exclude_file")"
-for pattern in /.loop/usage.jsonl /.loop/live.json /.loop/live.json.tmp /.loop/stop /.loop/attempts.json /.loop/attempts.json.tmp /.loop/run.lock/ /.loop/port; do
+for pattern in /.loop/usage.jsonl /.loop/live.json /.loop/live.json.tmp /.loop/stop /.loop/attempts.json /.loop/attempts.json.tmp /.loop/run.lock/ /.loop/port /.loop/logs/ /.loop/name; do
   grep -qxF "$pattern" "$exclude_file" 2>/dev/null || echo "$pattern" >> "$exclude_file"
 done
 
@@ -97,7 +97,9 @@ write_live() {
   local state="$1" mode="$2" workers="$3" running="$4"
   jq -n --arg state "$state" --arg mode "$mode" --arg agent "$agent" --arg script "$script_dir/loop.sh" --argjson workers "$workers" --argjson started "$loop_started" \
     --argjson updated "$(date +%s)" --argjson pid "$$" --argjson running "$running" \
-    '{state: $state, mode: $mode, agent: $agent, script: $script, workers: $workers, started_at: $started, updated_at: $updated, pid: $pid, running: $running}' \
+    --argjson sessions "${max_sessions:-1}" --argjson in_use "$(sessions_in_use 2> /dev/null || echo 0)" \
+    '{state: $state, mode: $mode, agent: $agent, script: $script, workers: $workers, started_at: $started, updated_at: $updated, pid: $pid, running: $running,
+      machine: {sessions: $sessions, in_use: $in_use}}' \
     > "$live_file.tmp"
   mv "$live_file.tmp" "$live_file"
 }

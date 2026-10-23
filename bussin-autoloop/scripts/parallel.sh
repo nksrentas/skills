@@ -15,6 +15,8 @@ slot_item=()
 slot_started=()
 slot_pointers=()
 slot_admin=()
+slot_machine=()
+machine_full=0
 
 ready_query='
 def prefix: sub("[*?\\[{].*$"; "");
@@ -70,7 +72,8 @@ launch() {
   install_commit_hook
   agent_command "$skill_command run --item $id" "$dir"
   (cd "$dir" && LOOP_WORKER="$slot" LOOP_MAIN_DIR="$main_dir" AUTOLOOP_SESSION=1 exec perl -e 'setpgrp(0, 0); exec @ARGV' \
-    "${agent_cmd[@]}") > "$state_dir/w$slot.json" 2> "$state_dir/w$slot.log" < /dev/null &
+    bash "$script_dir/run-session.sh" "$state_dir/w$slot.json" "$main_dir/.loop/logs/$id.log" "$agent" "${agent_cmd[@]}") \
+    > /dev/null 2> "$state_dir/w$slot.log" < /dev/null &
   slot_pid[$slot]=$!
   slot_item[$slot]="$id"
   slot_started[$slot]="$(date +%s)"
@@ -210,6 +213,7 @@ stop_on_tamper() {
   local i
   for ((i = 1; i <= workers; i++)); do
     if [ -n "${slot_pid[$i]}" ]; then kill -- -"${slot_pid[$i]}" 2>/dev/null || true; fi
+    release_slot "${slot_machine[$i]:-}"
   done
   trap - EXIT
   write_live stopped parallel "$workers" "[]"
@@ -222,6 +226,8 @@ finish() {
   local branch="loop/$LOOP_NAME/$id" output="$state_dir/w$1.log" result="$state_dir/w$1.json"
   wait "${slot_pid[$slot]}" || status=$?
   kill -- -"${slot_pid[$slot]}" 2>/dev/null || true
+  release_slot "${slot_machine[$slot]}"
+  slot_machine[$slot]=""
   if worker_redirected "$slot"; then stop_on_tamper; fi
   slot_pid[$slot]=""
   slot_item[$slot]=""
@@ -258,6 +264,7 @@ stop_workers() {
   local i
   for ((i = 1; i <= workers; i++)); do
     if [ -n "${slot_pid[$i]:-}" ]; then kill -- -"${slot_pid[$i]}" 2>/dev/null || true; fi
+    release_slot "${slot_machine[$i]:-}"
     remove_worktree "$i"
   done
   git merge --abort >/dev/null 2>&1 || true
@@ -303,6 +310,7 @@ run_parallel() {
     slot_started[$i]=""
     slot_pointers[$i]=""
     slot_admin[$i]=""
+    slot_machine[$i]=""
   done
   trap stop_workers EXIT
   trap 'exit 130' INT TERM
@@ -336,6 +344,7 @@ run_parallel() {
       sleep "$poll_seconds"
       continue
     fi
+    machine_full=0
     for ((i = 1; i <= workers; i++)); do
       [ -z "${slot_pid[$i]}" ] || continue
       [ "$launched" -lt "$max_iterations" ] || break
@@ -343,8 +352,16 @@ run_parallel() {
       [ -n "$id" ] || break
       remove_worktree "$i"
       [ ! -e "$worker_root/w$i" ] || continue
+      machine_slot="$(take_slot "$id")" || { machine_full=1; break; }
       launch "$i" "$id"
+      slot_machine[$i]="$machine_slot"
     done
+    if [ "$(busy_workers)" -eq 0 ] && [ "$machine_full" = 1 ]; then
+      write_live queued parallel "$workers" "[]"
+      log "this machine already runs $max_sessions loop sessions; waiting for one to finish"
+      pause "$slot_wait"
+      continue
+    fi
     write_live running parallel "$workers" "$(running_json)"
     if [ "$(busy_workers)" -eq 0 ]; then
       report_blocked

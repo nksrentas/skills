@@ -3,6 +3,7 @@ set -euo pipefail
 
 status="$(cd "$(dirname "$0")/../bussin-autoloop/scripts" && pwd)/loop-status.sh"
 tmp="$(mktemp -d)"
+export LOOP_SLOTS_DIR="$tmp/slots" LOOP_MACHINE_SESSIONS=8
 drivers=()
 trap 'for pid in ${drivers[@]+"${drivers[@]}"}; do kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true; done; rm -rf "$tmp"' EXIT
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
@@ -91,5 +92,22 @@ for side in a b; do
 done
 dup_out="$(cd "$dup" && bash "$status")"
 check "two loops with one name get the short folder name, as in the mod" 'grep -q "Same (a)" <<< "$dup_out" && grep -q "Same (b)" <<< "$dup_out"'
+
+live="$tmp/live"
+make_repo "$live" '{"features":[{"id":"E4","description":"Hero CTA keeps a focus ring","passes":false}]}'
+start_driver loop.sh
+jq -n --argjson now "$now" --argjson pid "$driver" '{state: "running", mode: "sequential", pid: $pid, started_at: ($now - 60), updated_at: $now,
+  running: [{item: "E4", worker: 0, started_at: ($now - 30)}], machine: {sessions: 5, in_use: 3}}' > "$live/.loop/live.json"
+mkdir -p "$live/.loop/logs"
+printf '10:00:01\t-\tRead\thero.tsx\n10:00:02\timplement\tEdit\thero.tsx\n10:00:03\tgate\tBash\tbash .loop/verify.sh\n10:00:04\t-\tSay\tgate is running\n' > "$live/.loop/logs/E4.log"
+live_out="$(bash "$status" "$live")"
+check "a running item shows its step strip with the current step" 'grep -q "✓Orient ✓Implement \[Gate\] Review" <<< "$live_out"'
+check "a running item shows the last three lines of its session log" 'grep -q "10:00:04 Say    gate is running" <<< "$live_out" && ! grep -q "10:00:01" <<< "$live_out"'
+check "the header shows how many loop sessions this Mac runs" 'grep -q "this Mac: 3/5 loop sessions" <<< "$live_out"'
+check "a running loop is marked with a dot, not an arrow" 'head -n 1 <<< "$live_out" | grep -q "^● " && ! grep -q "▶" <<< "$live_out"'
+
+bash "$status" --rename "Landing page" "$live" > /dev/null
+check "--rename sets the name every status view shows" '[ "$(cat "$live/.loop/name")" = "Landing page" ] && bash "$status" "$live" | head -n 1 | grep -q "^● Landing page "'
+check "--rename refuses an empty name" '! bash "$status" --rename "" "$live" 2> /dev/null'
 
 [ "$failures" = 0 ] && echo "all status checks passed" || { echo "$failures status checks failed"; exit 1; }

@@ -11,7 +11,7 @@ export type RunningRow = { item: string; title: string; worker: number; seconds:
 export type ModelRow = { name: string; costUsd: number; priced: boolean; inputTokens: number; outputTokens: number }
 
 export type LoopSnapshot = {
-  loopState: 'running' | 'stopping' | 'finished' | 'stopped' | 'idle'
+  loopState: 'running' | 'stopping' | 'queued' | 'finished' | 'stopped' | 'idle'
   stale: boolean
   mode: string
   agent: string
@@ -39,12 +39,15 @@ export type LoopSnapshot = {
   items: ItemRow[]
   blockedGroups: BlockedGroup[]
   recent: SessionRow[]
+  machine: { sessions: number; inUse: number } | null
 }
 
-export type LoopView = { name: string; label: string; path: string; snapshot: LoopSnapshot }
+export type LogLine = { time: string; step: string; kind: string; text: string }
+
+export type LoopView = { name: string; label: string; task: string; path: string; snapshot: LoopSnapshot; logs: Record<string, LogLine[]> }
 
 declare module 'claude-code' {
   interface PluginState {
-    'bussin-loop-status': { loops: LoopView[]; selected: string | null; expanded: string[]; showIdle: boolean; showTokens: boolean }
+    'bussin-loop-status': { loops: LoopView[]; selected: string | null; renaming: string | null; showTokens: boolean }
   }
 }
