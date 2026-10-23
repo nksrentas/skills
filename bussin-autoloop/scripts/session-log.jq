@@ -1,4 +1,4 @@
-def clip: tostring | gsub("[\u0000-\u001f\u007f-\u009f]"; " ") | gsub("\\s+"; " ") | ltrimstr(" ") | .[0:200];
+def clip: tostring | gsub("[\u0000-\u001f\u007f-\u009f\u200e\u200f\u202a-\u202e\u2066-\u2069]"; " ") | gsub("\\s+"; " ") | ltrimstr(" ") | .[0:200];
 def line($step; $kind; $text): [(now | strflocaltime("%H:%M:%S")), $step, $kind, ($text | clip)] | join("\t");
 def bash_step: if test("\\.loop/verify\\.sh") then "gate" elif test("git commit") then "commit" else "-" end;
 def args: if type == "string" then (fromjson? // {}) elif type == "object" then . else {} end;
@@ -46,4 +46,4 @@ def copilot:
   elif .type == "result" then line("-"; "Done"; "exit \(.exitCode // 0)")
   else empty end;
 
-fromjson? | objects | if $agent == "codex" then codex elif $agent == "copilot" then copilot else claude end
+fromjson? | objects | try (if $agent == "codex" then codex elif $agent == "copilot" then copilot else claude end) catch empty

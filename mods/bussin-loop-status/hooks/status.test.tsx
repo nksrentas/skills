@@ -660,7 +660,10 @@ function answerLogged(on: On, files: Record<string, string>, reads: string[], wr
     files[e.path] = e.text
     return { value: undefined }
   })
-  on('fs.stat', async (_, e) => ({ deny: `ENOENT: ${e.path}` }))
+  on('fs.stat', async (_, e) => {
+    const text = files[e.path]
+    return text === undefined ? { deny: `ENOENT: ${e.path}` } : { value: { ...ENTRY, kind: 'file', size: text.length } }
+  })
   on('ui.status', async () => ({ value: undefined }))
   on('ui.open', async () => ({ value: { isPlaced: true } }))
   on('ui.toast', async () => ({ value: undefined }))
@@ -717,15 +720,34 @@ test('Rename in the pane writes .loop/name and every view uses the new name', as
   await band.unmount()
 })
 
-test('a queued loop shows in the band and in the pane, with no Stop', async ($, on) => {
+test('a queued loop shows in the band and in the pane, and can be stopped while it waits', async ($, on) => {
   const live = JSON.stringify({ ...JSON.parse(LIVE), state: 'queued', running: [], machine: { sessions: 2, in_use: 2 } })
   answerLogged(on, { ...LOOP_FILES, '/project/.loop/live.json': live }, [], {})
   await $.command.run(RUN_COMMAND)
   const band = await $.ui.mount({ ...BAND_TARGET, surface: 'terminal' })
   expect(await band.find({ type: 'Text', text: /^◌ project queued: this Mac is full [█░]{10} 1\/4 · \$2\.00$/ })).toBeDefined()
-  expect(await band.find({ key: 'stop-project' })).toBeUndefined()
+  expect(await band.find({ key: 'stop-project' })).toBeDefined()
   await band.unmount()
   const pane = await $.ui.mount({ ...PANE_TARGET, surface: 'terminal' })
+  expect(await pane.find({ key: 'pane-stop' })).toBeDefined()
   expect(await pane.find({ type: 'Text', text: /^This Mac: 2 of 2 loop sessions in use · full, new sessions wait for a free one$/ })).toBeDefined()
+  await pane.unmount()
+})
+
+test('a large session log is read through tail, not whole', async ($, on) => {
+  const big = `${'10:00:00\t-\tRead\tx\n'.repeat(20000)}10:59:59\tcommit\tBash\tgit commit -m done\n`
+  const files: Record<string, string> = { ...LOOP_FILES, '/project/.loop/logs/F2.log': big }
+  const reads: string[] = []
+  const runs: string[][] = []
+  answerLogged(on, files, reads, {})
+  on('process.run', async (_, e) => {
+    runs.push([...e.argv])
+    return { value: { exitCode: 0, stdout: '10:59:59\tcommit\tBash\tgit commit -m done\n', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+  })
+  await $.command.run(RUN_COMMAND)
+  expect(reads).not.toContain('/project/.loop/logs/F2.log')
+  expect(runs).toContainEqual(['tail', '-n', '40', '/project/.loop/logs/F2.log'])
+  const pane = await $.ui.mount({ ...PANE_TARGET, surface: 'terminal' })
+  expect(await pane.find({ type: 'Text', text: /^› Commit$/ })).toBeDefined()
   await pane.unmount()
 })

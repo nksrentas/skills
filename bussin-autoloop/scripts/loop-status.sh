@@ -73,7 +73,7 @@ def log_rows($lines): $lines[-3:] | map("              \($dim)\(.[0] // "")\($re
 | ($features | length) as $total
 | ($passed | length) as $done
 | ($l.running | length > 0 and $now - ($l.updated_at // $now) > 900) as $silent
-| (($driver == "exited" or ($driver == "unknown" and $silent)) and (["running", "stopping"] | index($l.state) != null)) as $exited
+| (($driver == "exited" or ($driver == "unknown" and $silent)) and (["running", "stopping", "queued"] | index($l.state) != null)) as $exited
 | (if $exited then "stopped"
    elif $l.state == "running" and $stop_requested then "stopping"
    elif ["running", "stopping", "queued", "finished", "stopped"] | index($l.state) then $l.state

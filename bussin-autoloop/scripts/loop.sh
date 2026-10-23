@@ -23,6 +23,9 @@ skill_command="${LOOP_SKILL_COMMAND:-$(default_skill_command "$0")}"
 
 git cat-file -e "HEAD:$list" 2> /dev/null || { echo "autoloop: $list is not committed, run $skill_command init first" >&2; exit 1; }
 
+bad_ids="$(git show "HEAD:$list" | jq -r '[.features[]?.id | select(type != "string" or test("^[A-Za-z0-9_-][A-Za-z0-9._-]*$") | not or . == "." or . == "..")] | map(tostring) | join(", ")')"
+[ -z "$bad_ids" ] || { echo "autoloop: item ids may only use letters, digits, dot, dash and underscore; fix these in $list: $bad_ids" >&2; exit 1; }
+
 remaining() { git show "HEAD:$list" | jq '[.features[] | select(.passes == false)] | length'; }
 items_at_start="$(remaining)"
 max_iterations="${MAX_ITERATIONS:-$((items_at_start > 20 ? 2 * items_at_start : 40))}"
@@ -85,7 +88,7 @@ while [ "$(remaining)" -gt 0 ]; do
   install_commit_hook
   remember_git_controls
   agent_command "$skill_command run --item $item --sequential"
-  AUTOLOOP_SESSION=1 bash "$script_dir/run-session.sh" "$session_output" ".loop/logs/$item.log" "$agent" "${agent_cmd[@]}" 2> "$session_errors" || status=$?
+  AUTOLOOP_SESSION=1 bash "$script_dir/run-session.sh" "$session_output" "$PWD/.loop/logs/$item.log" "$agent" "${agent_cmd[@]}" 2> "$session_errors" || status=$?
   release_slot "$held_slot"
   held_slot=""
   if git_controls_changed; then exit 1; fi

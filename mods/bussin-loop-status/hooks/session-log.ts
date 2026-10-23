@@ -5,7 +5,7 @@ export const STEPS = ['orient', 'implement', 'gate', 'review', 'browser', 'commi
 
 export type StepState = { name: string; state: 'done' | 'now' | 'todo' }
 
-export const SAFE_ITEM = /^[A-Za-z0-9._-]+$/
+export const SAFE_ITEM = /^[A-Za-z0-9_-][A-Za-z0-9._-]*$/
 
 export const parseLog = (text: string | undefined, keep = 40): LogLine[] =>
   (text ?? '')

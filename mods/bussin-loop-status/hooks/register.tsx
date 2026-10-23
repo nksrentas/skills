@@ -32,6 +32,7 @@ import {
 
 const REFRESH_MS = 5000
 const LOG_ROWS = 6
+const MAX_LOG_READ = 256 * 1024
 
 export const PANE = 'autoloop-status'
 
@@ -68,6 +69,10 @@ function stateWords(snapshot: LoopSnapshot) {
   if (snapshot.stale) return 'driver not running'
   if (snapshot.loopState === 'queued') return 'queued: this Mac is full'
   return snapshot.loopState
+}
+
+function canStop(snapshot: LoopSnapshot) {
+  return (snapshot.loopState === 'running' || snapshot.loopState === 'queued') && !snapshot.stale
 }
 
 function primaryLoop(loops: LoopView[], selected: string | null) {
@@ -156,11 +161,22 @@ async function driverAlive($: EngineInterface, pid: number | undefined) {
   }
 }
 
+async function readLogTail($: EngineInterface, path: string) {
+  try {
+    const info = await $.fs.stat(path)
+    if (info.size <= MAX_LOG_READ) return await $.fs.read(path)
+    const { exitCode, stdout } = await $.process.run(['tail', '-n', '40', path], { timeoutMs: 5000 })
+    return exitCode === 0 ? stdout : undefined
+  } catch {
+    return undefined
+  }
+}
+
 async function readLogs($: EngineInterface, dir: string, snapshot: LoopSnapshot) {
   const logs: Record<string, LogLine[]> = {}
   for (const row of snapshot.runningRows) {
     if (!SAFE_ITEM.test(row.item)) continue
-    const text = await readOptional($, `${dir}/.loop/logs/${row.item}.log`)
+    const text = await readLogTail($, `${dir}/.loop/logs/${row.item}.log`)
     if (typeof text === 'string') logs[row.item] = parseLog(text)
   }
   return logs
@@ -295,7 +311,7 @@ export const register: Register = on => {
                   await openPane($)
                 }}
               />
-              {snapshot.loopState === 'running' && !snapshot.stale && <Button key={`stop-${loop.name}`} label="Stop" onPress={() => requestStop($, loop)} />}
+              {canStop(snapshot) && <Button key={`stop-${loop.name}`} label="Stop" onPress={() => requestStop($, loop)} />}
             </Box>
           )
         })}
@@ -398,7 +414,7 @@ export const register: Register = on => {
           </Text>
           <Box flexDirection="row" gap={1} flexShrink={0}>
             <Button key="pane-rename" label="Rename" onPress={() => update($, renamingAtom, () => view.path)} />
-            {snapshot.loopState === 'running' && !snapshot.stale && <Button key="pane-stop" label="Stop" onPress={() => requestStop($, view)} />}
+            {canStop(snapshot) && <Button key="pane-stop" label="Stop" onPress={() => requestStop($, view)} />}
           </Box>
         </Box>
         {renaming && (
