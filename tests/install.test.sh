@@ -12,6 +12,7 @@ check() {
 
 mkdir -p "$tmp/home" "$tmp/bin"
 git clone -q "$repo" "$tmp/origin"
+git -C "$tmp/origin" checkout -q -B main
 for tool in claude npx codex; do
   printf '#!/usr/bin/env bash\necho "%s $*" >> "%s/calls"\n' "$tool" "$tmp" > "$tmp/bin/$tool"
   chmod +x "$tmp/bin/$tool"
