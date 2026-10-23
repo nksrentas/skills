@@ -32,6 +32,7 @@ run_loop() {
 
 tmp="$(mktemp -d)"
 export LOOP_SLOTS_DIR="$tmp/slots" LOOP_MACHINE_SESSIONS=8
+export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
 trap 'rm -rf "$tmp"' EXIT
 
 make_project "$tmp/limit" limit-then-pass
