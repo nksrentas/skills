@@ -47,7 +47,7 @@ if { command -v codex > /dev/null || command -v copilot > /dev/null; } && comman
   for skill in "$dir"/bussin-* "$dir"/aliases/*; do
     [ -f "$skill/SKILL.md" ] && args+=(--skill "$(basename "$skill")")
   done
-  if npx -y skills add nksrentas/skills -g -y "${args[@]}" -a "${agents[@]}" < /dev/null > /dev/null 2>&1; then
+  if npx -y skills@1.7.4 add nksrentas/skills -g -y "${args[@]}" -a "${agents[@]}" < /dev/null > /dev/null 2>&1; then
     say "refreshed the skills for ${agents[*]}"
   else
     say "could not refresh the skills for ${agents[*]}" >&2

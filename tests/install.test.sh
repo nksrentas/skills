@@ -22,7 +22,7 @@ run_install
 check "a fresh install clones the repository" '[ -f "$tmp/home/dev/skills/bussin-autoloop/SKILL.md" ]'
 check "every skill and alias is linked into ~/.claude/skills" '[ "$(readlink "$tmp/home/.claude/skills/bussin-autoloop")" = "$tmp/home/dev/skills/bussin-autoloop" ] && [ "$(readlink "$tmp/home/.claude/skills/autoloop")" = "$tmp/home/dev/skills/aliases/autoloop" ] && [ "$(ls "$tmp/home/.claude/skills" | wc -l | tr -d " ")" = "$(ls -d "$repo"/bussin-* "$repo"/aliases/* | wc -l | tr -d " ")" ]'
 check "the status mod is installed through Claude Code" 'grep -q "claude plugin install bussin-loop-status@bussin" "$tmp/calls"'
-check "the skills are copied for Codex, by name and never with --all" 'grep -q "npx -y skills add nksrentas/skills -g -y --skill" "$tmp/calls" && grep -q " -a codex" "$tmp/calls" && ! grep -q -- "--all" "$tmp/calls"'
+check "the skills are copied for Codex, by name and never with --all" 'grep -qE "npx -y skills@[0-9]+\.[0-9]+\.[0-9]+ add nksrentas/skills -g -y --skill" "$tmp/calls" && grep -q " -a codex" "$tmp/calls" && ! grep -q -- "--all" "$tmp/calls"'
 
 git -C "$tmp/origin" -c user.email=t@t -c user.name=t commit -q --allow-empty -m "newer"
 rm "$tmp/home/.claude/skills/bussin-lean"
