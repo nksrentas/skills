@@ -47,8 +47,10 @@ Aliases are user-only: Claude never picks one by itself, so they do not compete 
 ## Install or update, on any computer
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/nksrentas/skills/main/install.sh | bash
+npx github:nksrentas/skills
 ```
+
+Without Node, the same installer runs with `curl -fsSL https://raw.githubusercontent.com/nksrentas/skills/main/install.sh | bash`.
 
 It clones this repository into `~/dev/skills`, or pulls it if it is already there, and links every skill and alias into `~/.claude/skills`. It also installs or updates the `bussin-loop-status` mod. When Codex or Copilot is installed, it copies the skills for them too. Run the same command again any time to update. It needs `git`; `jq` is needed by bussin-autoloop. On Windows, run it inside WSL. Set `SKILLS_DIR` to clone somewhere else.
 
