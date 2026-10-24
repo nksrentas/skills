@@ -32,7 +32,7 @@ release_lock() { remove_agent_settings; [ "$(cat "$lock_dir/pid" 2>/dev/null || 
 trap release_lock EXIT
 rm -f "$stop_file"
 
-events_query='(fromjson? | objects | [.]) // [split("\n")[] | fromjson? | objects]'
+events_query='[split("\n")[] | fromjson? | objects]'
 
 usage_query='
 def base: {agent: $agent, item: $item, worker: $worker, started_at: $started, ended_at: $ended, outcome: $outcome};

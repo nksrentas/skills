@@ -55,9 +55,9 @@ const KIND_COLOR: Record<string, string> = { Error: 'error', Done: 'success', Ed
 function costSummary(snapshot: LoopSnapshot) {
   const priced = snapshot.sessions - snapshot.unpricedSessions
   if (snapshot.sessions === 0) return 'no sessions recorded yet'
-  if (priced === 0) return `unknown · ${snapshot.sessions} sessions recovered from transcripts`
+  if (priced === 0) return `unknown · ${snapshot.sessions} sessions`
   const base = `${formatCost(snapshot.costUsd)} · ${priced} priced sessions · ${formatCost(snapshot.costUsd / priced)} each`
-  return snapshot.unpricedSessions > 0 ? `${base} · ${snapshot.unpricedSessions} earlier sessions unpriced` : base
+  return snapshot.unpricedSessions > 0 ? `${base} · ${snapshot.unpricedSessions} sessions with unknown cost` : base
 }
 
 function loopIcon(snapshot: LoopSnapshot) {
@@ -437,9 +437,6 @@ export const register: Register = on => {
           {progressBar(snapshot.done, snapshot.total, 30)} {snapshot.done}/{snapshot.total}
         </Text>
         <Text dimColor>{[eta, elapsed, spent].filter(Boolean).join(' · ') || ' '}</Text>
-        {!snapshot.hasLiveData && (
-          <Text color="warning">No live data yet: restart this loop with the latest bussin-autoloop to see what is running and the ETA.</Text>
-        )}
       </Box>
     )
 

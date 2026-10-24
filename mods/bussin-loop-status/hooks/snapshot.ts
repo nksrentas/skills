@@ -259,7 +259,6 @@ export const compute = (files: LoopFiles): LoopSnapshot | null => {
     finishAt: etaSec === null ? null : files.now + etaSec,
     sessions: usage.length,
     unpricedSessions: usage.filter(row => row.cost_usd === undefined).length,
-    hasLiveData: live !== undefined,
     costUsd: sum(usage, row => row.cost_usd),
     inputTokens: sum(usage, row => row.input_tokens),
     outputTokens: sum(usage, row => row.output_tokens),
@@ -316,7 +315,7 @@ export const statusLine = (snapshot: LoopSnapshot) => {
   if (snapshot.loopState === 'queued') return parts(`autoloop queued at ${progress}`, 'waiting for a free session on this Mac', cost)
   if (snapshot.loopState === 'finished') return parts(`autoloop finished ${progress}`, elapsed, cost)
   if (snapshot.loopState === 'stopped') return parts(`autoloop stopped at ${progress}`, cost)
-  return parts(`autoloop ${progress} done`, snapshot.hasLiveData ? 'not running' : 'no live data')
+  return parts(`autoloop ${progress} done`, 'not running')
 }
 
 export const parentDir = (path: string) => path.replace(/\/+$/, '').replace(/\/[^/]*$/, '') || '/'
