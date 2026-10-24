@@ -57,7 +57,7 @@ mkdir -p .claude
 jq -s '.[0] * .[1]' .claude/settings.local.json "$SKILL_DIR/assets/hooks.json" > .claude/settings.tmp && mv .claude/settings.tmp .claude/settings.local.json
 ```
 
-If the file already defines `hooks`, `*` would replace the arrays. In that case append the entry from `assets/hooks.json` to the existing `PreToolUse` array instead. Remove any `PostToolUse` entry that deletes `.loop/tests-passed`, left over from older versions of this skill; the fingerprint replaces it.
+If the file already defines `hooks`, `*` would replace the arrays. In that case append the entry from `assets/hooks.json` to the existing `PreToolUse` array instead.
 
 ## 6. Mutation gate (thorough mode)
 

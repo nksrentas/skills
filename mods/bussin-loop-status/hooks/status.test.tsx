@@ -114,22 +114,21 @@ test('ignores numbers that are not numbers in the loop files', async () => {
   expect(JSON.stringify(snapshot)).not.toContain('\\u001b')
 })
 
-test('a run recovered from transcripts shows tokens and time, marks cost unknown, and asks for a restart', async () => {
+test('sessions whose agent reports no cost show tokens and time and mark cost unknown', async () => {
   const features = JSON.stringify({ features: [{ id: 'F1', description: 'One', passes: true }, { id: 'F2', description: 'Two', passes: true }, { id: 'F3', description: 'Three', passes: false }] })
   const usage = [
-    { item: 'F1', outcome: 'backfilled', duration_ms: 840000, input_tokens: 10, output_tokens: 2000, started_at: 1000, ended_at: 1840, models: { 'claude-opus-5-5': { input_tokens: 10, output_tokens: 2000 } } },
-    { item: 'F2', outcome: 'backfilled', duration_ms: 600000, input_tokens: 20, output_tokens: 1000, started_at: 1900, ended_at: 2500, models: { 'claude-opus-5-5': { input_tokens: 20, output_tokens: 1000 } } },
+    { item: 'F1', outcome: 'passed', duration_ms: 840000, input_tokens: 10, output_tokens: 2000, started_at: 1000, ended_at: 1840, models: { 'claude-opus-5-5': { input_tokens: 10, output_tokens: 2000 } } },
+    { item: 'F2', outcome: 'passed', duration_ms: 600000, input_tokens: 20, output_tokens: 1000, started_at: 1900, ended_at: 2500, models: { 'claude-opus-5-5': { input_tokens: 20, output_tokens: 1000 } } },
   ]
     .map(row => JSON.stringify(row))
     .join('\n')
   const snapshot = compute({ features, usage, now: NOW })
-  expect(snapshot?.hasLiveData).toBe(false)
   expect(snapshot?.unpricedSessions).toBe(2)
   expect(snapshot?.costUsd).toBe(0)
   expect(snapshot?.outputTokens).toBe(3000)
   expect(snapshot?.elapsedSec).toBe(1500)
   expect(snapshot?.items[0]?.note).toBe('cost unknown · 14m')
-  expect(snapshot && statusLine(snapshot)).toBe('autoloop 2/3 done · no live data')
+  expect(snapshot && statusLine(snapshot)).toBe('autoloop 2/3 done · not running')
 })
 
 test('a done item with no recorded sessions just says done', async () => {
