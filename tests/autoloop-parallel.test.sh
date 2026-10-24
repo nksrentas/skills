@@ -280,4 +280,7 @@ cap_status=0
 run_loop "$cap" LOOP_WORKERS=9 || cap_status=$?
 check "worker count above the cap is refused" '[ "$cap_status" != 0 ] && grep -q "above the cap of 8" "$cap/out"'
 
-[ "$failures" = 0 ] && echo "all parallel checks passed" || { echo "$failures parallel checks failed"; exit 1; }
+[ "$failures" = 0 ] && { echo "all parallel checks passed"; exit 0; }
+for out in "$tmp"/*/out "$tmp"/*/*/out; do echo "--- $out"; cat "$out"; done
+echo "$failures parallel checks failed"
+exit 1

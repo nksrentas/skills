@@ -5,7 +5,7 @@ item_text='del(.features[]?.passes, .features[]?.evidence, .features[]?.depends_
 hook_warned=0
 
 install_commit_hook() {
-  local hook
+  local hook staged
   if [ -n "$("${user_git_env[@]}" git config core.hooksPath || true)" ]; then
     [ "$hook_warned" = 1 ] || echo "autoloop: core.hooksPath is set, so the git pre-commit guard is not installed; the driver still audits every session" >&2
     hook_warned=1
@@ -14,7 +14,8 @@ install_commit_hook() {
   hook="$(git rev-parse --git-common-dir)/hooks/pre-commit"
   mkdir -p "$(dirname "$hook")"
   if [ -e "$hook" ] && ! grep -qF "$hook_marker" "$hook"; then mv "$hook" "$hook.before-autoloop"; fi
-  cat > "$hook.tmp.$$" <<HOOK
+  staged="$(mktemp "$(git rev-parse --git-common-dir)/autoloop-pre-commit.XXXXXX")"
+  cat > "$staged" <<HOOK
 #!/usr/bin/env bash
 $hook_marker
 if [ -n "\${AUTOLOOP_SESSION:-}" ]; then
@@ -26,8 +27,8 @@ fi
 chained="\$(dirname "\$0")/pre-commit.before-autoloop"
 if [ -x "\$chained" ]; then exec "\$chained" "\$@"; fi
 HOOK
-  chmod +x "$hook.tmp.$$"
-  if cmp -s "$hook.tmp.$$" "$hook" && [ -x "$hook" ]; then rm -f "$hook.tmp.$$"; else mv "$hook.tmp.$$" "$hook"; fi
+  chmod +x "$staged"
+  if cmp -s "$staged" "$hook" && [ -x "$hook" ]; then rm -f "$staged"; else mv "$staged" "$hook"; fi
 }
 
 restore_uncommitted_list() {
@@ -39,8 +40,11 @@ restore_uncommitted_list() {
 git_controls() {
   (
     cd "$(git rev-parse --git-common-dir)" || exit 1
-    find . -path ./objects -prune -o \( -type f -o -type l \) \( -path ./config -o -path ./hooks -o -path './hooks/*' -o -name config.worktree \) -print \
-      | LC_ALL=C sort | while IFS= read -r file; do
+    {
+      find . \( -path ./objects -o -path ./worktrees \) -prune -o \( -type f -o -type l \) \( -path ./config -o -path ./hooks -o -path './hooks/*' -o -name config.worktree \) -print
+      shopt -s dotglob
+      for file in ./worktrees/*/config.worktree; do if [ -e "$file" ] || [ -L "$file" ]; then echo "$file"; fi; done
+    } | LC_ALL=C sort | while IFS= read -r file; do
         echo "$file"
         if [ -L "$file" ]; then readlink "$file"; else cat "$file"; fi
       done | cksum
