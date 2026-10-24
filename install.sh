@@ -30,8 +30,11 @@ say "linked $linked skills into $skills_home"
 if command -v claude > /dev/null; then
   claude plugin marketplace add nksrentas/skills < /dev/null > /dev/null 2>&1 || true
   claude plugin marketplace update bussin < /dev/null > /dev/null 2>&1 || true
-  if claude plugin install bussin-loop-status@bussin < /dev/null > /dev/null 2>&1 || claude plugin update bussin-loop-status@bussin < /dev/null > /dev/null 2>&1; then
-    say "status mod installed and up to date"
+  claude plugin install bussin-loop-status@bussin < /dev/null > /dev/null 2>&1 || true
+  claude plugin update bussin-loop-status@bussin < /dev/null > /dev/null 2>&1 || true
+  mod_version="$(claude plugin list < /dev/null 2> /dev/null | grep -A3 'bussin-loop-status@bussin' | sed -n 's/^[[:space:]]*Version:[[:space:]]*//p' | head -n 1)"
+  if [ -n "$mod_version" ]; then
+    say "status mod is at $mod_version"
   else
     say "could not install the status mod; run: claude plugin install bussin-loop-status@bussin" >&2
   fi
