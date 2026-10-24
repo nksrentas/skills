@@ -20,7 +20,7 @@ Everything else in the message is the task text. If it points at a file (`brief.
 
 ## 2. Fold in earlier retros
 
-If `.loop/retro.md` exists from a previous loop, read it. A proposal that appears two or more times has earned a place: a mechanical one becomes a lint rule, hook or CI step, a judgement call goes to `CODING_STANDARDS.md`. Apply those before planning and mention what was promoted. Single occurrences stay in the file.
+If `.loop/retro.md` exists from a previous loop, read it, including the `## Promoted` sections a retro wrote. If the previous loop's `progress.md` has `Lesson:` lines that no retro has promoted yet, suggest running `/bussin-autoloop retro` first. A proposal that appears two or more times has earned a place: a mechanical one becomes a lint rule, hook or CI step, a judgement call goes to `CODING_STANDARDS.md`. Apply those before planning and mention what was promoted. Single occurrences stay in the file.
 
 ## 3a. Existing project: research
 
@@ -31,6 +31,21 @@ Run the test suite once. Write the baseline counts into `progress.md`. If someth
 ## 3b. New project: scaffold
 
 Ask for the stack only if `--stack` is missing and the task does not imply one. One question, then proceed. Scaffold with the stack's standard generator, add lint, typecheck, a unit test runner and Playwright. Make the app boot to an empty page. The feature list for a new project is 50 to 200 small items ordered so earlier ones unblock later ones: project boots, schema, auth, each page, each API route, each validation rule, then edge cases.
+
+## 3c. Pick the house skills for this stack
+
+Sessions only follow the house rules they load, so init picks the context skills from what the project uses, not only from `--skills`. Read `package.json` (every workspace's, in a monorepo) and the task, and add each matching skill that is installed to `config.skills.context`:
+
+| When | Add |
+|---|---|
+| Always (the presets already include it) | `bussin-lean` |
+| `react` or `next` is a dependency, or the task builds UI | `bussin-ts-architecture`, `bussin-react`, `bussin-a11y` |
+| The task touches public pages or routes, ones a visitor reaches without signing in | `bussin-seo`, `bussin-schema` |
+| `hono` is a dependency, or the task adds route handlers, server actions or API endpoints | `bussin-ts-architecture` |
+| `drizzle-orm` is a dependency, or the task changes tables or queries | `bussin-drizzle` |
+| `gsap` or `lenis` is a dependency, or the task asks for the house look | `bussin-ui`, plus `review:review-animations` when that skill is installed |
+
+`--skills` adds to this list and never removes from it. A skill that is not installed is left out and named at the checkpoint. Show the final list with one reason per skill at the checkpoint, so the user can drop or add one before anything is committed.
 
 ## 4. Write `.loop/`
 
@@ -108,7 +123,7 @@ Mark UI-visible items with `"ui": true` so run knows the browser gate applies. A
 
 ## 9. Checkpoint
 
-Unless `checkpoint` is false, show the user the item list as a compact table with `depends_on` and `touches` as columns, how many items could run at once at the widest point, and the assumptions you made where requirements were silent. Wait for their answer. A wrong line in this list costs more than any amount of verification later. Edit the list on their feedback, then continue.
+Unless `checkpoint` is false, show the user the item list as a compact table with `depends_on` and `touches` as columns, how many items could run at once at the widest point, the context skills from step 3c with the reason for each, and the assumptions you made where requirements were silent. Wait for their answer. A wrong line in this list costs more than any amount of verification later. Edit the list on their feedback, then continue.
 
 ## 10. Commit and hand over
 

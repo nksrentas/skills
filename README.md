@@ -17,6 +17,7 @@
 - [bussin-lean](./bussin-lean): Lean code while writing it, then a mandatory cleanup pass on the diff: no leftovers from earlier implementations, nothing over-engineered, no wasteful allocation or data access.
 - [bussin-ts-architecture](./bussin-ts-architecture): Feature-based folders for TypeScript backends and Next.js apps, where every feature folder is portable: it imports nothing from other features and works when copied into another project.
 - [bussin-drizzle](./bussin-drizzle): Drizzle ORM data access with schemas per feature, drizzle-kit migrations, typed queries inside services, and tests against a real database.
+- [bussin-react](./bussin-react): React 19 and Next.js App Router rules: server components first, shadcn/ui owned in the shared kit, compound components, TanStack Query, forms on the feature's DTOs, and performance and security rules.
 - [bussin-ui](./bussin-ui): House UI system for landing pages and dashboards in Next.js, Tailwind CSS v4, GSAP and Lenis.
 - [bussin-a11y](./bussin-a11y): Build and audit accessible UI to WCAG 2.2 AA, native HTML first and ARIA only where needed. Adapted from addyosmani/web-quality-skills (MIT).
 - [bussin-seo](./bussin-seo): On-page and technical SEO plus Core Web Vitals, with Next.js App Router metadata, sitemap and robots rules. Adapted from addyosmani/web-quality-skills (MIT).
@@ -30,11 +31,12 @@ Every skill has a short alias that takes the same arguments, and the slash menu 
 
 | Alias | Skill | Arguments |
 |---|---|---|
-| `/autoloop` | `bussin-autoloop` | `init <task> [--mode fast\|standard\|thorough] [--skills a,b,review:c] [--no-checkpoint] [--new] [--stack <text>] [--base <ref>] [--name <text>]`, `run` or `status` |
+| `/autoloop` | `bussin-autoloop` | `init <task> [--mode fast\|standard\|thorough] [--skills a,b,review:c] [--no-checkpoint] [--new] [--stack <text>] [--base <ref>] [--name <text>]`, `run`, `retro` or `status` |
 | `/feature` | `bussin-feature` | `<feature to build or change>` |
 | `/lean` | `bussin-lean` | `[path, file or commit range to clean up]` |
 | `/arch` | `bussin-ts-architecture` | `[feature to place or wiring question]` |
 | `/drizzle` | `bussin-drizzle` | `[table, column, migration or query task]` |
+| `/react` | `bussin-react` | `[component, hook, form or page to build or review]` |
 | `/ui` | `bussin-ui` | `[page, section or screen to build or restyle]` |
 | `/honest` | `bussin-honest-feedback` | `<idea, plan, draft or decision to assess>` |
 | `/humanize` | `bussin-write-like-a-human` | `<draft text or path to the draft>` |
@@ -58,7 +60,7 @@ It clones this repository into `~/dev/skills`, or pulls it if it is already ther
 
 ### As a Claude Code plugin
 
-One install gives you all eleven skills:
+One install gives you all twelve skills:
 
 ```bash
 claude plugin marketplace add nksrentas/skills

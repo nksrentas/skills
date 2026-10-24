@@ -370,6 +370,7 @@ run_parallel() {
     sleep "$poll_seconds"
   done
   log "all items passing"
+  lessons_hint
   rm -f "$attempts_file"
   jq -r '.features[] | [.id, .category, (.evidence.commit // "")] | @tsv' "$list"
 }

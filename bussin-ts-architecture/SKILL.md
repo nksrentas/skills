@@ -68,7 +68,7 @@ Infrastructure with the same shape in every project, and nothing else:
 |---|---|
 | `kernel.ts` | The `App` and `KernelDeps` types (`db`, `env`, `logger`, `events`, `auth` for the current user) and `getKernel()` |
 | `db.ts` | Creates the database client (see `bussin-drizzle`) and exports its type |
-| `errors.ts` | `NotFoundError`, `ConflictError`, `ValidationError` |
+| `errors.ts` | `NotFoundError`, `ConflictError`, `ValidationError`, `UnauthorizedError`, `ForbiddenError` |
 | `http.ts` | Request and response helpers for the project's framework |
 | `config.ts` | Reads and validates the environment the kernel needs |
 | `ui/`, `motion/` | The `bussin-ui` component kit, in apps with a frontend |
@@ -111,6 +111,12 @@ module.exports = {
 `tsConfig` makes path aliases such as `@/features/...` resolve, so they cannot slip past the rule.
 
 Run `depcruise src --config .dependency-cruiser.cjs` in the lint script and CI; it exits non-zero on a violation. dependency-cruiser reads TypeScript through the `typescript` package and, as of version 18, does not support TypeScript 7: it then reports "0 modules cruised" and passes. Check that the module count is non-zero, and pin a supported `typescript` version for the check if the project is on 7. If the project already enforces boundaries another way (eslint-plugin-boundaries, Nx tags), express the same two rules there instead of adding a second tool.
+
+### Backends: Hono and Next.js route handlers
+
+[references/backend.md](references/backend.md) shows the same feature on both house backends: a Hono sub-app registered in `src/app.ts` with `@hono/zod-validator` and a typed `hc` client for the frontend, and Next.js route handlers and server actions that the feature owns and thin route files re-export. It also has a checklist for moving a feature into another project. Read it before adding an endpoint, a server action or a new backend.
+
+For React components, client state, TanStack Query, shadcn/ui, performance and security in the UI layer, load `bussin-react`.
 
 ## Layout
 
@@ -211,3 +217,5 @@ Copy these into `CODING_STANDARDS.md` when this skill is loaded by bussin-autolo
 - Every boundary input is parsed by a DTO schema; types are inferred, not hand-written twins.
 - Response DTOs do not leak database rows directly.
 - Jobs and listeners validate payloads and are idempotent.
+- Every route handler, server action and Hono route authenticates the caller, parses input with a DTO, and the service checks that the caller may act on that record.
+- Error responses come from the shared error mapping and never include stack traces or internal messages.

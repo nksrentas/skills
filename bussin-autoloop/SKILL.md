@@ -1,7 +1,7 @@
 ---
 name: bussin-autoloop
 description: Autonomous build loop for one feature or a new project. `init <task>` expands the task into `.loop/feature_list.json` with verify gates, then `run` completes ONE item per fresh session until every item passes with evidence. Use when the user wants something built autonomously, "in a loop", "until it's done", "overnight", with proof it works end-to-end, or mentions autoloop, feature_list or Ralph-style loops; modes fast, standard, thorough.
-argument-hint: "init <task> [--mode fast|standard|thorough] [--skills a,b,review:c] [--no-checkpoint] [--new] [--stack <text>] [--base <ref>] [--name <text>] | run | status"
+argument-hint: "init <task> [--mode fast|standard|thorough] [--skills a,b,review:c] [--no-checkpoint] [--new] [--stack <text>] [--base <ref>] [--name <text>] | run | retro | status"
 ---
 
 # bussin-autoloop
@@ -15,6 +15,7 @@ Two prompts over one harness. `init` runs once and leaves artifacts in `.loop/`.
 | `/bussin-autoloop init <task> [flags]` | `references/init.md` | Research or scaffold, write `.loop/`, checkpoint with the user, commit |
 | `/bussin-autoloop run` | `references/run.md` | One item: implement, pass the gates, mark passing with evidence, commit, stop |
 | `/bussin-autoloop run --item <id>` | `references/run.md` | Worker mode for the parallel driver: that one item in its own worktree, result written to `.loop/results/<id>.json` |
+| `/bussin-autoloop retro` | `references/retro.md` | Turn the loop's `Lesson:` lines and failed items into rules: the project's `CODING_STANDARDS.md`, and a pull request to the skills repository for rules every project should follow |
 | `/bussin-autoloop status` | nothing | Run `bash <skill directory>/scripts/loop-status.sh` and show its output: progress, ETA, what runs now and next, cost, tokens, models and the latest progress notes |
 | `/bussin-autoloop <text>` with no `.loop/` | `references/init.md` | Treat the text as the task |
 
@@ -148,12 +149,15 @@ Fast suits throwaway or low-risk work. Standard suits normal features. Thorough 
 
 `--skills a,b,review:c` adds skills to `config.skills`. A bare name lands in the `context` stage, which run reads before implementing (design systems, framework conventions, house style). `stage:name` targets `context`, `implement`, `review` or `end`. Run invokes each configured skill at its stage (the Skill tool in Claude Code; other agents load it by name), after its own built-in work for that stage. Test-first implementation, review and retro are built into `references/run.md`, so no outside skill is required. When a configured skill is not installed, run skips it and notes that in `progress.md`.
 
-House context skills, opt-in per feature:
+Init also adds house context skills on its own, chosen from the project's dependencies and the task: a React or Next.js app gets `bussin-ts-architecture`, `bussin-react` and `bussin-a11y`; Drizzle gets `bussin-drizzle`; and so on (see step 3c of `references/init.md`). It shows the choice at the checkpoint, where you can drop or add one.
+
+House context skills:
 
 | Skill | Use when |
 |---|---|
 | `bussin-ts-architecture` | Any TypeScript backend or Next.js feature: portable feature folders with controller, service, DTO, job and UI files |
 | `bussin-drizzle` | The feature reads or writes a SQL database from TypeScript |
+| `bussin-react` | Any React or Next.js UI: server components first, shadcn/ui, compound components, TanStack Query, forms, performance and security |
 | `bussin-ui` | Landing pages and dashboards in Next.js + Tailwind v4 + GSAP + Lenis with the house look |
 | `bussin-lean` | Always on: every preset loads it, and the review stage blocks on its findings |
 | `bussin-a11y` | Any UI work: WCAG 2.2 AA, native HTML first |
@@ -187,4 +191,4 @@ For UI work, add accessibility, SEO and Emil Kowalski's animation review: `/buss
 - `passes:true` needs evidence: the commit sha plus what was run or clicked. Without evidence it is a claim, and the loop would stop on a claim.
 - Whoever wrote the code does not grade it. Review runs in a subagent with its own context and the item as its spec.
 - Gates never weaken to pass. Thresholds and items are fixed by init; run adds tests, it does not lower bars.
-- Codebase learnings go to `progress.md`, environment proposals go to `retro.md`. Nothing edits CLAUDE.md, hooks or skills mid-loop; a human promotes recurring proposals at the next init.
+- Codebase learnings and `Lesson:` lines go to `progress.md`, environment proposals go to `retro.md`. Nothing edits CLAUDE.md, hooks or skills mid-loop. `/bussin-autoloop retro` turns lessons into rules after the run, and skill changes reach other projects only through a pull request the user merges.

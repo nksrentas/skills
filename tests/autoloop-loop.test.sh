@@ -229,4 +229,11 @@ grep -q "Done	success after 1 turns" "$tmp/hang/.loop/logs/H1.log" || { cat "$tm
 if bash "$run_session" "$tmp/x.raw" "$tmp/p/.loop/logs/../../escape.log" claude true 2> /dev/null; then echo "FAIL: a log path outside .loop/logs was accepted"; exit 1; fi
 [ ! -e "$tmp/escape.log" ] || { echo "FAIL: a log was written outside .loop/logs"; exit 1; }
 
+lessons="$tmp/lessons"
+make_project "$lessons" pass
+printf '## Session 1 · A0\nLesson: [bussin-react] fetched in useEffect → load on the server\nLesson: [tests] flaky clock → freeze time\n' > "$lessons/.loop/progress.md"
+run_loop "$lessons" || { cat "$lessons/out"; echo "FAIL: the lessons project did not finish"; exit 1; }
+grep -q "recorded 2 lessons; run /bussin-autoloop retro" "$lessons/out" || { cat "$lessons/out"; echo "FAIL: a finished loop did not point at its lessons"; exit 1; }
+! grep -q "lessons; run" "$tmp/stale/out" || { echo "FAIL: a loop without lessons printed the retro hint"; exit 1; }
+
 echo "autoloop-loop.test.sh: ok"

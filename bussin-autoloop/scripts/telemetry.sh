@@ -110,6 +110,13 @@ pause() {
   while [ "$SECONDS" -lt "$until" ] && [ ! -e "$stop_file" ]; do sleep 1; done
 }
 
+lessons_hint() {
+  local count
+  count="$(grep -c '^Lesson:' .loop/progress.md 2> /dev/null || true)"
+  [ "${count:-0}" -gt 0 ] || return 0
+  echo "autoloop: this loop recorded $count lesson$([ "$count" = 1 ] || echo s); run /bussin-autoloop retro to turn them into rules"
+}
+
 closing_state() {
   if [ "$(remaining 2>/dev/null || echo 1)" = 0 ]; then echo finished; else echo stopped; fi
 }
