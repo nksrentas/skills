@@ -3,6 +3,7 @@ set -euo pipefail
 
 watch_seconds=""
 stop=0
+title=0
 rename=""
 target=""
 while [ $# -gt 0 ]; do
@@ -13,13 +14,14 @@ while [ $# -gt 0 ]; do
       [ "$watch_seconds" -ge 1 ] || { echo "loop-status.sh: --watch needs 1 or more seconds" >&2; exit 1; }
       ;;
     --stop) stop=1 ;;
+    --title) title=1 ;;
     --rename)
       rename="${2:-}"
       [ -n "$rename" ] || { echo "loop-status.sh: --rename needs a name" >&2; exit 1; }
       shift
       ;;
     -h | --help)
-      echo "usage: loop-status.sh [--watch [seconds] | --stop | --rename <name>] [project dir]"
+      echo "usage: loop-status.sh [--watch [seconds] | --stop | --rename <name> | --title] [project dir]"
       exit 0
       ;;
     *) target="$1" ;;
@@ -140,7 +142,7 @@ def log_rows($lines): $lines[-3:] | map("              \($dim)\(.[0] // "")\($re
 
 driver_state() {
   local pid
-  pid="$(jq -r 'select(.state == "running" or .state == "stopping") | .pid | select(type == "number" and . > 0 and . == floor)' "$1/.loop/live.json" 2> /dev/null || true)"
+  pid="$(jq -r 'select(.state == "running" or .state == "stopping" or .state == "queued") | .pid | select(type == "number" and . > 0 and . == floor)' "$1/.loop/live.json" 2> /dev/null || true)"
   if [ -z "$pid" ]; then
     echo unknown
   elif ps -p "$pid" -o command= 2> /dev/null | head -n 1 | grep -qE '(^|[[:space:]/])loop\.sh([[:space:]]|$)'; then
@@ -271,6 +273,31 @@ request_rename() {
   echo "autoloop: this loop is now called $(loop_label "$dir" "$(basename "$dir")")"
 }
 
+title_line() {
+  local dir repo state progress count=0 parts=""
+  repo="$(repo_name "${target:-.}")"
+  [ -n "$repo" ] || repo="$(basename "$(git rev-parse --show-toplevel 2> /dev/null || pwd)")"
+  while IFS= read -r dir; do
+    [ -f "$dir/.loop/feature_list.json" ] || continue
+    state="$(jq -r '.state // "" | strings' "$dir/.loop/live.json" 2> /dev/null || true)"
+    case "$state" in running | stopping | queued) ;; *) continue ;; esac
+    [ "$(driver_state "$dir")" != exited ] || continue
+    progress="$(jq -r '(.features // []) | map(objects) | "\(map(select(.passes == true)) | length)/\(length)"' "$dir/.loop/feature_list.json" 2> /dev/null)" || continue
+    count=$((count + 1))
+    parts="$parts · $progress"
+  done < <(loop_dirs | awk '!seen[$0]++')
+  repo="$(printf '%s' "$repo" | tr -d '\000-\037\177')"
+  if [ "$count" = 0 ]; then
+    echo "[loop] $repo · no loop running"
+  else
+    echo "[loop] $repo · $count loop$([ "$count" = 1 ] || echo s)$parts"
+  fi
+}
+
+if [ "$title" = 1 ]; then
+  title_line
+  exit
+fi
 if [ "$stop" = 1 ]; then
   request_stop
   exit

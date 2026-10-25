@@ -110,4 +110,17 @@ bash "$status" --rename "Landing page" "$live" > /dev/null
 check "--rename sets the name every status view shows" '[ "$(cat "$live/.loop/name")" = "Landing page" ] && bash "$status" "$live" | head -n 1 | grep -q "^● Landing page "'
 check "--rename refuses an empty name" '! bash "$status" --rename "" "$live" 2> /dev/null'
 
+titled="$tmp/titled"
+make_repo "$titled" '{"features":[{"id":"A","passes":true},{"id":"B","passes":false},{"id":"C","passes":false}]}'
+git -C "$titled" worktree add -q -b second "$tmp/titled-second"
+start_driver loop.sh
+jq -n --argjson now "$now" --argjson pid "$driver" '{state: "running", pid: $pid, started_at: $now, updated_at: $now, running: []}' > "$titled/.loop/live.json"
+jq -n --argjson now "$now" --argjson pid "$driver" '{state: "queued", pid: $pid, started_at: $now, updated_at: $now, running: []}' > "$tmp/titled-second/.loop/live.json"
+jq '.features[1].passes = true' "$titled/.loop/feature_list.json" > "$tmp/titled-second/.loop/feature_list.json"
+title_out="$(cd "$titled" && bash "$status" --title)"
+check "--title names the project and gives one progress pair per running loop" '[ "$title_out" = "[loop] titled · 2 loops · 1/3 · 2/3" ]'
+jq -n --argjson now "$now" '{state: "running", pid: 999999, started_at: $now, updated_at: $now, running: []}' > "$tmp/titled-second/.loop/live.json"
+check "--title leaves out a loop whose driver has exited" '[ "$(cd "$titled" && bash "$status" --title)" = "[loop] titled · 1 loop · 1/3" ]'
+check "--title says when nothing runs" '[ "$(cd "$esc" && rm -f .loop/live.json && bash "$status" --title)" = "[loop] esc · no loop running" ]'
+
 [ "$failures" = 0 ] && echo "all status checks passed" || { echo "$failures status checks failed"; exit 1; }

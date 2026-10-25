@@ -102,6 +102,7 @@ write_live() {
       machine: {sessions: $sessions, in_use: $in_use}}' \
     > "$live_file.tmp"
   mv "$live_file.tmp" "$live_file"
+  [ ! -t 1 ] || printf '\033]0;%s\007' "$(bash "$script_dir/loop-status.sh" --title 2> /dev/null || true)"
 }
 
 pause() {
