@@ -138,5 +138,6 @@ while [ "$(remaining)" -gt 0 ]; do
 done
 
 echo "autoloop: all items passing"
+lessons_hint
 rm -f .loop/attempts.json
 jq -r '.features[] | [.id, .category, (.evidence.commit // "")] | @tsv' "$list"

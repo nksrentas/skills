@@ -97,8 +97,18 @@ Append to `.loop/progress.md`:
 ## Session <n> · <item id> · <date>
 Did: ...
 Learned: anything about the codebase the next session would otherwise rediscover
+Lesson: [<skill or area>] what went wrong → the rule that would have prevented it
 Next: <item id>
 ```
+
+Write a `Lesson:` line, in every mode, for each thing that went wrong in this session:
+- a gate run that failed
+- a review finding you had to fix
+- a commit the guard blocked
+- an assumption that turned out wrong
+- a retry of an item an earlier session failed
+
+Name the skill whose rule would have caught it, for example `[bussin-react]` or `[bussin-ts-architecture]`, or the area: `[tests]`, `[init.sh]`, `[this project]`. Skip the line when nothing went wrong. In worker mode, put the same lines in the result's `notes`. `/bussin-autoloop retro` turns these lines into rules (`references/retro.md`).
 
 In `thorough` mode, write a short retro: what in this session cost the most time or nearly went wrong, and one concrete change to the environment that would have prevented it (a lint rule, a hook, a missing command in `config.commands`, a line in `CODING_STANDARDS.md`). Append it to `.loop/retro.md` under a dated heading, then invoke any skills in `config.skills.end`. Never apply the proposals here; the loop is not the place to change its own rules.
 

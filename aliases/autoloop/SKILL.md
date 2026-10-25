@@ -1,7 +1,7 @@
 ---
 name: autoloop
 description: Short alias for bussin-autoloop. Type /autoloop instead of /bussin-autoloop; your arguments pass through unchanged.
-argument-hint: "init <task> [--mode fast|standard|thorough] [--skills a,b,review:c] [--no-checkpoint] [--new] [--stack <text>] [--base <ref>] [--name <text>] | run | status"
+argument-hint: "init <task> [--mode fast|standard|thorough] [--skills a,b,review:c] [--no-checkpoint] [--new] [--stack <text>] [--base <ref>] [--name <text>] | run | retro | status"
 disable-model-invocation: true
 ---
 

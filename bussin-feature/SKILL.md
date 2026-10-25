@@ -49,7 +49,7 @@ For mutations, also provide appropriate pending protection and success/failure f
 
 ## Accessible and findable
 
-For any UI, load `bussin-a11y`; for any public page or route, also load `bussin-seo` and `bussin-schema`. Their review checklists are part of this feature's quality gate.
+For any React or Next.js UI, load `bussin-react` and `bussin-a11y`; for any public page or route, also load `bussin-seo` and `bussin-schema`. For a backend endpoint, server action or Hono route, read `references/backend.md` in `bussin-ts-architecture`. Their review checklists are part of this feature's quality gate.
 
 ## Keep it lean
 
