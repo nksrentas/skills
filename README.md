@@ -134,7 +134,7 @@ From any terminal, whichever agent runs the loop:
 bash ~/.claude/skills/bussin-autoloop/scripts/loop-status.sh --watch
 ```
 
-It shows every loop in the repository and its worktrees: progress, ETA, each running item's step (Orient, Implement, Gate, Review, Browser, Commit) and its latest log lines, what runs next, cost, tokens, models, and how many loop sessions this Mac runs. Follow one item's full log with `tail -f .loop/logs/<item>.log`. Give a loop a better name with `--rename "Landing page"`.
+It shows every loop in the repository and its worktrees: progress, ETA, each running item's step (Orient, Implement, Gate, Review, Browser, Commit) and its latest log lines, what runs next, cost, tokens, models, and how many loop sessions this Mac runs. Follow one item's full log with `tail -f .loop/logs/<item>.log`. `loop-status.sh --title` prints a one-line title such as `[loop] telu-fyi · 2 loops · 11/19 · 3/23`; a terminal running `loop.sh` shows it as its window title, and in the Claude desktop app Claude renames the session to it when it starts or checks loops. Give a loop a better name with `--rename "Landing page"`.
 
 Run as many loops as you like, in different projects or worktrees: they share one machine-wide limit on agent sessions (half the CPU cores or (RAM − 4 GB) ÷ 2 GB, whichever is lower; `LOOP_MACHINE_SESSIONS` overrides it). A loop that would go over the limit waits as queued instead of slowing everything down.
 

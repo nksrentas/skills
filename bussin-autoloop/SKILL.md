@@ -16,7 +16,7 @@ Two prompts over one harness. `init` runs once and leaves artifacts in `.loop/`.
 | `/bussin-autoloop run` | `references/run.md` | One item: implement, pass the gates, mark passing with evidence, commit, stop |
 | `/bussin-autoloop run --item <id>` | `references/run.md` | Worker mode for the parallel driver: that one item in its own worktree, result written to `.loop/results/<id>.json` |
 | `/bussin-autoloop retro` | `references/retro.md` | Turn the loop's `Lesson:` lines and failed items into rules: the project's `CODING_STANDARDS.md`, and a pull request to the skills repository for rules every project should follow |
-| `/bussin-autoloop status` | nothing | Run `bash <skill directory>/scripts/loop-status.sh` and show its output: progress, ETA, what runs now and next, cost, tokens, models and the latest progress notes |
+| `/bussin-autoloop status` | nothing | Run `bash <skill directory>/scripts/loop-status.sh` and show its output: progress, ETA, what runs now and next, cost, tokens, models and the latest progress notes. Then update the session title (see Session title) |
 | `/bussin-autoloop <text>` with no `.loop/` | `references/init.md` | Treat the text as the task |
 
 Installed as the `bussin` plugin, the command is `/bussin:bussin-autoloop`; everything else is the same. In Codex the skill is mentioned as `$bussin-autoloop`.
@@ -68,6 +68,18 @@ Two loops still need two checkouts (worktrees or repos): one checkout holds one 
 The driver checks on its workers every `LOOP_POLL_SECONDS` (default 5). Each worker gets a git worktree next to the repo (`<repo>.loop-workers/w<n>`, override with `LOOP_WORKER_ROOT`) on branch `loop/<loop name>/<id>`, and runs `run --item <id>`. When it reports a pass, the driver merges the branch into the current branch one item at a time and runs `verify.sh` on the merged result, because two items that pass alone can still break together. A red merged gate is run once more before it counts, because flaky end-to-end tests fail more under the load of several workers. A conflict or a gate that stays red sends the item back to run again on top of the latest work, up to `LOOP_ITEM_ATTEMPTS` (default 3). A red merged gate after the worker's own gate passed does not use up an attempt, up to `LOOP_MERGE_RETRIES` times per item (default 2), so a merge that is really broken still stops. Attempt counts live in `.loop/attempts.json`, so they survive a restart; the driver deletes the file once every item passes, and you can delete it yourself to give items fresh attempts. When nothing can start (a dependency cycle, an unknown id, or an item out of attempts), the driver stops and lists what each item is waiting for.
 
 The speed-up depends on the list's shape, not on the cap. Items that all edit one file run one after another whatever the cap is, while portable feature folders (`bussin-ts-architecture`) parallelise well. Every worker is a full session, so usage goes N times faster. `init.sh` has to pick a free port at runtime, record it in `.loop/port`, name test databases after `LOOP_NAME` and `LOOP_WORKER`, and stop its servers on `init.sh stop`. Before it removes a worker's worktree, the driver also kills every process still running inside it, so a dev server that outlives its session cannot hold the port or block the removal. Workers must not use `git stash`, which all worktrees share; the driver warns when a new stash entry appears. It also warns at start when the 1-minute load average is above twice the core count.
+
+### Session title
+
+A session that starts or watches loops keeps its title in the form `[loop] <project> · <n> loops · <done/total> · …`, one progress pair per running loop, for example `[loop] telu-fyi · 2 loops · 11/19 · 3/23`. `bash <skill directory>/scripts/loop-status.sh --title`, run in the project, prints that line.
+
+- **Claude desktop app:** rename this session to that line with the app's session-title tool (`set_session_title`, session `self`):
+  - after starting a loop driver
+  - after `status`
+  - whenever you report on loops
+  
+  A mod cannot rename sessions, so the title changes when Claude acts, not on a timer. Rename only sessions that are about loops.
+- **Terminal:** `loop.sh` sets the same line as the terminal window title every time it updates `live.json`, so a terminal tab running a loop is always current.
 
 ### Status view
 
