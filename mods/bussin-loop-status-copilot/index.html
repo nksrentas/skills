@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Autoloop Dashboard</title><link rel="stylesheet" href="/styles.css"><script src="/app.js" defer></script></head>
+<body>
+<a href="#main" class="skip">Skip to loop details</a>
+<header><p class="eyebrow">BUSSIN / LOCAL CONTROL ROOM</p><h1>Autoloop</h1><p>Live artifacts. No runner changes. No cloud telemetry.</p></header>
+<section class="source" aria-labelledby="sources-title">
+<h2 id="sources-title">Sources</h2>
+<form id="source-form"><label for="path">Repository or loop directory</label><div class="row"><input id="path" name="path" placeholder="/absolute/path/to/repository" required><button>Add source</button></div></form>
+<p class="muted">Reads only selected directories and their Git worktrees. Sources persist across sessions.</p>
+<details><summary>Selected directories</summary><ul id="roots"></ul></details>
+</section>
+<div class="row toolbar"><p id="connection" role="status">Connecting...</p><button id="refresh" type="button">Refresh</button><label><input id="live" type="checkbox" checked> Live (3s)</label></div>
+<p id="error" role="alert" hidden></p>
+<div id="source-errors"></div>
+<div class="layout"><nav id="loops" aria-label="Loops"></nav><main id="main" tabindex="-1"><p>Add a source to see its loops.</p></main></div>
+<dialog id="rename-dialog"><form id="rename-form"><h2>Rename loop</h2><label for="loop-name">Display name</label><input id="loop-name" maxlength="80" required><p id="rename-error" role="alert"></p><div class="row"><button>Save name</button><button type="button" id="cancel-rename">Cancel</button></div></form></dialog>
+</body>
+</html>

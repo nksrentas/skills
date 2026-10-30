@@ -155,6 +155,8 @@ claude plugin marketplace add nksrentas/skills
 claude plugin install bussin-loop-status@bussin
 ```
 
+In the GitHub Copilot desktop app, [`bussin-loop-status-copilot`](./mods/bussin-loop-status-copilot/README.md) is the same view as a canvas (`autoloop-dashboard`): loop progress, ETA, running items with their log lines, cost, Rename and Stop. Ask any Copilot chat to install the extension from `https://github.com/nksrentas/skills/tree/main/mods/bussin-loop-status-copilot` with scope user, then ask it to "open the autoloop dashboard for <repo path>".
+
 See [bussin-autoloop](./bussin-autoloop/SKILL.md) for modes, gates and running unattended safely.
 
 ## Tests and evals

@@ -111,6 +111,8 @@ In Claude Code, the `bussin-loop-status` mod shows a run as it happens. Install 
 
 It reads only `.loop/` folders, and it finds them in the session's project and in every git worktree of the same repository. A session opened in the main checkout therefore sees loops running in worktrees, with buttons to switch between them.
 
+In the GitHub Copilot desktop app, the `bussin-loop-status-copilot` extension shows the same run in a canvas (canvasId `autoloop-dashboard`). Install it with Copilot's install-extension from `https://github.com/nksrentas/skills/tree/main/mods/bussin-loop-status-copilot`, scope user, then ask any chat to "open the autoloop dashboard for <repo path>". It reads the selected repository's `.loop/` folders and its git worktrees, refreshes every three seconds, and its Stop gracefully and Rename buttons work like `--stop` and `--rename`.
+
 ### Running unattended
 
 Each session runs headless with the limits in the agents table. A Claude session gets only the tools the driver lists in a temporary settings file passed with `--settings`, which keeps them out of the session's command line, where another loop's pattern kill could match them: the file tools, `Skill`, `Agent`, `TodoWrite`, `bash .loop/init.sh` (and `bash .loop/init.sh stop`), `bash .loop/verify.sh`, the read and commit subset of git, and every command in `config.commands`. Any other shell command is denied rather than run, and Edit and Write are denied on `.loop/*.sh`, `.loop/config.json`, `.claude/` and `.git/`. Add tools with a comma-separated `LOOP_EXTRA_TOOLS`, most often the browser MCP server that browser verification needs, for example `LOOP_EXTRA_TOOLS=mcp__plugin_playwright_playwright`.
