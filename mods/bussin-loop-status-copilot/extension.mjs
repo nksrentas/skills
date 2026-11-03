@@ -22,8 +22,10 @@ await joinSession({
         }],
         open: async (ctx) => {
             try {
+                // An explicit projectPath (auto-open after init or loop start) re-shows a removed loop.
                 const entry = await startServer(ctx.instanceId, {
                     projectPath: ctx.input?.projectPath || ctx.session?.workingDirectory,
+                    reveal: Boolean(ctx.input?.projectPath),
                 });
                 return { title: "Autoloop Dashboard", url: entry.url };
             } catch (error) { throw new CanvasError("loop_open_failed", error.message); }

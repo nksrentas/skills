@@ -7,6 +7,7 @@ import { execFileSync } from "node:child_process";
 import { request as httpRequest } from "node:http";
 import { snapshot, discover, control, validateRoot } from "./loop-data.mjs";
 import { startServer, stopServer } from "./server.mjs";
+import { status, clock } from "./format.mjs";
 
 async function fixture(t) {
     const root = await mkdtemp(join(tmpdir(), "autoloop-dashboard-test-"));
@@ -145,9 +146,61 @@ test("HTTP controls require token, matching origin/host, selected loop and persi
     assert.match(page.headers.get("content-security-policy"), /script-src 'self'/);
     assert.match(await page.text(), /<html lang="en">/);
     assert.equal((await fetch(`${entry.origin}/loop-data.mjs`)).status, 404);
+    assert.equal((await fetch(`${entry.origin}/format.mjs`)).status, 200);
     await stopServer("test");
     const second = await startServer("test-2", { artifacts: join(root, "artifacts") });
     t.after(() => stopServer("test-2"));
     const state = await fetch(`${second.origin}/api/state`, { headers: { "x-autoloop-token": second.token } });
     assert.equal((await state.json()).loops[0].name, "HTTP loop");
+});
+
+test("status line shows state, percent and ready clock time", () => {
+    const now = new Date(2026, 10, 3, 21, 18, 0).getTime();
+    const base = { done: 3, total: 10, eta: 17 * 60, state: "running" };
+    assert.deepEqual(status(base, now), { tone: "running", label: "Running", detail: "Ready ~21:35, in 17m", percent: 30 });
+    assert.match(status({ ...base, eta: null }, now).detail, /first item/);
+    assert.equal(status({ ...base, state: "finished", done: 10, endedAt: now / 1000 - 60 }, now).detail, "Finished at 21:17");
+    assert.equal(status({ ...base, state: "stopped", driverLost: true }, now).label, "Driver not running");
+    assert.equal(status({ ...base, state: "idle" }, now).label, "Not running");
+    assert.equal(status({ ...base, state: "queued" }, now).tone, "waiting");
+    assert.equal(status({ ...base, total: 0, done: 0, error: "bad" }, now).percent, 0);
+    assert.equal(clock(new Date(2026, 10, 4, 9, 5), new Date(now)), "Wed 09:05");
+});
+
+test("snapshot reports lost driver and end time", async t => {
+    const { root, put } = await fixture(t);
+    await put("live.json", { state: "running", pid: 2147483647, updated_at: 1000 });
+    const lost = await snapshot(root);
+    assert.equal(lost.driverLost, true);
+    assert.equal(lost.endedAt, 1000);
+    await put("live.json", { state: "finished", updated_at: 2000 });
+    assert.equal((await snapshot(root)).endedAt, 2000);
+});
+
+test("remove hides a loop persistently without touching .loop; adding the path again restores it", async t => {
+    const { root } = await fixture(t);
+    const artifacts = join(root, "artifacts");
+    const entry = await startServer("remove", { artifacts, projectPath: root });
+    t.after(() => stopServer("remove"));
+    const api = (server, path, data, headers = {}) => fetch(`${server.origin}${path}`, {
+        method: data ? "POST" : "GET",
+        headers: { "x-autoloop-token": server.token, ...(data ? { "Content-Type": "application/json" } : {}), ...headers },
+        ...(data ? { body: JSON.stringify(data) } : {}),
+    });
+    const path = await validateRoot(root);
+    const before = await readFile(join(root, ".loop", "feature_list.json"), "utf8");
+    assert.equal((await fetch(`${entry.origin}/api/remove`, { method: "POST", body: JSON.stringify({ path }) })).status, 403);
+    assert.equal((await api(entry, "/api/remove", { path }, { Origin: "https://evil.invalid" })).status, 403);
+    assert.equal((await api(entry, "/api/remove", { path: "/" })).status, 400);
+    const removed = await api(entry, "/api/remove", { path });
+    assert.equal(removed.status, 200);
+    const state = await removed.json();
+    assert.deepEqual([state.loops.length, state.hidden], [0, 1]);
+    assert.equal(await readFile(join(root, ".loop", "feature_list.json"), "utf8"), before);
+    await stopServer("remove");
+    const reopened = await startServer("remove-2", { artifacts, projectPath: root, reveal: false });
+    t.after(() => stopServer("remove-2"));
+    assert.equal((await (await api(reopened, "/api/state")).json()).loops.length, 0);
+    const restored = await (await api(reopened, "/api/root", { path: root })).json();
+    assert.deepEqual([restored.loops.length, restored.hidden], [1, 0]);
 });

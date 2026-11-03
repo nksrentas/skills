@@ -27,11 +27,13 @@ async function body(req) {
     return JSON.parse(Buffer.concat(chunks).toString("utf8"));
 }
 
-async function rootsFromDisk(directory) {
+const limits = { roots: 30, hidden: 200 };
+
+async function listFromDisk(directory, name) {
     try {
-        const value = JSON.parse(await readFile(join(directory, "roots.json"), "utf8"));
-        if (!Array.isArray(value) || value.length > 30 || value.some(v => typeof v !== "string")) {
-            throw new Error("Invalid saved roots. Expected at most 30 paths.");
+        const value = JSON.parse(await readFile(join(directory, `${name}.json`), "utf8"));
+        if (!Array.isArray(value) || value.length > limits[name] || value.some(v => typeof v !== "string")) {
+            throw new Error(`Invalid saved ${name}. Expected at most ${limits[name]} paths.`);
         }
         return value;
     } catch (error) {
@@ -40,31 +42,56 @@ async function rootsFromDisk(directory) {
     }
 }
 
-async function saveRoot(entry, root) {
-    const operation = persistence.then(async () => {
-        const roots = await rootsFromDisk(entry.artifacts);
-        const updated = [...new Set([...roots, root])];
-        if (updated.length > 30) throw new Error("Maximum of 30 selected repositories reached.");
-        await mkdir(entry.artifacts, { recursive: true, mode: 0o700 });
-        const temporary = join(entry.artifacts, `roots-${randomBytes(8).toString("hex")}.tmp`);
-        await writeFile(temporary, JSON.stringify(updated), { mode: 0o600 });
-        await rename(temporary, join(entry.artifacts, "roots.json"));
-    });
+async function writeList(directory, name, list) {
+    await mkdir(directory, { recursive: true, mode: 0o700 });
+    const temporary = join(directory, `${name}-${randomBytes(8).toString("hex")}.tmp`);
+    await writeFile(temporary, JSON.stringify(list), { mode: 0o600 });
+    await rename(temporary, join(directory, `${name}.json`));
+}
+
+function serialize(work) {
+    const operation = persistence.then(work);
     persistence = operation.catch(() => {});
-    await operation;
+    return operation;
+}
+
+// Adding a source again is the undo for Remove: it unhides the root and its worktree loops.
+async function saveRoot(entry, root, reveal = true) {
+    await serialize(async () => {
+        const roots = await listFromDisk(entry.artifacts, "roots");
+        const updated = [...new Set([...roots, root])];
+        if (updated.length > limits.roots) throw new Error(`Maximum of ${limits.roots} selected repositories reached.`);
+        if (updated.length !== roots.length) await writeList(entry.artifacts, "roots", updated);
+        const hidden = await listFromDisk(entry.artifacts, "hidden");
+        if (!reveal || !hidden.length) return;
+        const revealed = new Set([root, ...(await discover([root])).paths]);
+        const kept = hidden.filter(path => !revealed.has(path));
+        if (kept.length !== hidden.length) await writeList(entry.artifacts, "hidden", kept);
+    });
+}
+
+async function hideLoop(entry, path) {
+    await serialize(async () => {
+        const hidden = await listFromDisk(entry.artifacts, "hidden");
+        if (hidden.includes(path)) return;
+        if (hidden.length >= limits.hidden) throw new Error(`Maximum of ${limits.hidden} removed loops reached.`);
+        await writeList(entry.artifacts, "hidden", [...hidden, path]);
+    });
 }
 
 async function refresh(entry) {
     if (entry.pending) return entry.pending;
     entry.pending = (async () => {
-        const roots = await rootsFromDisk(entry.artifacts);
-        const { paths, errors } = await discover(roots);
+        const [roots, hidden] = await Promise.all([
+            listFromDisk(entry.artifacts, "roots"), listFromDisk(entry.artifacts, "hidden")]);
+        const { paths: found, errors } = await discover(roots);
+        const paths = found.filter(path => !hidden.includes(path));
         const loops = await Promise.all(paths.map(async path => {
             try { return await snapshot(path); }
             catch (error) { return { path, name: path, error: error.message }; }
         }));
         entry.paths = new Set(paths);
-        entry.snapshot = { gatheredAt: new Date().toISOString(), roots, errors, loops };
+        entry.snapshot = { gatheredAt: new Date().toISOString(), roots, hidden: hidden.length, errors, loops };
         return entry.snapshot;
     })();
     try { return await entry.pending; }
@@ -102,9 +129,17 @@ async function handle(req, res, entry) {
                 await control(input.path, input.action, input.name);
                 return json(res, 200, await refresh(entry));
             }
+            if (req.method === "POST" && url.pathname === "/api/remove") {
+                const input = await body(req);
+                await refresh(entry);
+                if (!entry.paths.has(input.path)) throw new Error("Select a discovered loop.");
+                await hideLoop(entry, input.path);
+                return json(res, 200, await refresh(entry));
+            }
             return json(res, 404, { error: "Not found." });
         }
-        const assets = { "/": ["index.html", "text/html"], "/app.js": ["app.js", "text/javascript"], "/styles.css": ["styles.css", "text/css"] };
+        const assets = { "/": ["index.html", "text/html"], "/app.js": ["app.js", "text/javascript"],
+            "/format.mjs": ["format.mjs", "text/javascript"], "/styles.css": ["styles.css", "text/css"] };
         if (req.method !== "GET" || !assets[url.pathname]) return json(res, 404, { error: "Not found." });
         const [file, type] = assets[url.pathname];
         const content = await readFile(new URL(file, import.meta.url));
@@ -117,15 +152,12 @@ async function handle(req, res, entry) {
 }
 
 export async function startServer(instanceId, options = {}) {
-    if (instances.has(instanceId)) return instances.get(instanceId);
-    const entry = {
+    const entry = instances.get(instanceId) || {
         token: randomBytes(32).toString("base64url"),
         artifacts: options.artifacts || artifacts, paths: new Set(),
     };
-    if (options.projectPath) {
-        const root = await validateRoot(options.projectPath);
-        await saveRoot(entry, root);
-    }
+    if (options.projectPath) await saveRoot(entry, await validateRoot(options.projectPath), options.reveal !== false);
+    if (entry.server) return entry;
     const server = createServer((req, res) => void handle(req, res, entry));
     await new Promise((resolve, reject) => {
         server.once("error", reject);

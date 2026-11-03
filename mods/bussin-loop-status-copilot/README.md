@@ -10,6 +10,21 @@ scan. Selected roots persist in
 `$COPILOT_HOME/extensions/bussin-autoloop-dashboard/artifacts/roots.json`
 (`COPILOT_HOME` defaults to `~/.copilot`).
 
+Each loop card and list entry leads with its state, `done / total` with percent,
+and the clock time it should be ready (`Ready ~21:35, in 17m`); otherwise it says
+"Waiting for the first item to finish", "Finished at …", "Stopped", "Queued" or
+"Driver not running". The Sources section collapses once a source exists.
+
+When the `bussin-autoloop` skill runs in Copilot desktop, it opens this canvas
+itself after `init`, after starting `loop.sh`, and on `status`, passing the
+repository as `projectPath` (instanceId `autoloop-<repo folder name>`).
+
+**Remove from dashboard** (after a confirmation) hides that loop from the list.
+It never touches `.loop/` or any project file, and the loop keeps running. The
+hidden list persists in `hidden.json` next to `roots.json`; adding the path
+under Sources again, or opening the canvas with that `projectPath`, shows it
+again.
+
 The view refreshes every three seconds while visible. Pause **Live** to inspect
 a stable snapshot. Logs and session history are bounded to the latest 2 MB per
 file; truncated usage totals are explicitly labeled. JSON contracts above 2 MB
@@ -19,6 +34,7 @@ Copilot tokens and unreported dollar cost remain **Unknown**, not zero.
 
 **Stop gracefully** creates `.loop/stop`; current sessions finish normally.
 It never sends a signal or kills a process. **Rename** changes only `.loop/name`.
+All three controls go through the same token, Host and Origin checks.
 Sources are directories you trust; file names and rendered text are treated as
 data, never executed. Driver detection checks the reported PID's command for
 `loop.sh`; unknown/stale detection is explicitly distinguished from exited.

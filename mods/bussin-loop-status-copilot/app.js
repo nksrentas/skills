@@ -1,8 +1,9 @@
+import { duration, status } from "/format.mjs";
+
 const token = new URLSearchParams(location.search).get("token");
 const $ = id => document.getElementById(id);
-let selected = null, latest = null, pending = false, renaming = null;
+let selected = null, latest = null, pending = false, renaming = null, sourcesShown = false;
 const escape = value => String(value ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const duration = value => value == null ? "Unknown" : value < 60 ? `${Math.round(value)}s` : value < 3600 ? `${Math.round(value / 60)}m` : `${Math.floor(value / 3600)}h ${Math.round(value % 3600 / 60)}m`;
 const money = value => value == null ? "Unknown" : `$${value.toFixed(2)}`;
 const number = value => value == null ? "Unknown" : value.toLocaleString();
 function error(message) { $("error").hidden = !message; $("error").textContent = message || ""; }
@@ -17,17 +18,20 @@ async function request(path, data) {
     return result;
 }
 function metric(label, value) { return `<div class="metric"><small>${label}</small><strong>${escape(value)}</strong></div>`; }
+const now = () => Date.parse(latest?.gatheredAt) || Date.now();
+const removeButton = '<button id="remove" type="button">Remove from dashboard</button>';
 function details(loop) {
-    if (loop.error) return `<h2>${escape(loop.name)}</h2><p class="warning">${escape(loop.error)}</p>`;
-    const canStop = ["running", "queued", "stopping"].includes(loop.state) && loop.driver !== "exited";
-    return `<section class="panel">
-        <div class="row heading"><h2>${escape(loop.name)}</h2><div class="row"><button id="rename">Rename</button>${canStop ? '<button id="stop">Stop gracefully</button>' : ""}</div></div>
-        <p>${escape(loop.task)}</p><p><span class="badge">${escape(loop.state)}</span> ${escape(loop.mode)} / ${escape(loop.agent)}</p>
-        <p class="path">${escape(loop.path)}</p>
+    if (loop.error) return `<section class="panel hero tone-alert"><div class="row heading"><h2>${escape(loop.name)}</h2>${removeButton}</div><p class="warning">${escape(loop.error)}</p><p class="path">${escape(loop.path)}</p></section>`;
+    const canStop = ["running", "queued", "stopping"].includes(loop.state) && !loop.driverLost;
+    const s = status(loop, now());
+    return `<section class="panel hero tone-${s.tone}" aria-labelledby="loop-title">
+        <div class="row heading"><h2 id="loop-title">${escape(loop.name)}</h2><div class="row"><button id="rename" type="button">Rename</button>${canStop ? '<button id="stop" type="button">Stop gracefully</button>' : ""}${removeButton}</div></div>
+        <p class="status"><span class="badge">${escape(s.label)}</span> <strong>${escape(s.detail)}</strong></p>
+        <label for="progress" class="progress-label"><strong>${loop.done} / ${loop.total}</strong> items done <strong>${s.percent}%</strong></label><progress id="progress" value="${loop.done}" max="${loop.total || 1}"></progress>
+        <div class="metrics">${metric("Elapsed", duration(loop.elapsed))}${metric("Reported cost", money(loop.usage.cost))}</div>
         ${loop.warnings.map(w => `<p class="warning">${escape(w)}</p>`).join("")}
-        <label for="progress">${loop.done} / ${loop.total} items complete</label><progress id="progress" value="${loop.done}" max="${loop.total || 1}"></progress>
-        <div class="metrics">${metric("Elapsed", duration(loop.elapsed))}${metric("Estimated remaining", loop.eta == null ? "After first item" : duration(loop.eta))}${metric("Reported cost", money(loop.usage.cost))}</div>
-        <small>ETA extrapolates session durations and worker count; retries and gates can change it.</small>
+        <details><summary>Task and location</summary><p>${escape(loop.task)}</p><p>${escape(loop.mode)} / ${escape(loop.agent)}</p><p class="path">${escape(loop.path)}</p>
+        <small>ETA extrapolates session durations and worker count; retries and gates can change it.</small></details>
         </section>
         <section class="panel"><h2>Now</h2>${loop.current.length ? loop.current.map(item => `<article>
         <h3>${escape(item.id)} / ${escape(item.description)}</h3><small>Worker ${escape(item.worker ?? 1)} / ${duration(item.elapsed)} / prior attempts ${escape(item.attempt ?? "unknown")}</small>
@@ -46,13 +50,17 @@ function render(state) {
     latest = state;
     const loops = [...state.loops].sort((a, b) => Number(["running", "stopping", "queued"].includes(b.state)) - Number(["running", "stopping", "queued"].includes(a.state)));
     if (!loops.some(l => l.path === selected)) selected = loops[0]?.path;
+    $("source-count").textContent = `${state.roots.length} selected${state.hidden ? `, ${state.hidden} removed loop${state.hidden === 1 ? "" : "s"} hidden` : ""}`;
+    if (!sourcesShown) { $("sources").open = state.roots.length === 0; sourcesShown = true; }
     $("roots").innerHTML = state.roots.map(root => `<li class="path">${escape(root)}</li>`).join("") || "<li>None selected yet.</li>";
     $("source-errors").innerHTML = state.errors.map(e => `<p class="warning">${escape(e)}</p>`).join("");
     const buttons = loops.map(loop => {
         const button = document.createElement("button");
         button.type = "button";
         button.setAttribute("aria-current", String(loop.path === selected));
-        button.innerHTML = `${escape(loop.name)}<small>${loop.error ? "Artifact error" : `${escape(loop.state)} / ${loop.done} of ${loop.total}`}</small>`;
+        const s = status(loop, now());
+        button.className = `tone-${s.tone}`;
+        button.innerHTML = `<strong>${escape(loop.name)}</strong><span class="summary">${escape(s.label)}${loop.error ? "" : ` / ${loop.done} of ${loop.total} (${s.percent}%)`}</span><small>${escape(s.detail)}</small>`;
         button.onclick = () => { selected = loop.path; renderDetail(); for (const b of $("loops").children) b.setAttribute("aria-current", String(b === button)); };
         return button;
     });
@@ -68,12 +76,17 @@ function renderDetail() {
     const loop = latest.loops.find(l => l.path === selected);
     const focus = document.activeElement?.id;
     const openDetails = [...$("main").querySelectorAll("details")].map(d => d.open);
-    $("main").innerHTML = loop ? details(loop) : "<h2>No loops found</h2><p>Add a directory containing .loop/feature_list.json, or its repository root. No loop will be started.</p>";
+    $("main").innerHTML = loop ? details(loop) : "<h2>No loops found</h2><p>Add a directory containing .loop/feature_list.json, or its repository root, under Sources. No loop will be started.</p>";
     $("main").querySelectorAll("details").forEach((d, i) => { d.open = openDetails[i] || false; });
     if (focus && $("main").contains($(focus))) $(focus).focus();
     if ($("stop")) $("stop").onclick = async () => {
         if (!confirm("Request a graceful stop? Current sessions finish normally; no process will be killed.")) return;
         try { render(await request("/api/control", { path: loop.path, action: "stop" })); error(""); }
+        catch (e) { error(e.message); }
+    };
+    if ($("remove")) $("remove").onclick = async () => {
+        if (!confirm(`Remove "${loop.name}" from this dashboard? Its .loop files and the running driver are not touched. Add its path under Sources to show it again.`)) return;
+        try { render(await request("/api/remove", { path: loop.path })); error(""); $("main").focus(); }
         catch (e) { error(e.message); }
     };
     if ($("rename")) $("rename").onclick = () => {

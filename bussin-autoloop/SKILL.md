@@ -16,7 +16,7 @@ Two prompts over one harness. `init` runs once and leaves artifacts in `.loop/`.
 | `/bussin-autoloop run` | `references/run.md` | One item: implement, pass the gates, mark passing with evidence, commit, stop |
 | `/bussin-autoloop run --item <id>` | `references/run.md` | Worker mode for the parallel driver: that one item in its own worktree, result written to `.loop/results/<id>.json` |
 | `/bussin-autoloop retro` | `references/retro.md` | Turn the loop's `Lesson:` lines and failed items into rules: the project's `CODING_STANDARDS.md`, and a pull request to the skills repository for rules every project should follow |
-| `/bussin-autoloop status` | nothing | Run `bash <skill directory>/scripts/loop-status.sh` and show its output: progress, ETA, what runs now and next, cost, tokens, models and the latest progress notes. Then update the session title (see Session title) |
+| `/bussin-autoloop status` | nothing | Run `bash <skill directory>/scripts/loop-status.sh` and show its output: progress, ETA, what runs now and next, cost, tokens, models and the latest progress notes. Then update the session title (see Session title). In Copilot desktop, also open the dashboard (see Status view) |
 | `/bussin-autoloop <text>` with no `.loop/` | `references/init.md` | Treat the text as the task |
 
 Installed as the `bussin` plugin, the command is `/bussin:bussin-autoloop`; everything else is the same. In Codex the skill is mentioned as `$bussin-autoloop`.
@@ -111,7 +111,14 @@ In Claude Code, the `bussin-loop-status` mod shows a run as it happens. Install 
 
 It reads only `.loop/` folders, and it finds them in the session's project and in every git worktree of the same repository. A session opened in the main checkout therefore sees loops running in worktrees, with buttons to switch between them.
 
-In the GitHub Copilot desktop app, the `bussin-loop-status-copilot` extension shows the same run in a canvas (canvasId `autoloop-dashboard`). Install it with Copilot's install-extension from `https://github.com/nksrentas/skills/tree/main/mods/bussin-loop-status-copilot`, scope user, then ask any chat to "open the autoloop dashboard for <repo path>". It reads the selected repository's `.loop/` folders and its git worktrees, refreshes every three seconds, and its Stop gracefully and Rename buttons work like `--stop` and `--rename`.
+In the GitHub Copilot desktop app, the `bussin-loop-status-copilot` extension shows the same run in a canvas (canvasId `autoloop-dashboard`). Install it with Copilot's install-extension from `https://github.com/nksrentas/skills/tree/main/mods/bussin-loop-status-copilot`, scope user, then ask any chat to "open the autoloop dashboard for <repo path>". It reads the selected repository's `.loop/` folders and its git worktrees, refreshes every three seconds, and shows each loop's state, done/total with percent and the clock time it should be ready ("Ready ~21:35, in 17m"). Its Stop gracefully and Rename buttons work like `--stop` and `--rename`; Remove from dashboard only hides a loop from the list, and adding its path again shows it.
+
+**Open the dashboard yourself in Copilot desktop.** When the `autoloop-dashboard` canvas is available to you (the `open_canvas` tool lists it), call `open_canvas` with canvasId `autoloop-dashboard`, extensionId `user:bussin-autoloop-dashboard`, instanceId `autoloop-<repo folder name>` and input `{"projectPath": "<absolute repo root>"}`:
+- right after `init` commits
+- right after you start `loop.sh`
+- on `status`
+
+It adds the repository to the dashboard's saved sources and re-shows a loop that was removed from it. Where the canvas or the tool is missing (Claude Code, Codex, the Copilot CLI, or the extension not installed), skip this silently.
 
 ### Running unattended
 
