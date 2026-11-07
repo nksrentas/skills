@@ -121,6 +121,20 @@ In the GitHub Copilot desktop app, the `bussin-loop-status-copilot` extension sh
 
 It adds the repository to the dashboard's saved sources and re-shows a loop that was removed from it. Where the canvas or the tool is missing (Claude Code, Codex, the Copilot CLI, or the extension not installed), skip this silently.
 
+### Telegram notifications
+
+Optional and off by default. With a config file in place, the driver sends a short message to your Telegram chat when the loop starts, after every session (passed, failed with its attempt count and last output, or paused by a usage limit), when one session runs longer than `LOOP_HANG_MINUTES` (default 60), and when the loop finishes or stops, with the blocked items and the last failure when it stops on an error. Each message starts with the session title line (`[loop] <name> · <done/total>`), followed by a summary of at most three lines that `claude -p --model haiku` writes from the facts. The summary call has no tools, runs from a temp folder and gives up after 60 seconds; without the `claude` CLI, or when it fails, the message carries the facts as they are.
+
+Setup, once per machine: create a bot with @BotFather, send it any message, read your chat id from `https://api.telegram.org/bot<token>/getUpdates`, then:
+
+```bash
+mkdir -p ~/.config/bussin-autoloop
+printf 'TELEGRAM_BOT_TOKEN=<token>\nTELEGRAM_CHAT_ID=<chat id>\n' > ~/.config/bussin-autoloop/telegram.env
+chmod 600 ~/.config/bussin-autoloop/telegram.env
+```
+
+Safety: the file lives outside every repo, so loop sessions never commit or see it, and the driver refuses a file other users can read. The token reaches `curl` through its stdin config, never its command line, and only over HTTPS. Messages carry item ids, descriptions, counts and the last few output lines, never code or diffs. The loop only sends: nothing listens for incoming messages, so the bot cannot control the machine. A machine that sleeps or a driver that is killed outright cannot report itself. `LOOP_NOTIFY_CONFIG` points at a different file.
+
 ### Running unattended
 
 Each session runs headless with the limits in the agents table. A Claude session gets only the tools the driver lists in a temporary settings file passed with `--settings`, which keeps them out of the session's command line, where another loop's pattern kill could match them: the file tools, `Skill`, `Agent`, `TodoWrite`, `bash .loop/init.sh` (and `bash .loop/init.sh stop`), `bash .loop/verify.sh`, the read and commit subset of git, and every command in `config.commands`. Any other shell command is denied rather than run, and Edit and Write are denied on `.loop/*.sh`, `.loop/config.json`, `.claude/` and `.git/`. Add tools with a comma-separated `LOOP_EXTRA_TOOLS`, most often the browser MCP server that browser verification needs, for example `LOOP_EXTRA_TOOLS=mcp__plugin_playwright_playwright`.

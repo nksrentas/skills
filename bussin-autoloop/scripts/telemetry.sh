@@ -95,6 +95,7 @@ record_usage() {
   tail -n 1 "$usage_file" | jq -r '"autoloop: \(.item) \(.outcome) after \(.duration_ms / 60000 | floor)m, "
     + (if .cost_usd then "$\(.cost_usd * 100 | round / 100)" else "cost unknown" end)
     + (if .input_tokens then ", \(.input_tokens) in / \(.output_tokens) out tokens" else "" end)'
+  notify_session "$item" "$outcome" "$reason"
 }
 
 write_live() {

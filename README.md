@@ -157,6 +157,8 @@ claude plugin install bussin-loop-status@bussin
 
 In the GitHub Copilot desktop app, [`bussin-loop-status-copilot`](./mods/bussin-loop-status-copilot/README.md) is the same view as a canvas (`autoloop-dashboard`): state, progress and the clock time it should be ready, running items with their log lines, cost, Rename, Stop and Remove from dashboard. The `bussin-autoloop` skill opens it by itself in Copilot desktop after init, after starting the loop, and on status. Ask any Copilot chat to install the extension from `https://github.com/nksrentas/skills/tree/main/mods/bussin-loop-status-copilot` with scope user, then ask it to "open the autoloop dashboard for <repo path>".
 
+To hear about a loop on your phone, put a Telegram bot token and your chat id in `~/.config/bussin-autoloop/telegram.env` (mode 600). The driver then sends a short summary when the loop starts, after each session, when a session may be stuck and when the loop finishes or stops. Nothing is sent without that file. See [Telegram notifications](./bussin-autoloop/SKILL.md#telegram-notifications) for setup.
+
 See [bussin-autoloop](./bussin-autoloop/SKILL.md) for modes, gates and running unattended safely.
 
 ## Tests and evals

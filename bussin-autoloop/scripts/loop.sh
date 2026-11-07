@@ -42,6 +42,8 @@ next_item() { jq -r --argjson skip "$(json_array $(blocked_items))" '[.features[
 source "$script_dir/telemetry.sh"
 source "$script_dir/capacity.sh"
 source "$script_dir/commit-hook.sh"
+source "$script_dir/notify.sh"
+notify_init
 
 if [ "${LOOP_WORKERS:-1}" -gt 1 ]; then
   source "$script_dir/parallel.sh"
@@ -52,8 +54,9 @@ fi
 session_output="$(mktemp)"
 session_errors="$(mktemp)"
 held_slot=""
-trap 'rm -f "$session_output" "$session_errors"; release_slot "$held_slot"; write_live "$(closing_state)" sequential 1 "[]"; release_lock' EXIT
+trap 'code=$?; rm -f "$session_output" "$session_errors"; release_slot "$held_slot"; unwatch_hang "$hang_pid"; write_live "$(closing_state)" sequential 1 "[]"; notify_loop_end "$code"; release_lock' EXIT
 write_live running sequential 1 "[]"
+notify "The loop started: $(remaining) items left, one session at a time."
 
 iteration=0
 stalls=0
@@ -92,7 +95,9 @@ while [ "$(remaining)" -gt 0 ]; do
   install_commit_hook
   remember_git_controls
   agent_command "$skill_command run --item $item --sequential"
+  watch_hang "$item"
   AUTOLOOP_SESSION=1 bash "$script_dir/run-session.sh" "$session_output" "$PWD/.loop/logs/$item.log" "$agent" "${agent_cmd[@]}" 2> "$session_errors" || status=$?
+  unwatch_hang "$hang_pid"
   release_slot "$held_slot"
   held_slot=""
   if git_controls_changed; then exit 1; fi
