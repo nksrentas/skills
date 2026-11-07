@@ -1,0 +1,37 @@
+:root {
+  /* Telegram light */
+  --color-bg: #eef1f4;
+  --color-chat: #c7d8b8;
+  --color-surface: #ffffff;
+  --color-border: #dfe3e8;
+  --color-text: #111b21;
+  --color-text-muted: #707579;
+  --color-primary: #3390ec;
+  --color-primary-hover: #2a7fd4;
+  --color-accent: #e8a43a;
+  --color-danger: #e53935;
+  --color-success: #4fae4e;
+  --color-quote: #3390ec;
+  --color-code-bg: #eef2f6;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+  --font-mono: "SF Mono", "JetBrains Mono", Menlo, monospace;
+  --text-xs: 0.72rem;
+  --text-sm: 0.875rem;
+  --text-base: 0.95rem;
+  --text-lg: 1.1rem;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+
+  --radius-sm: 4px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-full: 9999px;
+
+  --shadow-sm: 0 1px 1px rgba(0, 0, 0, 0.12);
+  --shadow-lg: 0 18px 40px rgba(0, 0, 0, 0.18);
+}

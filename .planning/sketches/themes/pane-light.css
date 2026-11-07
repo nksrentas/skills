@@ -1,0 +1,37 @@
+:root {
+  /* Claude desktop pane, light */
+  --color-bg: #f3f1ec;
+  --color-surface: #fbfaf7;
+  --color-surface-2: #f0ede6;
+  --color-border: #e2ddd3;
+  --color-border-strong: #c9c2b5;
+  --color-text: #1f1e1c;
+  --color-text-muted: #6f6b64;
+  --color-primary: #c2603f;
+  --color-primary-soft: rgba(194, 96, 63, 0.1);
+  --color-success: #2f8a3c;
+  --color-success-soft: rgba(47, 138, 60, 0.1);
+  --color-warning: #a8770a;
+  --color-warning-soft: rgba(168, 119, 10, 0.12);
+  --color-danger: #c63c39;
+  --color-danger-soft: rgba(198, 60, 57, 0.1);
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+  --font-mono: "SF Mono", "JetBrains Mono", Menlo, monospace;
+  --text-xs: 0.75rem;
+  --text-sm: 0.85rem;
+  --text-base: 0.95rem;
+  --text-lg: 1.1rem;
+  --text-xl: 1.3rem;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-full: 9999px;
+}
