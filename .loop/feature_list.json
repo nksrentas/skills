@@ -1,0 +1,283 @@
+{
+  "task": "Steerable autoloop, parts 2 to 4: plain task fields, eval metrics and screenshots from sessions, and the Areas status pane with in-place editing (design: .planning/sketches/002-built-so-far winner B, .planning/sketches/004-steer-the-loop winner A).",
+  "features": [
+    {
+      "id": "F1",
+      "category": "functional",
+      "ui": false,
+      "area": "Task list",
+      "plain": "Init writes an area, a plain sentence and a done-when line for every task",
+      "done_when": "The init instructions and the example list show area, plain, done_when and the optional kind and metrics on every task.",
+      "description": "Task fields: bussin-autoloop/references/init.md step 8 asks for `area` (a short product area, 1 to 3 words, shared by related items), `plain` (one sentence in product terms a non-developer understands, no ids or file names), `done_when` (one plain sentence) on every item, plus optional `kind` (`build` default, `eval` for an evaluation that returns metrics, `design` for work judged by screenshots) and, for eval items, `metrics` as [{name, target?}]. assets/feature-list.example.json shows them on every item. SKILL.md's artifacts table and a short paragraph document the fields, `.loop/inbox/` (changes from the status pane, applied between sessions by the driver) and `.loop/evidence/` (screenshots, never committed).",
+      "verify": "Read init.md step 8: the five fields are described with one example each. `jq -e '[.features[] | has(\"area\") and has(\"plain\") and has(\"done_when\")] | all' bussin-autoloop/assets/feature-list.example.json` prints true. SKILL.md mentions area, plain, done_when, kind, metrics, .loop/inbox and .loop/evidence. tests/skills-structure.test.sh stays green.",
+      "depends_on": [],
+      "touches": [
+        "bussin-autoloop/references/init.md",
+        "bussin-autoloop/assets/feature-list.example.json",
+        "bussin-autoloop/SKILL.md"
+      ],
+      "passes": false,
+      "evidence": null
+    },
+    {
+      "id": "F2",
+      "category": "functional",
+      "ui": false,
+      "area": "Sessions",
+      "plain": "Evaluation tasks report their metrics and design tasks save screenshots",
+      "done_when": "The run instructions tell an eval task where its metrics go and a UI or design task where its screenshots go, in both sequential and worker mode.",
+      "description": "references/run.md: an item with `kind: \"eval\"` runs its evaluation (the item's command or the project's) before the gate and puts `metrics` ({name: number}), `dataset` and `command` inside the item's `evidence` (sequential) or the result file's `evidence` (worker mode); a target in the item's `metrics` that is missed is written to progress.md, and the item still passes only when its verify steps hold. Step 6: for ui items and every `kind: \"design\"` item, save a PNG of each page the browser step checks to `.loop/evidence/<id>/<n>-<page>.png` and list the paths, relative to the repo root, in `evidence.screenshots`. A design item without screenshots stays false. The driver already copies a worker's .loop/evidence/<id>/ to the main checkout and keeps .loop/inbox and .loop/evidence out of git.",
+      "verify": "Read run.md: worker-mode and step 7 examples show evidence with metrics and screenshots; step 6 names the .loop/evidence/<id>/ path. tests/skills-structure.test.sh stays green.",
+      "depends_on": [
+        "F1"
+      ],
+      "touches": [
+        "bussin-autoloop/references/run.md"
+      ],
+      "passes": false,
+      "evidence": null
+    },
+    {
+      "id": "F3",
+      "category": "functional",
+      "ui": false,
+      "area": "Pane data",
+      "plain": "The pane knows each task's area, plain sentence, kind, metrics, screenshots and review",
+      "done_when": "compute() returns every task with its area, plain sentence, done-when line, kind, metrics, screenshots and review, with sensible fallbacks for older loops.",
+      "description": "mods/bussin-loop-status: types/index.d.ts and hooks/snapshot.ts. ItemRow gains area, plain, doneWhen, kind ('build' | 'eval' | 'design'), description, verify, metrics ({name, value: number | null, target: number | null}[] merged from the item's metrics targets and evidence.metrics values), screenshots (evidence.screenshots, keeping only relative paths under .loop/evidence/<id>/ with no '..'), review ('approved' | 'changes' | null), finishedAt (ended_at of the passing session, else null) and phase (the running item's current step in plain words: Orient → 'Reading the plan', Implement → 'Writing the code', Gate → 'Running the tests', Review → 'Reviewing its own work', Browser → 'Checking it in a browser', Commit → 'Saving the work'). Fallbacks for loops written before these fields: area from category (functional → 'Features', edge → 'Edge cases', regression → 'Safety checks', anything else → 'Other'), plain from shortTitle(description), doneWhen from verify. A new export groups rows into areas in first-seen order with done/total counts. All text passes through clean().",
+      "verify": "New tests in status.test.tsx: a list with the new fields, one without them (fallbacks), metrics merge with a missing value, a screenshot path with '..' or outside the item's folder is dropped, areas keep first-seen order with counts. `claude plugin test mods/bussin-loop-status` is green.",
+      "depends_on": [],
+      "touches": [
+        "mods/bussin-loop-status/types/index.d.ts",
+        "mods/bussin-loop-status/hooks/snapshot.ts",
+        "mods/bussin-loop-status/hooks/status.test.tsx"
+      ],
+      "passes": false,
+      "evidence": null
+    },
+    {
+      "id": "F4",
+      "category": "functional",
+      "ui": false,
+      "area": "Status pane",
+      "plain": "The pane shows the loop as feature areas you can open, instead of task ids and logs",
+      "done_when": "The pane's main column is a list of areas with progress, each opening to its tasks as plain sentences; ids and raw logs are gone from the default view.",
+      "description": "hooks/register.tsx Pane view, following .planning/sketches/004-steer-the-loop/index.html variant A with only Box, Text, Button (plain for rows), Markdown, Code and Svg. Keep: loop cards, header with Rename, Stop, Dismiss, the task line, state, progress, ETA, the stale-driver warning with Copy resume command, Spend with Tokens, and the This Mac line. Replace Now, Up next and Recent with one bordered Box per area: the area name as a plain Button that opens and closes it (an atom of open areas per loop; areas with running or failing items start open), a text progress bar (progressBar) with done/total, and a status word (building N, all work, waiting its turn, N need a look). An open area lists its tasks, running first, then failing, ready, waiting, done: a state icon (◆ running, ↻ failing, ○ ready or waiting, ✓ done), the plain sentence and a right-hand note (the phase, 'trying again', 'not started', 'after <plain of what it waits for>', or the finish time). No item id appears outside technical details.",
+      "verify": "Update status.test.tsx for the new layout on terminal and desktop: area rows with counts, opening and closing an area, task order and notes, no 'Now', 'Up next' or 'Recent' sections and no item id in the default view, Rename, Stop, Dismiss, stale warning and Spend still work. `claude plugin test mods/bussin-loop-status` is green.",
+      "depends_on": [
+        "F3"
+      ],
+      "touches": [
+        "mods/bussin-loop-status/hooks/register.tsx",
+        "mods/bussin-loop-status/hooks/status.test.tsx"
+      ],
+      "passes": false,
+      "evidence": null
+    },
+    {
+      "id": "F5",
+      "category": "functional",
+      "ui": false,
+      "area": "Status pane",
+      "plain": "Clicking a task opens it in place: what it will do, when it is done, and the technical details on request",
+      "done_when": "Pressing a task opens a bordered box under it with its done-when line; running tasks show their phase; a technical details button reveals the id, description, verify steps and the last log lines.",
+      "description": "An atom holds the open task per loop; pressing a task row toggles a bordered Box under it. Pending tasks show 'Done when' with doneWhen. A running task shows its phase and minutes running. A 'technical details' Button toggles the id, description, verify and, for a running task, its last six log lines (the existing log parsing). Opening another task closes the first.",
+      "verify": "Tests: press a task, see its done-when line and no id; press technical details, see id, description, verify and log lines; press another task, the first closes. Green.",
+      "depends_on": [
+        "F4"
+      ],
+      "touches": [
+        "mods/bussin-loop-status/hooks/register.tsx",
+        "mods/bussin-loop-status/hooks/status.test.tsx"
+      ],
+      "passes": false,
+      "evidence": null
+    },
+    {
+      "id": "F6",
+      "category": "functional",
+      "ui": false,
+      "area": "Steering",
+      "plain": "You can edit, move forward or skip a task that has not started yet",
+      "done_when": "A task that has not started offers Edit, Do it next and Skip it, and each writes a change file the driver accepts.",
+      "description": "For a pending task (not passing, not running) the open box shows Edit, Do it next and Skip it. Edit swaps in two Inputs (What it should do, rows 2; Done when, rows 2) with Save and Cancel; Save writes {op: 'edit', id, plain, done_when}. Do it next writes {op: 'first', id}; Skip it writes {op: 'skip', id}. Each change is one JSON file at <loop>/.loop/inbox/<epoch ms>-<random>.json written with $.fs.write, in exactly the shape bussin-autoloop/scripts/inbox.jq accepts, followed by a toast. Running and passing tasks show none of these. On a surface without Input (mobile) Edit is left out.",
+      "verify": "Tests stub fs.write and check path pattern and JSON for each action; running and done tasks have no Edit; a mobile mount has no Edit. Also feed one written file through inbox.jq in tests/autoloop-inbox.test.sh style or by hand and see it applied. Green.",
+      "depends_on": [
+        "F5"
+      ],
+      "touches": [
+        "mods/bussin-loop-status/hooks/register.tsx",
+        "mods/bussin-loop-status/hooks/status.test.tsx"
+      ],
+      "passes": false,
+      "evidence": null
+    },
+    {
+      "id": "F7",
+      "category": "functional",
+      "ui": false,
+      "area": "Steering",
+      "plain": "You can add a new task to a loop, including an evaluation that returns metrics",
+      "done_when": "'+ Add a task' in the header opens a form; Add to the loop writes an add change with the text, area, kind, done-when line and metrics.",
+      "description": "Header Button '+ Add a task' (hidden on surfaces without Input and Select) toggles a bordered form: Input 'What should it do?' (rows 2), Input 'Done when' (rows 2), Select Area (the loop's areas plus 'Added by you'), Select Kind (Build a feature / Evaluation: returns metrics / Design: send me screenshots), Select When (After what is queued / Next), and for Evaluation an Input 'Metrics to return' that takes 'precision@5>=0.75, recall@10' into [{name, target?}]. Add to the loop writes {op: 'add', plain, done_when, area, kind, metrics?, first?}; an empty text gets a toast instead. Cancel closes it.",
+      "verify": "Tests: open the form, submit build and eval tasks and check the written JSON (metrics parsed with and without targets, first for Next), an empty text writes nothing, mobile has no button. Green.",
+      "depends_on": [
+        "F6"
+      ],
+      "touches": [
+        "mods/bussin-loop-status/hooks/register.tsx",
+        "mods/bussin-loop-status/hooks/status.test.tsx"
+      ],
+      "passes": false,
+      "evidence": null
+    },
+    {
+      "id": "F8",
+      "category": "functional",
+      "ui": false,
+      "area": "Steering",
+      "plain": "The pane lists your changes that are waiting, and lets you undo them",
+      "done_when": "Waiting change files show as plain lines in a 'Your changes' box with Undo, and the box says when they will be applied.",
+      "description": "loadLoop reads <loop>/.loop/inbox/*.json (only names matching ^[0-9]+-[A-Za-z0-9]+\\.json$, at most 50) into the view. A 'Your changes · N waiting' Box under the header shows one plain line per change (Add 'x', Reword 'x', Skip 'x', Run 'x' next, Approve screenshots of 'x', Fix after review: 'x') with an Undo Button that removes that file through $.process.run(['rm', '--', path]) and refreshes. Under it: 'Applied before the next task starts.' while the loop runs, else 'Applied when the loop runs next.'",
+      "verify": "Tests: fs.list returns two inbox files, the box shows two plain lines and the right timing sentence for running and stopped loops; Undo runs rm with that exact path; a file name that does not match the pattern is ignored. Green.",
+      "depends_on": [
+        "F7"
+      ],
+      "touches": [
+        "mods/bussin-loop-status/hooks/register.tsx",
+        "mods/bussin-loop-status/hooks/status.test.tsx",
+        "mods/bussin-loop-status/types/index.d.ts"
+      ],
+      "passes": false,
+      "evidence": null
+    },
+    {
+      "id": "F9",
+      "category": "functional",
+      "ui": false,
+      "area": "Results",
+      "plain": "Evaluation tasks show their metrics as a table with targets",
+      "done_when": "An open eval task with metrics shows a Markdown table of metric, value, target and met, and a missed target offers to add a task to reach it.",
+      "description": "In the open box of a task with metrics: a Markdown table (Metric | Value | Target | ) with values to two decimals, '—' for no target or no value, '✓ met' or '✗ below'. When a target is missed, a warning line and a Button 'Add a task to reach it' writing {op: 'add', plain: 'Raise <metric> to at least <target>', kind: 'eval', area: <same area>, metrics: [that metric with target]}. Values come from evidence; dataset and command show as a caption when present.",
+      "verify": "Tests: an eval task with two metrics, one below target, renders the table text and the warning; the button writes the add change. Green.",
+      "depends_on": [
+        "F8"
+      ],
+      "touches": [
+        "mods/bussin-loop-status/hooks/register.tsx",
+        "mods/bussin-loop-status/hooks/status.test.tsx"
+      ],
+      "passes": false,
+      "evidence": null
+    },
+    {
+      "id": "F10",
+      "category": "functional",
+      "ui": false,
+      "area": "Results",
+      "plain": "Design tasks show their screenshots, which you approve or send back with a note",
+      "done_when": "An open task with screenshots shows thumbnails, an Open full size button, and Looks right / Needs changes that write review changes.",
+      "description": "Desktop (and every surface with Svg): for each screenshot, run sips (`sips -Z 480 -s format jpeg -s formatOptions 70 <file> --out <tmp>/<hash>.jpg`, tmp from one `mktemp -d` per session, cached by path and mtime), read it as base64 and draw a plain Svg (no isInteractive; the spike showed a sandboxed frame draws nothing) wrapping <image href=\"data:image/jpeg;base64,...\">; skip any thumbnail whose SVG source would pass 131072 characters. Terminal: Image with a PNG made the same way (`-s format png`, 40 columns). Each has a caption and an 'Open full size' Button running `open <absolute path>` (a file: Link draws as plain text on desktop). Under them: review state from the item (approved / changes) or a waiting review change; otherwise Looks right (writes {op: 'review', id, verdict: 'approved'}) and Needs changes, which shows an Input (rows 3) and Send to the loop (writes {op: 'review', id, verdict: 'changes', note}; empty note gets a toast).",
+      "verify": "Tests stub process.run (sips, open) and fs.read: two screenshots draw two Svgs on desktop and Images on terminal; Open runs open with the absolute path; Looks right and Needs changes write the right JSON; an approved item shows 'You approved these'. Green.",
+      "depends_on": [
+        "F9"
+      ],
+      "touches": [
+        "mods/bussin-loop-status/hooks/register.tsx",
+        "mods/bussin-loop-status/hooks/status.test.tsx"
+      ],
+      "passes": false,
+      "evidence": null
+    },
+    {
+      "id": "F11",
+      "category": "functional",
+      "ui": false,
+      "area": "Status pane",
+      "plain": "The band above the prompt names the task being built and its phase, not an id",
+      "done_when": "A running loop's band row reads like '● Landing page ███░░ 36/59 · Password reset · Running the tests · ETA 40m'.",
+      "description": "workingOn() and the band row use the running task's plain sentence (shortTitle) and its phase instead of '<id> <step>'. compactLine and the status line stay as they are.",
+      "verify": "Update the band tests: the row shows the plain title and phase, no item id. Green.",
+      "depends_on": [
+        "F10"
+      ],
+      "touches": [
+        "mods/bussin-loop-status/hooks/register.tsx",
+        "mods/bussin-loop-status/hooks/status.test.tsx"
+      ],
+      "passes": false,
+      "evidence": null
+    },
+    {
+      "id": "F12",
+      "category": "functional",
+      "ui": false,
+      "area": "Docs",
+      "plain": "The README and the skill describe the new pane, and the mod gets a new version",
+      "done_when": "README and SKILL.md describe areas, opening tasks, editing, adding, your changes, metrics and screenshots; the mod is 0.5.0.",
+      "description": "README.md (the bussin-loop-status section) and bussin-autoloop/SKILL.md (Pane bullets in Status view) describe the new pane instead of Now / Up next / Recent. mods/bussin-loop-status/.claude-plugin/plugin.json version 0.5.0 and its description mentions steering the loop.",
+      "verify": "Read both sections; plugin.json says 0.5.0. tests/skills-structure.test.sh green.",
+      "depends_on": [
+        "F11",
+        "F2"
+      ],
+      "touches": [
+        "README.md",
+        "bussin-autoloop/SKILL.md",
+        "mods/bussin-loop-status/.claude-plugin/plugin.json"
+      ],
+      "passes": false,
+      "evidence": null
+    },
+    {
+      "id": "E1",
+      "category": "edge",
+      "ui": false,
+      "area": "Steering",
+      "plain": "Nothing typed in the pane can break the loop or reach outside it",
+      "done_when": "Over-long, control-character or odd text from the pane is either refused by the pane or by the driver, and change files only ever land in the loop's own inbox.",
+      "description": "Pane side: inputs are trimmed and capped (plain and done_when 500, area 40, metric names 40, at most 10 metrics) and control characters stripped before writing; the inbox path is built only from the loop path, a millisecond timestamp and [a-z0-9] random. Screenshot paths from evidence are only read when under <loop>/.loop/evidence/<id>/ (F3), and sips and open get them as separate argv entries, never through a shell. Driver side (already in inbox.jq): a property-style test in tests/autoloop-inbox.test.sh feeds a batch of awkward inputs (empty, whitespace, 501 characters, newlines, quotes, unicode, a non-object, unknown op, metrics with a string target) and checks each is applied cleanly or dropped with a reason, never leaving feature_list.json invalid.",
+      "verify": "Mod tests for the caps and for a screenshot path outside the folder; the new inbox test loop passes and `jq . .loop/feature_list.json` stays valid after it. Green.",
+      "depends_on": [
+        "F10"
+      ],
+      "touches": [
+        "mods/bussin-loop-status/hooks/register.tsx",
+        "mods/bussin-loop-status/hooks/status.test.tsx",
+        "tests/autoloop-inbox.test.sh"
+      ],
+      "passes": false,
+      "evidence": null
+    },
+    {
+      "id": "FINAL",
+      "category": "regression",
+      "ui": false,
+      "area": "Safety checks",
+      "plain": "Every test passes, the slow loop suites included, and old loops still show sensibly",
+      "done_when": "The full gate and the final suites are green.",
+      "description": "The final checks pass: the slow driver suites (agents, loop, notify, parallel) run once here, after everything else is built. Also: loops in other worktrees, loop cards and selection, Rename, Stop, Dismiss, the stale-driver warning, the status line, the band Details and Stop, and loops whose feature_list.json has none of the new fields keep working.",
+      "verify": "Run bash tests/autoloop-agents.test.sh && bash tests/autoloop-loop.test.sh && bash tests/autoloop-notify.test.sh && bash tests/autoloop-parallel.test.sh, everything green. bash .loop/verify.sh green. A mod test opens a fixture loop with only id, description and passes and sees areas from categories and plain titles from descriptions.",
+      "depends_on": [
+        "E1",
+        "F1",
+        "F10",
+        "F11",
+        "F12",
+        "F2",
+        "F3",
+        "F4",
+        "F5",
+        "F6",
+        "F7",
+        "F8",
+        "F9"
+      ],
+      "touches": [
+        "**"
+      ],
+      "passes": false,
+      "evidence": null
+    }
+  ]
+}

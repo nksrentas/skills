@@ -3,3 +3,15 @@
 reports/mutation/
 .claude/settings.local.json
 evals/results/
+.loop/usage.jsonl
+.loop/live.json
+.loop/live.json.tmp
+.loop/stop
+.loop/attempts.json
+.loop/attempts.json.tmp
+.loop/run.lock/
+.loop/port
+.loop/logs/
+.loop/name
+.loop/inbox/
+.loop/evidence/

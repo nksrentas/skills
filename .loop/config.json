@@ -1,0 +1,33 @@
+{
+  "task": "Steerable autoloop, parts 2 to 4: plain task fields, eval metrics and screenshots from sessions, and the Areas status pane with in-place editing (design in .planning/sketches/002-built-so-far and 004-steer-the-loop).",
+  "name": "Steerable loop pane",
+  "mode": "standard",
+  "new_project": false,
+  "base": "997272b3e5bce13a6c146c02cabbc395cdb9350a",
+  "commands": {
+    "test": "bash tests/autoloop-guard.test.sh && bash tests/autoloop-inbox.test.sh && bash tests/autoloop-status.test.sh && bash tests/install.test.sh && bash tests/skills-structure.test.sh && claude plugin test mods/bussin-loop-status",
+    "final": "bash tests/autoloop-agents.test.sh && bash tests/autoloop-loop.test.sh && bash tests/autoloop-notify.test.sh && bash tests/autoloop-parallel.test.sh",
+    "mod": "claude plugin test mods/bussin-loop-status",
+    "inbox": "bash tests/autoloop-inbox.test.sh",
+    "structure": "bash tests/skills-structure.test.sh"
+  },
+  "mutation_paths": [
+    "mods/bussin-loop-status/hooks/*.ts",
+    "mods/bussin-loop-status/hooks/register.tsx"
+  ],
+  "gates": {
+    "tests": true,
+    "mutation": false,
+    "browser": false
+  },
+  "skills": {
+    "context": [
+      "bussin-lean",
+      "plugin-authoring"
+    ],
+    "implement": [],
+    "review": [],
+    "end": []
+  },
+  "checkpoint": true
+}
