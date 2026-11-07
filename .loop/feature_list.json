@@ -169,8 +169,11 @@
         "mods/bussin-loop-status/hooks/status.test.tsx",
         "mods/bussin-loop-status/types/index.d.ts"
       ],
-      "passes": false,
-      "evidence": null
+      "passes": true,
+      "evidence": {
+        "commit": "a52c5335955351232396a30df07c3bfe54c105f7",
+        "ran": "bash .loop/verify.sh (fast shell suites + claude plugin test mods/bussin-loop-status: 52 pass, new test \"waiting changes show as plain lines in 'Your changes', with when they apply and an Undo that removes the file\" on terminal and desktop, running and stopped loops)"
+      }
     },
     {
       "id": "F9",
