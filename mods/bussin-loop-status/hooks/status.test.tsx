@@ -3,7 +3,7 @@ import { expect, test } from 'claude-code/testing'
 
 import { PANE } from './register'
 import { areas, commonDirFromGitFile, compactLine, compute, distinctLabels, isDriverCommand, loopLabel, phaseOf, resumeCommand, formatDuration, formatTokens, shortModel, shortName, shortTitle, statusLine } from './snapshot'
-import { currentStep, parseLog, stepStrip } from './session-log'
+import { currentStep, parseLog } from './session-log'
 
 const NOW = 4000
 
@@ -66,7 +66,6 @@ test('sums tokens and cost and breaks them down by model', async () => {
   expect(snapshot?.outputTokens).toBe(250)
   expect(snapshot?.cacheReadTokens).toBe(5000)
   expect(snapshot?.models.map(model => model.name)).toEqual(['claude-opus-5-5', 'claude-haiku-4-5'])
-  expect(snapshot?.recent.map(row => `${row.item}:${row.outcome}:${row.ok}:${row.seconds}:${row.costUsd}`)).toEqual(['R1:failed:false:300:0.5', 'F1:merged:true:600:1.5'])
 })
 
 test('has no estimate before the first item passes, and none once finished', async () => {
@@ -95,9 +94,8 @@ test('strips terminal control characters from everything read out of the repo', 
   expect(/[\u0000-\u001f\u007f-\u009f]/.test(shown.replace(/\\u00[0-9a-f]{2}/g, ''))).toBe(false)
   expect(shown).not.toContain('\\u001b')
   expect(snapshot?.items[0]?.id).toBe('F[2J1')
-  expect(snapshot?.items[0]?.note).toBe('waiting for X')
+  expect(snapshot?.items[0]?.waitingFor).toEqual(['X'])
   expect(snapshot?.models[0]?.name).toBe('evil[31m')
-  expect(snapshot?.recent[0]?.item).toBe('F1')
 })
 
 test('ignores numbers that are not numbers in the loop files', async () => {
@@ -127,13 +125,7 @@ test('sessions whose agent reports no cost show tokens and time and mark cost un
   expect(snapshot?.costUsd).toBe(0)
   expect(snapshot?.outputTokens).toBe(3000)
   expect(snapshot?.elapsedSec).toBe(1500)
-  expect(snapshot?.items[0]?.note).toBe('cost unknown · 14m')
   expect(snapshot && statusLine(snapshot)).toBe('autoloop 2/3 done · not running')
-})
-
-test('a done item with no recorded sessions just says done', async () => {
-  const features = JSON.stringify({ features: [{ id: 'A', description: 'Old work', passes: true }] })
-  expect(compute({ features, now: NOW })?.items[0]?.note).toBe('done')
 })
 
 test('formats durations, tokens and the status line', async () => {
@@ -201,17 +193,16 @@ test('/autoloop-status reads the loop files, sets the status line and fills the 
     expect(await ui.find({ type: 'Text', text: /^ETA ~22m \(around \d\d:\d\d\) · elapsed 50m · \$2\.00 so far$/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /^\$2\.00 · 2 priced sessions · \$1\.00 each · opus-5-5 \$1\.50 · haiku-4-5 \$0\.50$/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /^out 250/ })).toBeUndefined()
-    expect(await ui.find({ type: 'Text', text: /^Now$/ })).toBeDefined()
+    expect(await ui.find({ key: 'area-Other', text: '▾ Other' })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^[█░]{12} 1\/4$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^◆ building 1$/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /^CSV download$/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /w1 · 5m/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^Reading the plan$/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /^Filters unchanged$/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /1 attempt · \$0\.50 · 5m/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /^1 wait for F2: E1$/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /^No session log yet/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /^Recent$/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /^R1 failed$/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /^F1 merged$/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /10m · \$1\.50 · \d\d:\d\d/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^trying again$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^after CSV download$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^Export button$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^\d\d:\d\d$/ })).toBeDefined()
     expect(await ui.findAll({ type: 'Text', text: /^CSV download$/ })).toHaveLength(1)
     await ui.press({ key: 'show-tokens' })
     expect(await ui.find({ type: 'Text', text: /^out 250 · in 1\.4k · cache read 5\.0k · cache write 100$/ })).toBeDefined()
@@ -564,8 +555,7 @@ test('a running loop whose driver process is gone shows a warning, no Stop, and 
     expect(await pane.find({ type: 'Text', text: /^⚠ project$/ })).toBeDefined()
     expect(await pane.find({ type: 'Text', text: /^driver not running · parallel × 2 · codex$/ })).toBeDefined()
     expect(await pane.find({ type: 'Text', text: /The loop driver is not running/ })).toBeDefined()
-    expect(await pane.find({ type: 'Text', text: /nothing is working on F2/ })).toBeDefined()
-    expect(await pane.find({ type: 'Text', text: /^w1 · 5m · attempt 3$/ })).toBeDefined()
+    expect(await pane.find({ type: 'Text', text: /nothing is working on CSV download\./ })).toBeDefined()
     expect(await pane.find({ type: 'Text', text: /ETA/ })).toBeUndefined()
     expect(await pane.find({ key: 'pane-stop' })).toBeUndefined()
     await pane.unmount()
@@ -592,22 +582,11 @@ test('a loop whose driver process is alive stays running', async ($, on) => {
   await pane.unmount()
 })
 
-test('a reused pid that is not loop.sh counts as gone, and blocked items group by what they wait for', async () => {
+test('a reused pid that is not loop.sh counts as gone', async () => {
   expect(isDriverCommand('bash /skills/bussin-autoloop/scripts/loop.sh')).toBe(true)
   expect(isDriverCommand('bash loop.sh')).toBe(true)
   expect(isDriverCommand('/usr/bin/vim notes.txt')).toBe(false)
   expect(isDriverCommand('bash myloop.sh')).toBe(false)
-  const features = JSON.stringify({
-    features: [
-      { id: 'R0', passes: false },
-      ...['A', 'B', 'C'].map(id => ({ id, passes: false, depends_on: ['R0'] })),
-      { id: 'D', passes: false, depends_on: ['A', 'R0'] },
-    ],
-  })
-  expect(compute({ features, now: NOW })?.blockedGroups).toEqual([
-    { waitingFor: 'R0', items: ['A', 'B', 'C'] },
-    { waitingFor: 'A, R0', items: ['D'] },
-  ])
 })
 
 test('the resume command only runs a bussin-autoloop loop.sh outside the project, with a known agent', async () => {
@@ -662,14 +641,12 @@ test('a running row without a start time counts from now', () => {
 
 const LOG = ['10:00:01\t-\tRead\tsrc/export.ts', '10:00:02\timplement\tEdit\tsrc/export.ts', '10:00:03\tgate\tBash\tbash .loop/verify.sh', '10:00:04\t-\tSay\tgate \u001b[31mis running'].join('\n')
 
-test('a session log becomes lines, a current step and a step strip', () => {
+test('a session log becomes lines and a current step', () => {
   const lines = parseLog(LOG)
   expect(lines).toHaveLength(4)
   expect(lines[3]).toEqual({ time: '10:00:04', step: '-', kind: 'Say', text: 'gate [31mis running' })
   expect(currentStep(lines)).toBe('gate')
-  expect(stepStrip(lines).map(step => `${step.name}:${step.state}`).join(' ')).toBe('Orient:done Implement:done Gate:now Review:todo Browser:todo Commit:todo')
   expect(currentStep([])).toBe('orient')
-  expect(stepStrip([]).find(step => step.state === 'now')?.name).toBe('Orient')
   expect(parseLog(Array.from({ length: 60 }, (_, i) => `t${i}\t-\tBash\tx`).join('\n'))).toHaveLength(40)
 })
 
@@ -709,7 +686,7 @@ function answerLogged(on: On, files: Record<string, string>, reads: string[], wr
   on('ui.toast', async () => ({ value: undefined }))
 }
 
-test('the pane shows each running item with its step strip and live log, the band its step, and this Mac', async ($, on) => {
+test('the pane shows each running task with its phase from the session log, the band its step, and this Mac', async ($, on) => {
   const live = JSON.stringify({ ...JSON.parse(LIVE), machine: { sessions: 5, in_use: 3 } })
   const files: Record<string, string> = {
     ...LOOP_FILES,
@@ -723,10 +700,8 @@ test('the pane shows each running item with its step strip and live log, the ban
     const pane = await $.ui.mount({ ...PANE_TARGET, surface })
     expect(await pane.find({ type: 'Text', text: /^● Export invoices to CSV$/ })).toBeDefined()
     expect(await pane.find({ type: 'Text', text: /^Export invoices to CSV\. Paid ones only\.$/ })).toBeDefined()
-    expect(await pane.find({ type: 'Text', text: /^✓ Implement$/ })).toBeDefined()
-    expect(await pane.find({ type: 'Text', text: /^› Gate$/ })).toBeDefined()
-    expect(await pane.find({ type: 'Text', text: /^bash \.loop\/verify\.sh$/ })).toBeDefined()
-    expect(await pane.find({ type: 'Text', text: /^gate \[31mis running$/ })).toBeDefined()
+    expect(await pane.find({ type: 'Text', text: /^Running the tests$/ })).toBeDefined()
+    expect(await pane.find({ type: 'Text', text: /verify\.sh|is running/ })).toBeUndefined()
     expect(await pane.find({ type: 'Text', text: /^This Mac: 3 of 5 loop sessions in use · room for 2 more$/ })).toBeDefined()
     await pane.unmount()
   }
@@ -788,7 +763,7 @@ test('a large session log is read through tail, not whole', async ($, on) => {
   expect(reads).not.toContain('/project/.loop/logs/F2.log')
   expect(runs).toContainEqual(['tail', '-n', '40', '/project/.loop/logs/F2.log'])
   const pane = await $.ui.mount({ ...PANE_TARGET, surface: 'terminal' })
-  expect(await pane.find({ type: 'Text', text: /^› Commit$/ })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: /^Saving the work$/ })).toBeDefined()
   await pane.unmount()
 })
 
@@ -859,4 +834,46 @@ test('the new task fields are stripped of control characters', () => {
 test('areas keep first-seen order with done and total counts', () => {
   const groups = areas(compute({ features: STEERABLE, now: NOW })?.items ?? [])
   expect(groups.map(group => `${group.name} ${group.done}/${group.total} ${group.items.map(row => row.id).join(',')}`)).toEqual(['Search 1/2 F1,F3', 'Checkout 0/1 F2'])
+})
+
+const AREA_FEATURES = JSON.stringify({
+  features: [
+    { id: 'A1', area: 'Search', plain: 'Search finds products by name', passes: true },
+    { id: 'A2', area: 'Search', plain: 'Empty search says so', passes: false, depends_on: ['A3'] },
+    { id: 'A4', area: 'Checkout', plain: 'Refunds work', passes: false },
+    { id: 'A3', area: 'Checkout', plain: 'Pay by card', passes: false },
+    { id: 'A5', area: 'Account', plain: 'Change your password', passes: false },
+    { id: 'A6', area: 'Docs', plain: 'Readme explains it', passes: true },
+  ],
+})
+
+test('the pane lists areas with counts and status, opens and closes them, and never shows an item id', async ($, on) => {
+  const files: Record<string, string> = {
+    '/project/.loop/feature_list.json': AREA_FEATURES,
+    '/project/.loop/usage.jsonl': JSON.stringify({ item: 'A5', outcome: 'failed', started_at: 1000, ended_at: 1200 }),
+    '/project/.loop/live.json': JSON.stringify({ state: 'running', started_at: 1000, updated_at: 3990, running: [{ item: 'A3', worker: 0, started_at: 3700 }] }),
+  }
+  answerLogged(on, files, [], {})
+  await $.command.run(RUN_COMMAND)
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const pane = await $.ui.mount({ ...PANE_TARGET, surface })
+    expect((await pane.findAll({ type: 'Button', text: /^[▾▸] / })).map(button => button.text)).toEqual(['▸ Search', '▾ Checkout', '▾ Account', '▸ Docs'])
+    expect((await pane.findAll({ type: 'Text', text: /^[█░]{12} \d\/\d$/ })).map(text => text.text.slice(13))).toEqual(['1/2', '0/2', '0/1', '1/1'])
+    for (const status of ['waiting its turn', '◆ building 1', '1 needs a look', '✓ all work']) expect(await pane.find({ type: 'Text', text: status })).toBeDefined()
+    expect((await pane.findAll({ type: 'Text', text: /^(Pay by card|Refunds work|Change your password)$/ })).map(text => text.text)).toEqual(['Pay by card', 'Refunds work', 'Change your password'])
+    expect(await pane.find({ type: 'Text', text: /^not started$/ })).toBeDefined()
+    expect(await pane.find({ type: 'Text', text: /^Empty search says so$/ })).toBeUndefined()
+    await pane.press({ key: 'area-Search' })
+    expect(await pane.find({ key: 'area-Search', text: '▾ Search' })).toBeDefined()
+    expect((await pane.findAll({ type: 'Text', text: /^(Empty search says so|Search finds products by name)$/ })).map(text => text.text)).toEqual(['Empty search says so', 'Search finds products by name'])
+    expect(await pane.find({ type: 'Text', text: /^after Pay by card$/ })).toBeDefined()
+    await pane.press({ key: 'area-Checkout' })
+    expect(await pane.find({ type: 'Text', text: /^Pay by card$/ })).toBeUndefined()
+    const shown = [...(await pane.findAll({ type: 'Text' })), ...(await pane.findAll({ type: 'Button' }))].map(element => element.text)
+    expect(shown.filter(text => /\bA[1-6]\b/.test(text))).toEqual([])
+    expect(shown.filter(text => /^(Now|Up next|Recent)$/.test(text))).toEqual([])
+    await pane.press({ key: 'area-Search' })
+    await pane.press({ key: 'area-Checkout' })
+    await pane.unmount()
+  }
 })

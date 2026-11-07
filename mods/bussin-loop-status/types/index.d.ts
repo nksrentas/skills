@@ -4,9 +4,7 @@ export type Metric = { name: string; value: number | null; target: number | null
 
 export type ItemRow = {
   id: string
-  title: string
   state: ItemState
-  note: string
   waitingFor?: string[]
   area: string
   plain: string
@@ -23,11 +21,7 @@ export type ItemRow = {
 
 export type Area = { name: string; done: number; total: number; items: ItemRow[] }
 
-export type BlockedGroup = { waitingFor: string; items: string[] }
-
-export type SessionRow = { item: string; outcome: string; ok: boolean | null; seconds: number; costUsd: number | null; endedAt: number | null }
-
-export type RunningRow = { item: string; title: string; worker: number; seconds: number; attempt: number }
+export type RunningRow = { item: string; worker: number; seconds: number; attempt: number }
 
 export type ModelRow = { name: string; costUsd: number; priced: boolean; inputTokens: number; outputTokens: number }
 
@@ -58,8 +52,6 @@ export type LoopSnapshot = {
   models: ModelRow[]
   runningRows: RunningRow[]
   items: ItemRow[]
-  blockedGroups: BlockedGroup[]
-  recent: SessionRow[]
   machine: { sessions: number; inUse: number } | null
 }
 
@@ -69,6 +61,6 @@ export type LoopView = { name: string; label: string; task: string; path: string
 
 declare module 'claude-code' {
   interface PluginState {
-    'bussin-loop-status': { loops: LoopView[]; selected: string | null; renaming: string | null; showTokens: boolean }
+    'bussin-loop-status': { loops: LoopView[]; selected: string | null; renaming: string | null; showTokens: boolean; openAreas: Record<string, boolean> }
   }
 }

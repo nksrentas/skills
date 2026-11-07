@@ -1,4 +1,4 @@
-import type { Area, BlockedGroup, ItemRow, LoopSnapshot, Metric, ModelRow, RunningRow, SessionRow } from '../types'
+import type { Area, ItemRow, LoopSnapshot, Metric, ModelRow, RunningRow } from '../types'
 
 type Feature = {
   id: string
@@ -168,7 +168,6 @@ const parseLines = (text: string | undefined): Usage[] =>
 const sum = (rows: Usage[], pick: (row: Usage) => number | undefined) =>
   rows.reduce((total, row) => total + (pick(row) ?? 0), 0)
 
-const title = (feature: Feature | undefined) => feature?.details.description ?? ''
 
 const loopStateOf = (live: Live | undefined, done: number, total: number, stopRequested: boolean): LoopSnapshot['loopState'] => {
   if (live?.state === 'running' && stopRequested) return 'stopping'
@@ -211,15 +210,6 @@ const modelRows = (usage: Usage[]): ModelRow[] => {
   return [...byName.values()].sort((a, b) => b.costUsd - a.costUsd)
 }
 
-const spend = (sessions: Usage[]) => {
-  const priced = sessions.filter(row => row.cost_usd !== undefined)
-  const minutes = Math.round(sum(sessions, row => row.duration_ms) / 60000)
-  return [
-    priced.length > 0 ? formatCost(sum(priced, row => row.cost_usd)) : sessions.length > 0 ? 'cost unknown' : '',
-    minutes > 0 ? `${minutes}m` : '',
-  ].filter(Boolean)
-}
-
 const PHASES = new Map([
   ['orient', 'Reading the plan'],
   ['implement', 'Writing the code'],
@@ -234,24 +224,16 @@ export const phaseOf = (step: string) => PHASES.get(step) ?? 'Reading the plan'
 
 const itemRow = (feature: Feature, passed: Set<string>, running: Map<string, number>, usage: Usage[]): ItemRow => {
   const sessions = usage.filter(row => row.item === feature.id)
-  const base = { id: feature.id, title: title(feature), ...feature.details, finishedAt: null, phase: null }
+  const base = { id: feature.id, ...feature.details, finishedAt: null, phase: null }
   if (feature.passes) {
     const finishedAt = sessions.findLast(row => OUTCOME_OK[row.outcome] === true)?.ended_at ?? null
-    return { ...base, state: 'done', note: spend(sessions).join(' · ') || 'done', finishedAt }
+    return { ...base, state: 'done', finishedAt }
   }
-  const worker = running.get(feature.id)
-  if (worker !== undefined) {
-    return { ...base, state: 'running', note: worker > 0 ? `worker ${worker}` : 'now', phase: phaseOf('orient') }
-  }
-  if (sessions.length > 0) {
-    const attempts = sessions.length === 1 ? '1 attempt' : `${sessions.length} attempts`
-    return { ...base, state: 'failing', note: [attempts, ...spend(sessions)].join(' · ') }
-  }
+  if (running.has(feature.id)) return { ...base, state: 'running', phase: phaseOf('orient') }
+  if (sessions.length > 0) return { ...base, state: 'failing' }
   const waitingFor = (feature.depends_on ?? []).filter(id => !passed.has(id))
-  if (waitingFor.length > 0) {
-    return { ...base, state: 'waiting', note: `waiting for ${waitingFor.join(', ')}`, waitingFor }
-  }
-  return { ...base, state: 'ready', note: 'ready' }
+  if (waitingFor.length > 0) return { ...base, state: 'waiting', waitingFor }
+  return { ...base, state: 'ready' }
 }
 
 export const areas = (items: ItemRow[]): Area[] => {
@@ -265,29 +247,6 @@ export const areas = (items: ItemRow[]): Area[] => {
 }
 
 const OUTCOME_OK: Record<string, boolean> = { passed: true, merged: true, failed: false, error: false, 'not merged': false }
-
-const sessionRows = (usage: Usage[]): SessionRow[] =>
-  usage
-    .slice(-3)
-    .reverse()
-    .map(row => ({
-      item: row.item,
-      outcome: row.outcome,
-      ok: OUTCOME_OK[row.outcome] ?? null,
-      seconds: Math.round((row.duration_ms ?? 0) / 1000),
-      costUsd: row.cost_usd ?? null,
-      endedAt: row.ended_at ?? null,
-    }))
-
-const blockedGroups = (items: ItemRow[]): BlockedGroup[] => {
-  const groups = new Map<string, string[]>()
-  for (const row of items) {
-    if (row.state !== 'waiting') continue
-    const key = (row.waitingFor ?? []).join(', ')
-    groups.set(key, [...(groups.get(key) ?? []), row.id])
-  }
-  return [...groups.entries()].map(([waitingFor, ids]) => ({ waitingFor, items: ids })).sort((a, b) => b.items.length - a.items.length)
-}
 
 const attemptCounts = (text: string | undefined) => {
   const parsed = parseJson<unknown>(text)
@@ -324,7 +283,6 @@ export const compute = (files: LoopFiles): LoopSnapshot | null => {
     loopState === 'running' && !stale && doneByLoop > 0 && remaining > 0 ? Math.round((remaining * sessionSec) / doneByLoop / parallelism) : null
   const runningRows: RunningRow[] = runningList.map(row => ({
     item: row.item,
-    title: title(features.find(feature => feature.id === row.item)),
     worker: row.worker,
     seconds: Math.max(0, files.now - (row.started_at ?? files.now)),
     attempt: Math.floor(num(attempts[row.item])),
@@ -356,8 +314,6 @@ export const compute = (files: LoopFiles): LoopSnapshot | null => {
     models: modelRows(usage),
     runningRows,
     items,
-    blockedGroups: blockedGroups(items),
-    recent: sessionRows(usage),
     machine: live?.machine ?? null,
   }
 }
