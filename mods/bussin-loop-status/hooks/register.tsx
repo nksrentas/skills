@@ -1,9 +1,10 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { ItemState, LogLine, LoopSnapshot, LoopView } from '../types'
-import { currentStep, parseLog, SAFE_ITEM, stepStrip } from './session-log'
+import type { Area, ItemRow, ItemState, LogLine, LoopSnapshot, LoopView } from '../types'
+import { currentStep, parseLog, SAFE_ITEM } from './session-log'
 import {
+  areas,
   baseName,
   commonDirFromGitFile,
   compactLine,
@@ -34,7 +35,6 @@ import {
 } from './snapshot'
 
 const REFRESH_MS = 5000
-const LOG_ROWS = 6
 const MAX_LOG_READ = 256 * 1024
 
 export const PANE = 'autoloop-status'
@@ -43,8 +43,17 @@ export const loopsAtom = atom({ plugin: 'bussin-loop-status', key: 'loops' } as 
 export const selectedAtom = atom({ plugin: 'bussin-loop-status', key: 'selected' } as const, null as string | null)
 export const renamingAtom = atom({ plugin: 'bussin-loop-status', key: 'renaming' } as const, null as string | null)
 export const showTokensAtom = atom({ plugin: 'bussin-loop-status', key: 'showTokens' } as const, false)
+// Keyed `<loop path>\n<area name>`; an area nobody toggled is open while it has running or failing tasks.
+export const openAreasAtom = atom({ plugin: 'bussin-loop-status', key: 'openAreas' } as const, {} as Record<string, boolean>)
 
-const STATE_COLOR: Record<ItemState, string> = { done: 'success', running: 'claude', waiting: 'subtle', failing: 'error', ready: 'text' }
+const TASK_MARK: Record<ItemState, { icon: string; color: string }> = {
+  running: { icon: '◆', color: 'claude' },
+  failing: { icon: '↻', color: 'warning' },
+  ready: { icon: '○', color: 'subtle' },
+  waiting: { icon: '○', color: 'subtle' },
+  done: { icon: '✓', color: 'success' },
+}
+const TASK_ORDER: Record<ItemState, number> = { running: 0, failing: 1, ready: 2, waiting: 3, done: 4 }
 const LOOP_COLOR: Record<LoopSnapshot['loopState'], string> = {
   running: 'claude',
   stopping: 'warning',
@@ -53,7 +62,6 @@ const LOOP_COLOR: Record<LoopSnapshot['loopState'], string> = {
   stopped: 'subtle',
   idle: 'subtle',
 }
-const KIND_COLOR: Record<string, string> = { Error: 'error', Done: 'success', Edit: 'claude', Bash: 'text', Say: 'subtle' }
 
 function costSummary(snapshot: LoopSnapshot) {
   const priced = snapshot.sessions - snapshot.unpricedSessions
@@ -108,6 +116,23 @@ function machineText(loops: LoopView[]) {
   if (machine === undefined || machine === null) return null
   const room = machine.sessions - machine.inUse
   return `This Mac: ${machine.inUse} of ${machine.sessions} loop sessions in use · ${room > 0 ? `room for ${room} more` : 'full, new sessions wait for a free one'}`
+}
+
+function areaStatus(area: Area) {
+  const busy = area.items.filter(row => row.state === 'running').length
+  if (busy > 0) return { text: `◆ building ${busy}`, color: 'claude' }
+  const failing = area.items.filter(row => row.state === 'failing').length
+  if (failing > 0) return { text: `${failing} ${failing === 1 ? 'needs' : 'need'} a look`, color: 'warning' }
+  if (area.done === area.total) return { text: '✓ all work', color: 'success' }
+  return { text: 'waiting its turn', color: 'subtle' }
+}
+
+function taskNote(row: ItemRow, plainOf: Map<string, string>) {
+  if (row.state === 'running') return row.phase ?? ''
+  if (row.state === 'failing') return 'trying again'
+  if (row.state === 'done') return row.finishedAt === null ? 'done' : formatClock(row.finishedAt)
+  const after = (row.waitingFor ?? []).flatMap(id => plainOf.get(id) || [])
+  return row.state === 'waiting' && after.length > 0 ? `after ${after.map(text => shortTitle(text, 40)).join(', ')}` : 'not started'
 }
 
 function workingOn(view: LoopView) {
@@ -363,23 +388,6 @@ export const register: Register = on => {
         <Text bold>{text}</Text>
       </Box>
     )
-    const line = (key: string, heading: string, id: string, title: string, note: string, color: string) => (
-      <Box key={key} flexDirection="row">
-        {label(heading)}
-        <Box width={6}>
-          <Text color={color}>{id}</Text>
-        </Box>
-        <Box flexGrow={1} flexShrink={1}>
-          <Text color={color} wrap="truncate-end">
-            {title}
-          </Text>
-        </Box>
-        <Box flexShrink={0}>
-          <Text dimColor> {note}</Text>
-        </Box>
-      </Box>
-    )
-
     const cards = loops.length > 1 && (
       <Box flexDirection="column" width={28} flexShrink={0}>
         {loops.map(loop => (
@@ -422,9 +430,10 @@ export const register: Register = on => {
     const elapsed = snapshot.elapsedSec > 0 ? `elapsed ${formatDuration(snapshot.elapsedSec)}` : null
     const spent = snapshot.sessions > snapshot.unpricedSessions ? `${formatCost(snapshot.costUsd)} so far` : null
     const resume = resumeCommand(view.path, snapshot)
-    const runningIds = snapshot.runningRows.map(row => row.item).join(', ')
-    const open = snapshot.items.filter(row => row.state === 'failing' || row.state === 'ready')
-    const nextShown = open.slice(0, 4)
+    const runningTasks = snapshot.items
+      .filter(row => row.state === 'running')
+      .map(row => row.plain)
+      .join(', ')
 
     const header = (
       <Box flexDirection="column">
@@ -467,7 +476,7 @@ export const register: Register = on => {
           ⚠ The loop driver is not running
         </Text>
         <Text dimColor>
-          Its process has exited, so nothing is working on {runningIds || 'any item'}. Run loop.sh again to resume; attempt counts are kept.
+          Its process has exited, so nothing is working on {runningTasks || 'any task'}. Run loop.sh again to resume; attempt counts are kept.
         </Text>
         {resume !== null && <Text dimColor>{resume}</Text>}
         {resume !== null && (
@@ -485,100 +494,49 @@ export const register: Register = on => {
       </Box>
     )
 
-    const now = snapshot.runningRows.length > 0 && (
-      <Box flexDirection="column">
-        <Text bold>Now</Text>
-        {snapshot.runningRows.map(row => {
-          const lines = view.logs[row.item] ?? []
+    const openAreas = await read($, openAreasAtom)
+    const plainOf = new Map(snapshot.items.map(row => [row.id, row.plain]))
+    const areaList = (
+      <Box flexDirection="column" gap={1}>
+        {areas(snapshot.items).map(area => {
+          const key = `${view.path}\n${area.name}`
+          const isOpen = Object.hasOwn(openAreas, key) ? openAreas[key] === true : area.items.some(row => row.state === 'running' || row.state === 'failing')
+          const status = areaStatus(area)
           return (
-            <Box key={`now-${row.item}`} flexDirection="column" borderStyle="round" borderColor={snapshot.stale ? 'warning' : 'subtle'} paddingX={1}>
-              <Box flexDirection="row" gap={1}>
-                <Text bold color={snapshot.stale ? 'warning' : 'claude'}>
-                  {row.item}
-                </Text>
-                <Box flexGrow={1} flexShrink={1}>
-                  <Text wrap="truncate-end">{shortTitle(row.title)}</Text>
+            <Box key={`area-box-${area.name}`} flexDirection="column" borderStyle="round" borderColor={isOpen ? 'text' : 'subtle'} paddingX={1}>
+              <Box flexDirection="row" justifyContent="space-between" gap={1}>
+                <Button
+                  key={`area-${area.name}`}
+                  plain
+                  label={`${isOpen ? '▾' : '▸'} ${area.name}`}
+                  onPress={() => update($, openAreasAtom, open => ({ ...open, [key]: !isOpen }))}
+                />
+                <Box flexDirection="row" gap={2} flexShrink={0}>
+                  <Text>
+                    {progressBar(area.done, area.total, 12)} {area.done}/{area.total}
+                  </Text>
+                  <Text color={status.color}>{status.text}</Text>
                 </Box>
-                <Text dimColor>
-                  {[row.worker > 0 ? `w${row.worker}` : '', formatDuration(row.seconds), row.attempt > 1 ? `attempt ${row.attempt}` : ''].filter(Boolean).join(' · ')}
-                </Text>
               </Box>
-              {lines.length > 0 && (
-                <Box flexDirection="row" flexWrap="wrap" gap={1}>
-                  {stepStrip(lines).map(step => (
-                    <Text
-                      key={`step-${row.item}-${step.name}`}
-                      color={step.state === 'now' ? 'claude' : step.state === 'done' ? 'success' : 'subtle'}
-                      bold={step.state === 'now'}
-                    >
-                      {step.state === 'done' ? '✓ ' : step.state === 'now' ? '› ' : ''}
-                      {step.name}
-                    </Text>
+              {isOpen &&
+                [...area.items]
+                  .sort((a, b) => TASK_ORDER[a.state] - TASK_ORDER[b.state])
+                  .map(row => (
+                    <Box key={`task-${row.id}`} flexDirection="row" gap={1}>
+                      <Text color={TASK_MARK[row.state].color}>{TASK_MARK[row.state].icon}</Text>
+                      <Box flexGrow={1} flexShrink={1}>
+                        <Text dimColor={row.state === 'done'} wrap="truncate-end">
+                          {row.plain}
+                        </Text>
+                      </Box>
+                      <Box flexShrink={0}>
+                        <Text color={row.state === 'running' ? 'claude' : 'subtle'}>{taskNote(row, plainOf)}</Text>
+                      </Box>
+                    </Box>
                   ))}
-                </Box>
-              )}
-              {lines.slice(-LOG_ROWS).map((entry, index) => (
-                <Box key={`log-${row.item}-${index}`} flexDirection="row" gap={1}>
-                  <Text dimColor>{entry.time}</Text>
-                  <Box width={6} flexShrink={0}>
-                    <Text color={KIND_COLOR[entry.kind] ?? 'subtle'}>{entry.kind}</Text>
-                  </Box>
-                  <Box flexGrow={1} flexShrink={1}>
-                    <Text wrap="truncate-end">{entry.text}</Text>
-                  </Box>
-                </Box>
-              ))}
-              {lines.length === 0 && <Text dimColor>No session log yet; it appears once this loop runs on the latest bussin-autoloop.</Text>}
             </Box>
           )
         })}
-      </Box>
-    )
-
-    const next = (nextShown.length > 0 || snapshot.blockedGroups.length > 0) && (
-      <Box flexDirection="column">
-        {nextShown.map((row, index) => line(`next-${row.id}`, index === 0 ? 'Up next' : '', row.id, shortTitle(row.title), row.note, STATE_COLOR[row.state]))}
-        {open.length > nextShown.length && (
-          <Box key="next-more" flexDirection="row">
-            {label('')}
-            <Text dimColor>… {open.length - nextShown.length} more ready</Text>
-          </Box>
-        )}
-        {snapshot.blockedGroups.map((group, index) => (
-          <Box key={`blocked-${group.waitingFor}`} flexDirection="row">
-            {label(index === 0 && nextShown.length === 0 ? 'Up next' : '')}
-            <Box flexGrow={1} flexShrink={1}>
-              <Text dimColor wrap="truncate-end">
-                {group.items.length} wait for {group.waitingFor}: {group.items.slice(0, 6).join(' ')}
-                {group.items.length > 6 ? ' …' : ''}
-              </Text>
-            </Box>
-          </Box>
-        ))}
-      </Box>
-    )
-
-    const recent = snapshot.recent.length > 0 && (
-      <Box flexDirection="column">
-        {snapshot.recent.map((session, index) => (
-          <Box key={`recent-${index}`} flexDirection="row">
-            {label(index === 0 ? 'Recent' : '')}
-            <Box width={2}>
-              <Text color={session.ok === true ? 'success' : session.ok === false ? 'error' : 'subtle'}>{session.ok === true ? '✓' : session.ok === false ? '✗' : '·'}</Text>
-            </Box>
-            <Box flexGrow={1} flexShrink={1}>
-              <Text wrap="truncate-end">
-                {session.item} {session.outcome}
-              </Text>
-            </Box>
-            <Text dimColor>
-              {' '}
-              {[session.seconds > 0 ? formatDuration(session.seconds) : '', session.costUsd === null ? '' : formatCost(session.costUsd), session.endedAt === null ? '' : formatClock(session.endedAt)]
-                .filter(Boolean)
-                .join(' · ')}
-            </Text>
-          </Box>
-        ))}
       </Box>
     )
 
@@ -615,9 +573,7 @@ export const register: Register = on => {
           <Box flexDirection="column" flexGrow={1} flexShrink={1} gap={1}>
             {header}
             {stale}
-            {now}
-            {next}
-            {recent}
+            {areaList}
             {spend}
           </Box>
         </Box>
