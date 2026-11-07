@@ -238,6 +238,9 @@ finish() {
   if worker_redirected "$slot"; then stop_on_tamper; fi
   slot_pid[$slot]=""
   slot_item[$slot]=""
+  if [ -d "$worker_root/w$slot/.loop/evidence/$id" ]; then
+    mkdir -p .loop/evidence && rm -rf ".loop/evidence/$id" && cp -R "$worker_root/w$slot/.loop/evidence/$id" .loop/evidence/
+  fi
   remove_worktree "$slot"
   warn_new_stashes "$id"
   if git show "$branch:.loop/results/$id.json" 2>/dev/null \
@@ -344,6 +347,7 @@ run_parallel() {
       pause "$limit_wait"
       pause_after_poll=0
     fi
+    apply_inbox
     if ! left="$(remaining 2>/dev/null)"; then
       log "could not read $list, retrying"
       sleep "$poll_seconds"
