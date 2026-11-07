@@ -17,10 +17,10 @@ The parallel driver starts sessions as `run --item <id>` without `--sequential`,
 - In step 7, commit the implementation as usual. Then, in place of marking the item and writing progress, write `.loop/results/<id>.json` and commit it as `chore(loop): result <id>`:
 
 ```json
-{ "id": "F7", "passes": true, "evidence": { "commit": "<sha>", "ran": "npm test" }, "notes": "Did: ...\nLearned: ..." }
+{ "id": "F7", "passes": true, "evidence": { "commit": "<sha>", "ran": "npm test", "metrics": { "precision@5": 0.81 }, "dataset": "fixtures/queries.jsonl", "command": "npm run eval", "screenshots": [".loop/evidence/F7/1-settings.png"] }, "notes": "Did: ...\nLearned: ..." }
 ```
 
-  When the item cannot pass, write the same file with `"passes": false` and the reason in `notes`. The driver merges a passing branch into the branch the loop runs on, runs the gate again on the merged result, then marks the item and copies `notes` into `progress.md`.
+  Leave out the evidence fields that do not apply (steps 4 and 6); the driver copies the worktree's `.loop/evidence/<id>/` to the main checkout. When the item cannot pass, write the same file with `"passes": false` and the reason in `notes`. The driver merges a passing branch into the branch the loop runs on, runs the gate again on the merged result, then marks the item and copies `notes` into `progress.md`.
 
 ## Processes
 
@@ -53,6 +53,8 @@ Edge items get at least one example test each. Parsing, escaping, money, dates a
 
 ## 4. Verify gate
 
+An item with `"kind": "eval"` first runs its evaluation: the command its `verify` names, else the evaluation command the project already has. Record the numbers as `evidence.metrics` (`{"<name>": <number>}`, one entry per metric the item lists), plus `evidence.dataset` and `evidence.command`, in the item (step 7) or in the result file in worker mode. A metric that misses its `target` goes into `progress.md` (worker mode: `notes`); the item still passes or fails on its `verify` steps alone, never on a target.
+
 ```bash
 bash .loop/verify.sh
 ```
@@ -77,12 +79,20 @@ Then spawn a subagent for each skill in `config.skills.review`, with the same sp
 
 For items with `"ui": true` and `gates.browser` on, follow the item's `verify` steps in a real browser with whatever browser tool is available (Playwright MCP, Claude in Chrome, the built-in browser). Unit tests and curl missed the bugs this step catches. If no browser tool exists, record `"browser": "unavailable"` in the evidence and leave a UI item `false`.
 
+Every `"kind": "design"` item runs this step too, whatever its `ui` flag and `gates.browser`. For ui items and design items, save a PNG of each page the browser step checks to `.loop/evidence/<id>/<n>-<page>.png` (`1-pricing.png`, `2-checkout.png`) and list the paths, relative to the repo root, in `evidence.screenshots`. Git ignores `.loop/evidence/`, so never commit them. A design item is judged by these screenshots, so one without them stays `false`.
+
 ## 7. Mark and commit
 
 Set `passes: true` and `evidence` on that one item only:
 
 ```json
-"evidence": { "commit": "<sha>", "ran": "npm test, stryker 84%", "browser": "exported paid-only CSV, 12 rows" }
+"evidence": { "commit": "<sha>", "ran": "npm test, stryker 84%", "browser": "exported paid-only CSV, 12 rows", "screenshots": [".loop/evidence/F7/1-invoices.png"] }
+```
+
+An eval item adds its numbers from step 4:
+
+```json
+"evidence": { "commit": "<sha>", "ran": "npm test", "metrics": { "precision@5": 0.81, "recall@10": 0.64 }, "dataset": "fixtures/queries.jsonl", "command": "npm run eval" }
 ```
 
 Commit in two steps. First commit the implementation with a message that names the item id. Then set `passes` and `evidence` with that commit's sha, append to `progress.md` (step 8), and commit those as `chore(loop): mark <item id>`.
