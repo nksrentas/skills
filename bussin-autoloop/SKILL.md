@@ -124,7 +124,18 @@ It adds the repository to the dashboard's saved sources and re-shows a loop that
 
 ### Telegram notifications
 
-Optional and off by default. With a config file in place, the driver sends a short message to your Telegram chat when the loop starts, after every session (passed, failed with its attempt count and last output, or paused by a usage limit), when one session runs longer than `LOOP_HANG_MINUTES` (default 60), and when the loop finishes or stops, with the blocked items and the last failure when it stops on an error. Each message starts with the loop's folder name, which usually names the project, and the session title line (`shop-web · [loop] <name> · <done/total>`; the folder is left out when the loop has no other name, because the title already shows it), followed by a summary of at most three lines that `claude -p --model haiku` writes from the facts. The summary call has no tools, runs from a temp folder and gives up after 60 seconds; without the `claude` CLI, or when it fails, the message carries the facts as they are.
+Optional and off by default. With a config file in place, the driver sends a short message to your Telegram chat when the loop starts, after every session (passed, failed with its attempt count and last output, or paused by a usage limit), when one session runs longer than `LOOP_HANG_MINUTES` (default 60), and when the loop finishes or stops, with the blocked items and the last failure when it stops on an error. Each message is a short briefing in Telegram HTML, with no emojis:
+
+```text
+shop-web · Invoice reminders · 8/19          (bold; progress in code)
+F7 CSV export passed.                        (the event line)
+| Now      F8 overdue filter                 (a quote block)
+| Next     F9 filter by status
+| Pending  11 items
+| Finish   ~00:15, in 2h 44m
+```
+
+The first line is the loop's folder, which usually names the project, and the loop's name (left out when it is the folder) with its progress. The driver computes the Now / Next / Pending / Finish block from the loop's own files, so the numbers are exact: the running items, the next ready item, the items not yet passing, and an estimate from the time per passed item; when the loop stops it lists the blocked items and says "on hold". Only the event line comes from `claude -p --model haiku`, which bolds what failed and italicises the reason. That call has no tools, runs from a temp folder and gives up after 60 seconds; without the `claude` CLI, or when it fails, a template line takes its place. Its output may only keep `<b>`, `<i>` and `<code>`; everything else is escaped, and a message Telegram refuses as HTML is sent again as plain text.
 
 Setup, once per machine: create a bot with @BotFather, send it any message, read your chat id from `https://api.telegram.org/bot<token>/getUpdates`, then:
 
