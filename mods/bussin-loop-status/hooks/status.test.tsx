@@ -997,3 +997,55 @@ test('a task that has not started offers Edit, Do it next and Skip it, each writ
   expect(await mobile.find({ key: 'edit-A2' })).toBeUndefined()
   await mobile.unmount()
 })
+
+test("'+ Add a task' opens a form whose Add to the loop writes one add change", async ($, on) => {
+  const files: Record<string, string> = {
+    '/project/.loop/feature_list.json': STEER_FEATURES,
+    '/project/.loop/live.json': JSON.stringify({ state: 'running', started_at: 1000, updated_at: 3990, running: [{ item: 'A1', worker: 1, started_at: 3700 }] }),
+  }
+  const written: Record<string, string> = {}
+  const toasts: string[] = []
+  answerLogged(on, files, [], written, toasts)
+  await $.command.run(RUN_COMMAND)
+  const changes = () => Object.entries(written).filter(([path]) => path.includes('/inbox/'))
+  for (const surface of ['terminal', 'desktop'] as const) {
+    for (const path of Object.keys(written)) delete written[path]
+    toasts.length = 0
+    const pane = await $.ui.mount({ ...PANE_TARGET, surface })
+    expect(await pane.find({ key: 'add-plain' })).toBeUndefined()
+    await pane.press({ key: 'pane-add' })
+    await pane.press({ key: 'add-submit' })
+    expect(changes()).toHaveLength(0)
+    await pane.input({ key: 'add-plain', text: '  Search suggests products as you type  ', kind: 'change' })
+    await pane.input({ key: 'add-done', text: 'Typing three letters shows suggestions.', kind: 'change' })
+    expect(await pane.find({ key: 'add-metrics' })).toBeUndefined()
+    await pane.press({ key: 'add-submit' })
+    expect(await pane.find({ key: 'add-plain' })).toBeUndefined()
+    await pane.press({ key: 'pane-add' })
+    await pane.input({ key: 'add-plain', text: 'Measure search quality', kind: 'change' })
+    await pane.select({ key: 'add-area', value: 'Search' })
+    await pane.select({ key: 'add-kind', value: 'eval' })
+    await pane.select({ key: 'add-when', value: 'next' })
+    await pane.input({ key: 'add-metrics', text: 'precision@5>=0.75, recall@10 ,', kind: 'change' })
+    await pane.press({ key: 'add-submit' })
+    await pane.press({ key: 'pane-add' })
+    await pane.input({ key: 'add-plain', text: 'Something', kind: 'change' })
+    await pane.press({ key: 'add-cancel' })
+    expect(await pane.find({ key: 'add-plain' })).toBeUndefined()
+    const found = changes()
+    expect(found.every(([path]) => INBOX_FILE.test(path))).toBe(true)
+    expect(found.map(([, text]) => JSON.parse(text))).toEqual([
+      { op: 'add', plain: 'Search suggests products as you type', done_when: 'Typing three letters shows suggestions.', area: 'Added by you', kind: 'build' },
+      { op: 'add', plain: 'Measure search quality', done_when: '', area: 'Search', kind: 'eval', metrics: [{ name: 'precision@5', target: 0.75 }, { name: 'recall@10' }], first: true },
+    ])
+    expect(toasts).toEqual([
+      'Say what the new task should do before adding it',
+      "Added 'Search suggests products as you type'. Applied before the next task starts.",
+      "Added 'Measure search quality'. Applied before the next task starts.",
+    ])
+    await pane.unmount()
+  }
+  const mobile = await $.ui.mount({ ...PANE_TARGET, surface: 'mobile' })
+  expect(await mobile.find({ key: 'pane-add' })).toBeUndefined()
+  await mobile.unmount()
+})

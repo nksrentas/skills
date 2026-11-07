@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Area, ItemRow, ItemState, LogLine, LoopSnapshot, LoopView } from '../types'
+import type { AddDraft, Area, ItemRow, ItemState, LogLine, LoopSnapshot, LoopView } from '../types'
 import { currentStep, parseLog, SAFE_ITEM } from './session-log'
 import {
   areas,
@@ -50,8 +50,32 @@ export const openTaskAtom = atom({ plugin: 'bussin-loop-status', key: 'openTask'
 export const technicalAtom = atom({ plugin: 'bussin-loop-status', key: 'technical' } as const, false)
 // The task being reworded (keyed like openTask) and the text typed so far.
 export const editDraftAtom = atom({ plugin: 'bussin-loop-status', key: 'editDraft' } as const, null as { key: string; plain: string; doneWhen: string } | null)
+export const addDraftAtom = atom({ plugin: 'bussin-loop-status', key: 'addDraft' } as const, null as AddDraft | null)
 
 const LOG_ROWS = 6
+const ADDED_AREA = 'Added by you'
+const KIND_OPTIONS = [
+  { value: 'build', label: 'Build a feature' },
+  { value: 'eval', label: 'Evaluation: returns metrics' },
+  { value: 'design', label: 'Design: send me screenshots' },
+]
+const WHEN_OPTIONS = [
+  { value: 'queued', label: 'After what is queued' },
+  { value: 'next', label: 'Next' },
+]
+
+// 'precision@5>=0.75, recall@10' -> [{ name: 'precision@5', target: 0.75 }, { name: 'recall@10' }]
+function parseMetrics(text: string) {
+  return text
+    .split(',')
+    .map(part => part.trim())
+    .filter(part => part !== '')
+    .map(part => {
+      const match = /^(.+?)\s*>=\s*(.+)$/.exec(part)
+      const target = match === null ? NaN : Number(match[2])
+      return match !== null && Number.isFinite(target) ? { name: match[1] ?? part, target } : { name: part }
+    })
+}
 
 const TASK_MARK: Record<ItemState, { icon: string; color: string }> = {
   running: { icon: '◆', color: 'claude' },
@@ -304,7 +328,7 @@ async function dismiss($: EngineInterface, loop: LoopView) {
 }
 
 // One change file for the driver's inbox.sh / inbox.jq, applied between sessions.
-async function sendChange($: EngineInterface, loop: LoopView, change: Record<string, string>, done: string) {
+async function sendChange($: EngineInterface, loop: LoopView, change: Record<string, unknown>, done: string) {
   const random = crypto.randomUUID().replace(/-/g, '').slice(0, 12)
   try {
     await $.fs.write(`${loop.path}/.loop/inbox/${await $.clock.now()}-${random}.json`, `${JSON.stringify(change)}\n`)
@@ -390,6 +414,7 @@ export const register: Register = on => {
     const { Box, Button, Text } = elements
     // Mobile's table still hands out an Input, drawn as an empty Box: the app has no text field yet.
     const Input = e.surface !== 'mobile' && 'Input' in elements ? elements.Input : undefined
+    const Select = Input !== undefined && 'Select' in elements ? elements.Select : undefined
     const loops = await read($, loopsAtom)
     const view = primaryLoop(loops, await read($, selectedAtom))
     if (view === undefined) {
@@ -455,6 +480,57 @@ export const register: Register = on => {
       .filter(row => row.state === 'running')
       .map(row => row.plain)
       .join(', ')
+    const loopAreas = areas(snapshot.items)
+    const storedAdd = await read($, addDraftAtom)
+    const adding = Input !== undefined && Select !== undefined && storedAdd?.path === view.path ? storedAdd : null
+    const setAdd = (patch: Partial<AddDraft>) => update($, addDraftAtom, current => current && { ...current, ...patch })
+    const submitAdd = async () => {
+      if (adding === null) return
+      const plain = adding.plain.trim()
+      if (plain === '') {
+        $.ui.toast('Say what the new task should do before adding it')
+        return
+      }
+      const metrics = adding.kind === 'eval' ? parseMetrics(adding.metrics) : []
+      const change = {
+        op: 'add',
+        plain,
+        done_when: adding.doneWhen.trim(),
+        area: adding.area,
+        kind: adding.kind,
+        ...(metrics.length > 0 ? { metrics } : {}),
+        ...(adding.first ? { first: true } : {}),
+      }
+      if (await sendChange($, view, change, `Added '${plain}'`)) await update($, addDraftAtom, () => null)
+    }
+    const addForm = adding !== null && Input !== undefined && Select !== undefined && (
+      <Box flexDirection="column" borderStyle="round" borderColor="claude" paddingX={1}>
+        <Input key="add-plain" label="What should it do?" rows={2} value={adding.plain} onInput={(plain: string) => setAdd({ plain })} onSubmit={(plain: string) => setAdd({ plain })} />
+        <Input key="add-done" label="Done when" rows={2} value={adding.doneWhen} onInput={(doneWhen: string) => setAdd({ doneWhen })} onSubmit={(doneWhen: string) => setAdd({ doneWhen })} />
+        <Select
+          key="add-area"
+          label="Area"
+          options={[...new Set([...loopAreas.map(area => area.name), ADDED_AREA])].map(value => ({ value }))}
+          value={adding.area}
+          onSelect={(area: string) => setAdd({ area })}
+        />
+        <Select key="add-kind" label="Kind" options={KIND_OPTIONS} value={adding.kind} onSelect={(kind: string) => setAdd({ kind: kind as AddDraft['kind'] })} />
+        <Select key="add-when" label="When" options={WHEN_OPTIONS} value={adding.first ? 'next' : 'queued'} onSelect={(when: string) => setAdd({ first: when === 'next' })} />
+        {adding.kind === 'eval' && (
+          <Input
+            key="add-metrics"
+            label="Metrics to return"
+            value={adding.metrics}
+            onInput={(metrics: string) => setAdd({ metrics })}
+            onSubmit={(metrics: string) => setAdd({ metrics })}
+          />
+        )}
+        <Box flexDirection="row" gap={1}>
+          <Button key="add-submit" label="Add to the loop" onPress={submitAdd} />
+          <Button key="add-cancel" label="Cancel" onPress={() => update($, addDraftAtom, () => null)} />
+        </Box>
+      </Box>
+    )
 
     const header = (
       <Box flexDirection="column">
@@ -463,6 +539,17 @@ export const register: Register = on => {
             {loopIcon(snapshot)} {view.label}
           </Text>
           <Box flexDirection="row" gap={1} flexShrink={0}>
+            {Select !== undefined && (
+              <Button
+                key="pane-add"
+                label="+ Add a task"
+                onPress={() =>
+                  update($, addDraftAtom, current =>
+                    current?.path === view.path ? null : { path: view.path, plain: '', doneWhen: '', area: ADDED_AREA, kind: 'build', first: false, metrics: '' },
+                  )
+                }
+              />
+            )}
             <Button key="pane-rename" label="Rename" onPress={() => update($, renamingAtom, () => view.path)} />
             {canStop(snapshot) && <Button key="pane-stop" label="Stop" onPress={() => requestStop($, view)} />}
             {canDismiss(snapshot) && <Button key="pane-dismiss" label="Dismiss" onPress={() => dismiss($, view)} />}
@@ -606,7 +693,7 @@ export const register: Register = on => {
     }
     const areaList = (
       <Box flexDirection="column" gap={1}>
-        {areas(snapshot.items).map(area => {
+        {loopAreas.map(area => {
           const key = `${view.path}\n${area.name}`
           const isOpen = Object.hasOwn(openAreas, key) ? openAreas[key] === true : area.items.some(row => row.state === 'running' || row.state === 'failing')
           const status = areaStatus(area)
@@ -695,6 +782,7 @@ export const register: Register = on => {
           {cards}
           <Box flexDirection="column" flexGrow={1} flexShrink={1} gap={1}>
             {header}
+            {addForm}
             {stale}
             {areaList}
             {spend}
