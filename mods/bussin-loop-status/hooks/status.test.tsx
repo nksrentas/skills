@@ -1049,3 +1049,77 @@ test("'+ Add a task' opens a form whose Add to the loop writes one add change", 
   expect(await mobile.find({ key: 'pane-add' })).toBeUndefined()
   await mobile.unmount()
 })
+
+test("waiting changes show as plain lines in 'Your changes', with when they apply and an Undo that removes the file", async ($, on) => {
+  const inbox: Record<string, unknown> = {
+    '3999001-a1.json': { op: 'add', plain: 'Search: suggests products as you type', area: 'Search' },
+    '3999002-b2.json': { op: 'edit', id: 'A2', plain: 'An empty search explains what to type' },
+    '3999003-c3.json': { op: 'skip', id: 'A2' },
+    '3999004-d4.json': { op: 'first', id: 'A2' },
+    '3999005-e5.json': { op: 'review', id: 'A3', verdict: 'approved' },
+    '3999006-f6.json': { op: 'review', id: 'A3', verdict: 'changes', note: 'The button is too small' },
+    'notes.json': { op: 'skip', id: 'A2' },
+    '3999007-g7.json.tmp': { op: 'skip', id: 'A2' },
+    '3999008-h_8.json': { op: 'skip', id: 'A2' },
+  }
+  const files: Record<string, string> = {
+    '/project/.loop/feature_list.json': STEER_FEATURES,
+    '/project/.loop/live.json': JSON.stringify({ state: 'running', started_at: 1000, updated_at: 3990, running: [{ item: 'A1', worker: 1, started_at: 3700 }] }),
+  }
+  for (const [name, change] of Object.entries(inbox)) files[`/project/.loop/inbox/${name}`] = JSON.stringify(change)
+  const removed: string[][] = []
+  const toasts: string[] = []
+  answerLogged(on, files, [], {}, toasts)
+  on('fs.list', async (_, e) =>
+    e.path === '/project/.loop/inbox'
+      ? { value: Object.keys(files).flatMap(path => (path.startsWith('/project/.loop/inbox/') ? [{ ...ENTRY, kind: 'file' as const, name: path.slice(21) }] : [])) }
+      : { deny: `ENOENT: ${e.path}` },
+  )
+  on('process.run', async (_, e) => {
+    removed.push(e.argv)
+    delete files[e.argv[2] ?? '']
+    return { value: { exitCode: 0, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+  })
+  await $.command.run(RUN_COMMAND)
+  const lines = [
+    "Add 'Search: suggests products as you type'",
+    "Reword 'Empty search says so'",
+    "Skip 'Empty search says so'",
+    "Run 'Empty search says so' next",
+    "Approve screenshots of 'Search is fast'",
+    "Fix after review: 'The button is too small'",
+  ]
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const pane = await $.ui.mount({ ...PANE_TARGET, surface })
+    expect(await pane.find({ type: 'Text', text: /^Your changes · 6 waiting$/ })).toBeDefined()
+    expect((await pane.findAll({ type: 'Text', text: /^(Add|Reword|Skip|Run|Approve|Fix after) / })).map(text => text.text)).toEqual(lines)
+    expect(await pane.find({ type: 'Text', text: /^Applied before the next task starts\.$/ })).toBeDefined()
+    expect(await pane.find({ key: 'undo-notes.json' })).toBeUndefined()
+    await pane.unmount()
+  }
+  const pane = await $.ui.mount({ ...PANE_TARGET, surface: 'terminal' })
+  await pane.press({ key: 'undo-3999003-c3.json' })
+  expect(removed).toEqual([['rm', '--', '/project/.loop/inbox/3999003-c3.json']])
+  expect(await pane.find({ type: 'Text', text: /^Your changes · 5 waiting$/ })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: /^Skip 'Empty search says so'$/ })).toBeUndefined()
+  await pane.press({ key: 'task-A2' })
+  await pane.press({ key: 'skip-A2' })
+  expect(await pane.find({ type: 'Text', text: /^Your changes · 6 waiting$/ })).toBeDefined()
+  await pane.unmount()
+
+  files['/project/.loop/live.json'] = JSON.stringify({ state: 'stopped', started_at: 1000, updated_at: 3990, running: [] })
+  await $.command.run(RUN_COMMAND)
+  const stopped = await $.ui.mount({ ...PANE_TARGET, surface: 'desktop' })
+  expect(await stopped.find({ type: 'Text', text: /^Applied when the loop runs next\.$/ })).toBeDefined()
+  // A2 is still the open task from the terminal pane; its area no longer opens by itself once nothing runs.
+  await stopped.press({ key: 'area-Search' })
+  await stopped.press({ key: 'first-A2' })
+  expect(toasts.at(-1)).toBe("'Empty search says so' runs next. Applied when the loop runs next.")
+  await stopped.unmount()
+
+  for (const path of Object.keys(files)) if (path.startsWith('/project/.loop/inbox/')) delete files[path]
+  await $.command.run(RUN_COMMAND)
+  const empty = await $.ui.mount({ ...PANE_TARGET, surface: 'desktop' })
+  expect(await empty.find({ type: 'Text', text: /^Your changes/ })).toBeUndefined()
+  await empty.unmount()
+})

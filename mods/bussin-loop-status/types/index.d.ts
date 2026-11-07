@@ -57,7 +57,10 @@ export type LoopSnapshot = {
 
 export type LogLine = { time: string; step: string; kind: string; text: string }
 
-export type LoopView = { name: string; label: string; task: string; path: string; snapshot: LoopSnapshot; logs: Record<string, LogLine[]> }
+// A change file waiting in .loop/inbox, as one plain line.
+export type InboxChange = { name: string; path: string; line: string }
+
+export type LoopView = { name: string; label: string; task: string; path: string; snapshot: LoopSnapshot; logs: Record<string, LogLine[]>; changes: InboxChange[] }
 
 // The '+ Add a task' form of the loop at `path`, as typed so far.
 export type AddDraft = { path: string; plain: string; doneWhen: string; area: string; kind: 'build' | 'eval' | 'design'; first: boolean; metrics: string }
