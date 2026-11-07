@@ -1,9 +1,0 @@
-{
-  "id": "F5",
-  "passes": true,
-  "evidence": {
-    "commit": "692b814d9825b75c5dc44f4223737773d3f808d6",
-    "ran": "bash .loop/verify.sh (fast shell suites + claude plugin test mods/bussin-loop-status: 49 pass, new test 'pressing a task opens it in place ...' on terminal and desktop)"
-  },
-  "notes": "Did: task rows are now plain Buttons keyed task-<id> (icon and plain sentence as Text children, label = plain), so existing Text-based tests still find the sentence. Pressing one toggles a bordered Box under it (openTaskAtom, keyed '<loop path>\\n<id>', so opening another closes the first). The box shows '<phase> · running for <duration>' for a running task, 'Done when: <doneWhen>' for every task that has one, and a plain dim Button tech-<id> ('Technical details' / 'Hide technical details') toggling technicalAtom (boolean; any task press resets it) to show 'Id: <id>', the description, 'Verify: <verify>' and the last six log lines ('<time> <kind> <text>') from view.logs. types/index.d.ts PluginState gains openTask and technical (outside F5's touches, needed for the atom contract).\nLearned: a Button's Text children are found by ui.find({type: 'Text'}) in tests, so making a row pressable this way keeps text queries working. view.logs only holds running rows, so no state check is needed before reading it. F6 can add Edit / Do it next / Skip it inside taskBox for pending rows.\nLesson: [bussin-react] the first version left technical details open when a task was closed and reopened, contradicting its own comment; review caught it → when a child toggle belongs to a parent's open state, reset the child in the parent's toggle handler."
-}

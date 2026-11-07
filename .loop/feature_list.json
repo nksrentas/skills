@@ -102,8 +102,11 @@
         "mods/bussin-loop-status/hooks/register.tsx",
         "mods/bussin-loop-status/hooks/status.test.tsx"
       ],
-      "passes": false,
-      "evidence": null
+      "passes": true,
+      "evidence": {
+        "commit": "692b814d9825b75c5dc44f4223737773d3f808d6",
+        "ran": "bash .loop/verify.sh (fast shell suites + claude plugin test mods/bussin-loop-status: 49 pass, new test 'pressing a task opens it in place ...' on terminal and desktop)"
+      }
     },
     {
       "id": "F6",
