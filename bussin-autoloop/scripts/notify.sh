@@ -82,8 +82,7 @@ def clock: strflocaltime("%H:%M");
 notify_status() {
   local title label folder live usage
   title="$(bash "$script_dir/loop-status.sh" --title 2> /dev/null || echo "[loop] $LOOP_NAME")"
-  label="${title#\[loop\] }"
-  label="${label% · not running}"
+  label="${title#*] }"
   label="${label% · *}"
   folder="$(basename "$PWD")"
   live="$(jq -c 'objects' "$live_file" 2> /dev/null || true)"

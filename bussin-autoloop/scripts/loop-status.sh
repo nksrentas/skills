@@ -4,6 +4,7 @@ set -euo pipefail
 watch_seconds=""
 stop=0
 title=0
+next_title=""
 rename=""
 telegram=""
 target=""
@@ -16,6 +17,12 @@ while [ $# -gt 0 ]; do
       ;;
     --stop) stop=1 ;;
     --title) title=1 ;;
+    --next-title)
+      next_title="${2:-}"
+      [ -n "$next_title" ] || { echo "loop-status.sh: --next-title needs the title the session has now" >&2; exit 1; }
+      title=1
+      shift
+      ;;
     --telegram)
       telegram=list
       if [[ "${2:-}" =~ ^(on|off)$ ]]; then telegram="$2"; shift; fi
@@ -26,7 +33,7 @@ while [ $# -gt 0 ]; do
       shift
       ;;
     -h | --help)
-      echo "usage: loop-status.sh [--watch [seconds] | --stop | --rename <name> | --title | --telegram [on|off]] [project dir]"
+      echo "usage: loop-status.sh [--watch [seconds] | --stop | --rename <name> | --title | --next-title <title> | --telegram [on|off]] [project dir]"
       exit 0
       ;;
     *) target="$1" ;;
@@ -306,17 +313,43 @@ telegram_toggle() {
   done < <(loop_dirs | awk '!seen[$0]++')
 }
 
+# [loop <icon> <done>/<total>] <name>[ · <detail>]: ▸ running, ■ stopped, ◆ blocked, ✓ done
 title_line() {
-  local dir label progress state suffix=" · not running"
+  local dir label progress done total state active=0 running detail="" icon blocked
   dir="$(cd "${target:-.}" && { worker_main_dir || git rev-parse --show-toplevel 2> /dev/null || pwd; })"
   label="$(loop_label "$dir" "$(basename "$dir")" | tr -d '\000-\037\177')"
   [ -f "$dir/.loop/feature_list.json" ] || { echo "[loop] $label · no loop"; return; }
-  progress="$(jq -r '(.features // []) | map(objects) | "\(map(select(.passes == true)) | length)/\(length)"' "$dir/.loop/feature_list.json" 2> /dev/null || echo "?")"
+  progress="$(jq -r '(.features // []) | map(objects) | "\(map(select(.passes == true)) | length)/\(length)"' "$dir/.loop/feature_list.json" 2> /dev/null || echo "?/?")"
+  done="${progress%/*}" total="${progress#*/}"
   state="$(jq -r '.state // "" | strings' "$dir/.loop/live.json" 2> /dev/null || true)"
-  case "$state" in running | stopping | queued) [ "$(driver_state "$dir")" = exited ] || suffix="" ;; esac
-  echo "[loop] $label · $progress$suffix"
+  case "$state" in running | stopping | queued) [ "$(driver_state "$dir")" = exited ] || active=1 ;; esac
+  if [ "$done" = "$total" ] && [ "$total" != 0 ]; then
+    icon="✓"
+  elif [ "$active" = 1 ]; then
+    icon="▸"
+    running="$(jq -r '[.running[]?.item | strings | select(test("^[A-Za-z0-9._-]+$"))] | join(" ")' "$dir/.loop/live.json" 2> /dev/null || true)"
+    case "$running" in
+      "") ;;
+      *" "*) detail=" · $(wc -w <<< "$running" | tr -d ' ') workers" ;;
+      *) detail=" · $running $(awk -F '\t' 'BEGIN { split("orient implement gate review browser commit", s, " "); for (i in s) n[s[i]] = i; now = 1 }
+           $2 in n { now = n[$2] } END { print toupper(substr(s[now], 1, 1)) substr(s[now], 2) " " now "/6" }' "$dir/.loop/logs/$running.log" 2> /dev/null || echo "Orient 1/6")" ;;
+    esac
+  else
+    blocked="$({ jq -r --argjson max "${LOOP_ITEM_ATTEMPTS:-3}" 'to_entries[] | select((.value | type) == "number" and .value >= $max) | .key' "$dir/.loop/attempts.json" 2> /dev/null || true
+      sed -n 's/^Blocked: *\([^ ]*\).*/\1/p' "$dir/.loop/progress.md" 2> /dev/null || true; } \
+      | jq -R -s -r --slurpfile list "$dir/.loop/feature_list.json" '($list[0].features // [] | map(objects | select(.passes != true) | .id)) as $open
+        | [split("\n")[] | select(. as $id | $open | index($id))] | unique | if length == 1 then "\(.[0]) blocked" elif length > 1 then "\(length) blocked" else "" end' 2> /dev/null || true)"
+    if [ -n "$blocked" ]; then icon="◆" detail=" · $blocked"; else icon="■" detail=" · stopped"; fi
+  fi
+  echo "[loop $icon $progress] $label$detail"
 }
 
+if [ -n "$next_title" ]; then
+  # shortcut: polls every 5s, fine for a title; Claude runs this in the background and renames when it exits
+  while [ "$(title_line)" = "$next_title" ]; do sleep 5; done
+  title_line
+  exit
+fi
 if [ "$title" = 1 ]; then
   title_line
   exit
