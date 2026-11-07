@@ -10,6 +10,7 @@ worker_root="${LOOP_WORKER_ROOT:-$main_dir.loop-workers}"
 state_dir="$(mktemp -d)"
 launched=0
 pause_after_poll=0
+agent_broken=0
 slot_pid=()
 slot_item=()
 slot_started=()
@@ -247,8 +248,14 @@ finish() {
     outcome=failed
     log "worker $slot did not pass $id (exit $status):"
     tail -n 5 "$output" | sed 's/^/    /'
+    if failed_to_start "$status" "$started" "$(date +%s)"; then
+      set_attempts "$id" $(($(attempts_of "$id") - 1))
+      launched=$((launched - 1))
+      agent_broken="$id"
+      outcome=error
+    fi
   fi
-  record_usage "$id" "$slot" "$started" "$result" "$outcome"
+  record_usage "$id" "$slot" "$started" "$result" "$outcome" "$(date +%s)" "$output"
 }
 
 running_json() {
@@ -334,7 +341,11 @@ run_parallel() {
       continue
     fi
     [ "$left" -gt 0 ] || break
-    if [ -e "$stop_file" ]; then
+    if [ -e "$stop_file" ] || [ "$agent_broken" != 0 ]; then
+      if [ "$(busy_workers)" -eq 0 ] && [ "$agent_broken" != 0 ]; then
+        startup_failure "$agent_broken"
+        exit 1
+      fi
       if [ "$(busy_workers)" -eq 0 ]; then
         rm -f "$stop_file"
         log "stopped on request; run loop.sh again to resume"

@@ -9,6 +9,10 @@ export LOOP_NAME
 list=.loop/feature_list.json
 max_stalls="${MAX_STALLS:-3}"
 limit_wait="${LIMIT_WAIT:-600}"
+startup_seconds="${LOOP_STARTUP_SECONDS:-10}"
+# a session that exits non-zero this fast never started working: the agent CLI itself failed (sign-in, flags, model)
+failed_to_start() { [ "$1" -ne 0 ] && [ $(($3 - $2)) -lt "$startup_seconds" ]; }
+startup_failure() { echo "autoloop: the $agent CLI exited within ${startup_seconds}s without working on $1, so the loop stopped and did not count the attempt. Fix the error above (sign-in, LOOP_AGENT_ARGS, LOOP_MODEL), then run loop.sh again." >&2; }
 limit_pattern="hit your .*limit|usage limit reached"
 
 user_config_count="${GIT_CONFIG_COUNT:-0}"
@@ -111,10 +115,15 @@ while [ "$(remaining)" -gt 0 ]; do
   write_live running sequential 1 "[]"
   ended="$(date +%s)"
   if ! audit_session "$before_head"; then
-    record_usage "$item" 0 "$started" "$session_output" failed "$ended"
+    record_usage "$item" 0 "$started" "$session_output" failed "$ended" "$session_errors"
     exit 1
   fi
-  record_usage "$item" 0 "$started" "$session_output" "$outcome" "$ended"
+  record_usage "$item" 0 "$started" "$session_output" "$outcome" "$ended" "$session_errors"
+  if [ "$outcome" = error ] && failed_to_start "$status" "$started" "$ended"; then
+    set_attempts "$item" $(($(attempts_of "$item") - 1))
+    startup_failure "$item"
+    exit 1
+  fi
   if [ "$before" = "$after" ] && [ "$hit_limit" = true ]; then
     iteration=$((iteration - 1))
     echo "autoloop: usage limit hit, retrying in ${limit_wait}s" >&2

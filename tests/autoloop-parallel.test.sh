@@ -31,6 +31,10 @@ if [ "\$(jq -r --arg id "\$id" '.features[] | select(.id == \$id) | .limit // fa
   echo "You've hit your session limit"
   exit 1
 fi
+if [ "\$(jq -r --arg id "\$id" '.features[] | select(.id == \$id) | .broken // false' .loop/feature_list.json)" = true ]; then
+  echo "Error: Invalid API key" >&2
+  exit 1
+fi
 if [ "\$(jq -r --arg id "\$id" '.features[] | select(.id == \$id) | .leak // false' .loop/feature_list.json)" = true ]; then
   mkdir -p .cache
   nohup perl -e 'setpgrp(0, 0); exec @ARGV' bash -c 'while :; do touch .cache/\$RANDOM; sleep 0.1; done' > /dev/null 2>&1 &
@@ -279,6 +283,12 @@ make_project "$cap" true '{"features": [{"id": "A", "passes": false, "evidence":
 cap_status=0
 run_loop "$cap" LOOP_WORKERS=9 || cap_status=$?
 check "worker count above the cap is refused" '[ "$cap_status" != 0 ] && grep -q "above the cap of 8" "$cap/out"'
+
+broken="$tmp/broken"
+make_project "$broken" "true" '{"features":[{"id":"B1","passes":false,"broken":true,"writes":"src/b1.txt","touches":["src/b1.txt"]},{"id":"B2","passes":false,"writes":"src/b2.txt","touches":["src/b2.txt"]}]}'
+broken_status=0
+run_loop "$broken" LOOP_WORKERS=2 || broken_status=$?
+check "an agent that fails to start stops the loop and costs no attempt, while running workers finish" '[ "$broken_status" = 1 ] && grep -q "exited within 10s without working on B1" "$broken/out" && [ "$(jq -r ".B1 // 0" "$broken/.loop/attempts.json")" = 0 ] && grep -q "merged B2" "$broken/out" && [ "$(grep -c "start B1" "$broken/events")" = 1 ]'
 
 [ "$failures" = 0 ] && { echo "all parallel checks passed"; exit 0; }
 for out in "$tmp"/*/out "$tmp"/*/*/out; do echo "--- $out"; cat "$out"; done

@@ -57,7 +57,7 @@ Edge items get at least one example test each. Parsing, escaping, money, dates a
 bash .loop/verify.sh
 ```
 
-Run it in the foreground and wait for it, however long it takes. Under Copilot, whose allowlist names the loop scripts by path, run them as `.loop/verify.sh` and `.loop/init.sh` without `bash`. It runs the test command, then Stryker on the changed files when `gates.mutation` is on, and creates `.loop/tests-passed` only if everything held. Do not run `commands.e2e` on your own: the end-to-end suite runs only in the `E2E` item, the last one. If mutants survive, add the tests that kill them. Do not touch thresholds, do not exclude files. After three attempts on the same item, write what survived into `progress.md`, leave the item `false`, and stop; the driver counts the failed session and moves on once the item runs out of attempts.
+Run it in the foreground and wait for it, however long it takes. Under Copilot, whose allowlist names the loop scripts by path, run them as `.loop/verify.sh` and `.loop/init.sh` without `bash`. It runs the test command, then Stryker on the changed files when `gates.mutation` is on, and creates `.loop/tests-passed` only if everything held. Do not run `commands.final` on your own: the slow checks run only in the `FINAL` item, the last one. If mutants survive, add the tests that kill them. Do not touch thresholds, do not exclude files. After three attempts on the same item, write what survived into `progress.md`, leave the item `false`, and stop; the driver counts the failed session and moves on once the item runs out of attempts.
 
 ## 5. Review
 

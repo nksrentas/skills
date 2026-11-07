@@ -6,7 +6,7 @@ Run after a loop finishes, or any time between items. It turns the mistakes the 
 
 - Every `Lesson:` line in `.loop/progress.md`. Sessions write one whenever something went wrong (see step 8 of `references/run.md`).
 - Every proposal in `.loop/retro.md`, the thorough-mode retros.
-- From `.loop/usage.jsonl`, the items that needed more than one session or ended `failed` or `error`. From `.loop/attempts.json`, the items that ran out of attempts. Read the matching `progress.md` entries to see why.
+- From `.loop/usage.jsonl`, every session that did not pass: `failed`, `error` or `not merged`, and the items that needed more than one session. Each such row has a `reason`: the session's last log and error lines, which the driver keeps because the next session overwrites the item's log. From `.loop/attempts.json`, the items that ran out of attempts. Read the matching `progress.md` entries too. This is the main source: sessions that fail rarely get to write a `Lesson:` line.
 - Rules already promoted from this loop, listed under `## Promoted` in `.loop/retro.md`, so nothing is proposed twice.
 
 ## 2. Turn them into rules
