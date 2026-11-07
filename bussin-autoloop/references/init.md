@@ -24,13 +24,13 @@ If `.loop/retro.md` exists from a previous loop, read it, including the `## Prom
 
 ## 3a. Existing project: research
 
-Use the Explore subagent so the main context stays clean. Find: the feature area and its entry points, the data layer, anything similar already built (export, download, auth guards), the test runner and how tests are organised, the dev server command, lint and typecheck commands, CI config. Record the commands into `config.commands`.
+Use the Explore subagent so the main context stays clean. Find: the feature area and its entry points, the data layer, anything similar already built (export, download, auth guards), the test runner and how tests are organised, the dev server command, lint and typecheck commands, CI config. Record the commands into `config.commands`. Keep `commands.test` to the fast suites (unit, integration) and put an end-to-end suite (Playwright, Cypress) in `commands.e2e`: the gate runs `commands.test` after every item, while the end-to-end suite runs once, in the last item (step 8).
 
 Run the test suite once. Write the baseline counts into `progress.md`. If something already fails, record it; do not fix it, the loop must not inherit unrelated work.
 
 ## 3b. New project: scaffold
 
-Ask for the stack only if `--stack` is missing and the task does not imply one. One question, then proceed. Scaffold with the stack's standard generator, add lint, typecheck, a unit test runner and Playwright. Make the app boot to an empty page. The feature list for a new project is 50 to 200 small items ordered so earlier ones unblock later ones: project boots, schema, auth, each page, each API route, each validation rule, then edge cases.
+Ask for the stack only if `--stack` is missing and the task does not imply one. One question, then proceed. Scaffold with the stack's standard generator, add lint, typecheck, a unit test runner and Playwright, with the Playwright suite in `commands.e2e` rather than `commands.test`. Make the app boot to an empty page. The feature list for a new project is 50 to 200 small items ordered so earlier ones unblock later ones: project boots, schema, auth, each page, each API route, each validation rule, then edge cases.
 
 ## 3c. Pick the house skills for this stack
 
@@ -119,6 +119,8 @@ Two items run in parallel only when neither depends on the other and their `touc
 
 Order the list so that each item's `verify` steps can pass with only that item and the ones before it implemented. A verify example that also needs a later item (an input that only comes out right once trimming exists, for example) pulls that item's work forward and blurs the evidence. Pick a different example or reorder the items.
 
+When `commands.e2e` is set, end the list with one regression item `E2E`: "the end-to-end suite passes", verify `run <commands.e2e>, every test green`, `depends_on` every other id, `touches: ["**"]`. It is the only item that runs the suite, so the slow tests run once, after everything else is built, and any failure they find is fixed in that session.
+
 Mark UI-visible items with `"ui": true` so run knows the browser gate applies. All items start `"passes": false, "evidence": null`.
 
 ## 9. Checkpoint
@@ -138,6 +140,8 @@ git commit -m "chore(autoloop): init <short task slug>"
 Tell the user the guard applies to every Claude Code session in this repo while `.loop/` exists, so a commit there needs `bash .loop/verify.sh` first. Sessions the driver starts, with any agent, also pass through a git `pre-commit` hook the driver installs; it ignores commits made outside those sessions.
 
 On a re-init over an earlier loop, the guard blocks this commit because `config.json` and the scripts change. Ask the user to run the commit themselves, in their terminal or with `!` in Claude Code; neither guard checks a commit the user makes there.
+
+In the Claude desktop app, rename this session now to the line `bash "$SKILL_DIR/scripts/loop-status.sh" --title` prints, so it carries the loop's name from the start (Session title in SKILL.md).
 
 Tell the user they can change `depends_on` and `touches` at any time by editing `.loop/feature_list.json`: the driver re-reads them before every launch, and the commit guard ignores those two fields. Then tell them how to start:
 

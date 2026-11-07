@@ -71,9 +71,10 @@ The speed-up depends on the list's shape, not on the cap. Items that all edit on
 
 ### Session title
 
-A session that starts or watches loops keeps its title in the form `[loop] <project> · <n> loops · <done/total> · …`, one progress pair per running loop, for example `[loop] telu-fyi · 2 loops · 11/19 · 3/23`. `bash <skill directory>/scripts/loop-status.sh --title`, run in the project, prints that line.
+A session that creates, starts or watches a loop is always titled `[loop] <loop name> · <done/total>`, for example `[loop] Invoice reminders · 11/19`, with `· not running` added while its driver is stopped. The loop name is the same one the status views show, so a session, its terminal and the band row all carry one name. `bash <skill directory>/scripts/loop-status.sh --title`, run in the loop's checkout (or one of its workers), prints that line.
 
 - **Claude desktop app:** rename this session to that line with the app's session-title tool (`set_session_title`, session `self`):
+  - after `init` commits the loop
   - after starting a loop driver
   - after `status`
   - whenever you report on loops
@@ -198,7 +199,7 @@ For UI work, add accessibility, SEO and Emil Kowalski's animation review: `/buss
   "mode": "standard",
   "new_project": false,
   "base": "<HEAD before the init commit>",
-  "commands": { "test": "npm test", "dev": "npm run dev" },
+  "commands": { "test": "npm test", "e2e": "npx playwright test", "dev": "npm run dev" },
   "mutation_paths": ["src/**/*.ts", "src/**/*.tsx"],
   "gates": { "tests": true, "mutation": false, "browser": true },
   "skills": { "context": ["bussin-lean"], "implement": [], "review": [], "end": [] },

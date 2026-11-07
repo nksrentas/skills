@@ -274,24 +274,14 @@ request_rename() {
 }
 
 title_line() {
-  local dir repo state progress count=0 parts=""
-  repo="$(repo_name "${target:-.}")"
-  [ -n "$repo" ] || repo="$(basename "$(git rev-parse --show-toplevel 2> /dev/null || pwd)")"
-  while IFS= read -r dir; do
-    [ -f "$dir/.loop/feature_list.json" ] || continue
-    state="$(jq -r '.state // "" | strings' "$dir/.loop/live.json" 2> /dev/null || true)"
-    case "$state" in running | stopping | queued) ;; *) continue ;; esac
-    [ "$(driver_state "$dir")" != exited ] || continue
-    progress="$(jq -r '(.features // []) | map(objects) | "\(map(select(.passes == true)) | length)/\(length)"' "$dir/.loop/feature_list.json" 2> /dev/null)" || continue
-    count=$((count + 1))
-    parts="$parts · $progress"
-  done < <(loop_dirs | awk '!seen[$0]++')
-  repo="$(printf '%s' "$repo" | tr -d '\000-\037\177')"
-  if [ "$count" = 0 ]; then
-    echo "[loop] $repo · no loop running"
-  else
-    echo "[loop] $repo · $count loop$([ "$count" = 1 ] || echo s)$parts"
-  fi
+  local dir label progress state suffix=" · not running"
+  dir="$(cd "${target:-.}" && { worker_main_dir || git rev-parse --show-toplevel 2> /dev/null || pwd; })"
+  label="$(loop_label "$dir" "$(basename "$dir")" | tr -d '\000-\037\177')"
+  [ -f "$dir/.loop/feature_list.json" ] || { echo "[loop] $label · no loop"; return; }
+  progress="$(jq -r '(.features // []) | map(objects) | "\(map(select(.passes == true)) | length)/\(length)"' "$dir/.loop/feature_list.json" 2> /dev/null || echo "?")"
+  state="$(jq -r '.state // "" | strings' "$dir/.loop/live.json" 2> /dev/null || true)"
+  case "$state" in running | stopping | queued) [ "$(driver_state "$dir")" = exited ] || suffix="" ;; esac
+  echo "[loop] $label · $progress$suffix"
 }
 
 if [ "$title" = 1 ]; then
