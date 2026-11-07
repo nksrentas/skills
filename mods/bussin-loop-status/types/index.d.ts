@@ -13,6 +13,8 @@ export type ItemRow = {
   description: string
   verify: string
   metrics: Metric[]
+  dataset: string
+  command: string
   screenshots: string[]
   review: 'approved' | 'changes' | null
   finishedAt: number | null

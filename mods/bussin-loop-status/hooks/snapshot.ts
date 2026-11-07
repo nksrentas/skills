@@ -4,7 +4,7 @@ type Feature = {
   id: string
   passes?: boolean
   depends_on?: string[]
-  details: Pick<ItemRow, 'area' | 'plain' | 'doneWhen' | 'kind' | 'description' | 'verify' | 'metrics' | 'screenshots' | 'review'>
+  details: Pick<ItemRow, 'area' | 'plain' | 'doneWhen' | 'kind' | 'description' | 'verify' | 'metrics' | 'dataset' | 'command' | 'screenshots' | 'review'>
 }
 
 type Usage = {
@@ -151,6 +151,8 @@ const toFeature = (value: Record<string, unknown>): Feature => {
       description,
       verify,
       metrics: toMetrics(value.metrics, evidence.metrics),
+      dataset: nonEmpty(evidence.dataset),
+      command: nonEmpty(evidence.command),
       screenshots: toScreenshots(id, evidence.screenshots),
       review: value.review === 'approved' || value.review === 'changes' ? value.review : null,
     },

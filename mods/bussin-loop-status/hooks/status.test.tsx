@@ -936,6 +936,55 @@ const STEER_FEATURES = JSON.stringify({
 })
 const INBOX_FILE = /^\/project\/\.loop\/inbox\/4000000-[A-Za-z0-9]+\.json$/
 
+test('an eval task shows its metrics as a table with targets, and a missed target offers a task to reach it', async ($, on) => {
+  const files: Record<string, string> = {
+    '/project/.loop/feature_list.json': JSON.stringify({
+      features: [
+        {
+          id: 'Q1', area: 'Quality', plain: 'Measure search quality', kind: 'eval', passes: true,
+          metrics: [{ name: 'precision@5', target: 0.75 }, { name: 'recall@10', target: 0.6 }],
+          evidence: { commit: 'abc', metrics: { 'precision@5': 0.812, 'recall@10': 0.5, mrr: 0.4 }, dataset: 'queries-200.jsonl', command: 'npm run eval' },
+        },
+      ],
+    }),
+    '/project/.loop/live.json': JSON.stringify({ state: 'stopped', started_at: 1000, updated_at: 3990, running: [] }),
+  }
+  const written: Record<string, string> = {}
+  const toasts: string[] = []
+  answerLogged(on, files, [], written, toasts)
+  await $.command.run(RUN_COMMAND)
+  for (const surface of ['terminal', 'desktop'] as const) {
+    for (const path of Object.keys(written)) delete written[path]
+    toasts.length = 0
+    const pane = await $.ui.mount({ ...PANE_TARGET, surface })
+    await pane.press({ key: 'area-Quality' })
+    await pane.press({ key: 'task-Q1' })
+    expect((await pane.find({ key: 'metrics-Q1' }))?.text).toBe(
+      [
+        '| Metric | Value | Target | |',
+        '| --- | ---: | ---: | --- |',
+        '| precision@5 | 0.81 | 0.75 | ✓ met |',
+        '| recall@10 | 0.50 | 0.60 | ✗ below |',
+        '| mrr | 0.40 | — | — |',
+      ].join('\n'),
+    )
+    expect(await pane.find({ type: 'Text', text: /^Dataset: queries-200\.jsonl · Command: npm run eval$/ })).toBeDefined()
+    expect(await pane.find({ type: 'Text', text: /^⚠ recall@10 is 0\.50, below its target of 0\.60$/ })).toBeDefined()
+    expect(await pane.find({ key: 'reach-Q1-precision@5' })).toBeUndefined()
+    await pane.press({ key: 'reach-Q1-recall@10' })
+    const found = Object.entries(written).filter(([path]) => path.includes('/inbox/'))
+    expect(found.every(([path]) => INBOX_FILE.test(path))).toBe(true)
+    expect(found.map(([, text]) => JSON.parse(text))).toEqual([
+      { op: 'add', plain: 'Raise recall@10 to at least 0.6', kind: 'eval', area: 'Quality', metrics: [{ name: 'recall@10', target: 0.6 }] },
+    ])
+    expect(toasts).toEqual(["Added 'Raise recall@10 to at least 0.6'. Applied when the loop runs next."])
+    // Close what this mount opened, since the open task and areas outlive it.
+    await pane.press({ key: 'task-Q1' })
+    await pane.press({ key: 'area-Quality' })
+    await pane.unmount()
+  }
+})
+
 test('a task that has not started offers Edit, Do it next and Skip it, each writing one inbox change', async ($, on) => {
   const files: Record<string, string> = {
     '/project/.loop/feature_list.json': STEER_FEATURES,
