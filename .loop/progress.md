@@ -14,3 +14,9 @@ Design: .planning/sketches/MANIFEST.md, 002-built-so-far (winner B: Areas) and 0
 
 ## Baseline
 Fast gate before init (commands.test): green. Final suites (commands.final): agents 45s, loop 150s, notify 51s, parallel 146s, all green. Mod tests: 43 pass.
+
+## F1 · worker 1 · 2026-11-08
+Did: init.md step 8 describes area, plain, done_when, optional kind and metrics, each with an example. feature-list.example.json has the three fields on every item plus an eval item (F3, metrics) and a design item (F4). SKILL.md artifacts table has inbox/ and evidence/ rows and a short paragraph on the item fields.
+Learned: a parallel worker's environment leaks LOOP_WORKERS=2 into tests that run loop.sh. tests/autoloop-loop, autoloop-agents and autoloop-notify (the final suites) also run loop.sh without pinning LOOP_WORKERS, so FINAL may hit the same failure when run under a parallel driver.
+Lesson: [tests] tests/autoloop-inbox.test.sh e2e failed in the worker gate because it inherited LOOP_WORKERS=2 from the driver → tests that start loop.sh must pin or unset every LOOP_* setting they depend on (fixed here with LOOP_WORKERS=1).
+Lesson: [bussin-autoloop docs] review flagged 'the pane groups by area' as a claim nothing backs yet → document only behaviour that exists or that the item's spec requires.

@@ -16,8 +16,11 @@
         "bussin-autoloop/assets/feature-list.example.json",
         "bussin-autoloop/SKILL.md"
       ],
-      "passes": false,
-      "evidence": null
+      "passes": true,
+      "evidence": {
+        "commit": "842c06fa14f98e6b2825a8042708a0ec7dc7be27",
+        "ran": "bash .loop/verify.sh (all fast suites + 43 mod tests green); jq -e '[.features[] | has(\"area\") and has(\"plain\") and has(\"done_when\")] | all' bussin-autoloop/assets/feature-list.example.json -> true"
+      }
     },
     {
       "id": "F2",
