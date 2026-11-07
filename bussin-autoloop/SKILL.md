@@ -184,7 +184,11 @@ The guard and `verify.sh` read the loop scripts and config from the last commit,
 | `logs/<item>.log` | the driver | The latest session's live log for that item, one tab-separated line per action: time, step, kind, text |
 | `name` | you, through `--rename` or the pane | The loop's display name, overriding `name` in `config.json` |
 | `results/<id>.json` | a parallel worker | One item's outcome, merged and then folded into `feature_list.json` and `progress.md` by the driver |
+| `inbox/<epoch ms>-<random>.json` | the status pane | One change to the list (add, edit, skip, first, review), applied by the driver between sessions and then deleted. Never committed |
+| `evidence/<id>/` | run | Screenshots a UI or design item took in its browser step, listed in its `evidence.screenshots`. Never committed |
 | `retro.md` | run, thorough mode | Proposed environment improvements, never applied by the loop |
+
+Every item also carries three plain fields for people who never read `description`: `area`, a short product area shared by related items; `plain`, one sentence in product terms with no ids or file names; and `done_when`, one plain sentence saying when it is finished. Two optional fields set how it is judged: `kind` is `build` (the default), `eval` for an evaluation that returns metrics, or `design` for work judged by screenshots, and an eval item lists its `metrics` as `[{name, target?}]`.
 
 Items are never removed or reworded by `run`. Deleting an item to make the list green is the exact failure this harness exists to prevent, so a run that believes an item is wrong records that in `progress.md` and leaves it `false` for a human. The guard enforces this rather than trusting it.
 

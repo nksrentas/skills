@@ -5,6 +5,9 @@
       "id": "F1",
       "category": "functional",
       "ui": true,
+      "area": "Invoices",
+      "plain": "Admins see an export button on the invoice list",
+      "done_when": "An admin sees the export button and a staff user does not.",
       "description": "Export button on /invoices, visible only to role=admin",
       "verify": "Login as admin, open /invoices, button present. Login as staff, button absent.",
       "depends_on": [],
@@ -19,6 +22,9 @@
       "id": "F2",
       "category": "functional",
       "ui": true,
+      "area": "Invoices",
+      "plain": "Exporting downloads the invoices currently shown as a spreadsheet file",
+      "done_when": "The downloaded file holds exactly the filtered invoices, in the same column order as the table.",
       "description": "Export downloads invoices.csv honouring the active filters",
       "verify": "Filter status=paid, click export, open the file, only paid rows present, column order matches the table.",
       "depends_on": [],
@@ -31,9 +37,52 @@
       "evidence": null
     },
     {
+      "id": "F3",
+      "category": "functional",
+      "ui": false,
+      "area": "Invoice search",
+      "plain": "Searching invoices finds the right customer near the top",
+      "done_when": "The search evaluation reports its scores on the sample queries.",
+      "kind": "eval",
+      "metrics": [
+        { "name": "precision@5", "target": 0.75 },
+        { "name": "recall@10" }
+      ],
+      "description": "Evaluate invoice search on fixtures/search-queries.json and report precision@5 and recall@10",
+      "verify": "Run npm run eval:search, both metrics land in evidence, precision@5 is compared with its target.",
+      "depends_on": [],
+      "touches": [
+        "src/features/invoices/invoice-search.eval.ts"
+      ],
+      "passes": false,
+      "evidence": null
+    },
+    {
+      "id": "F4",
+      "category": "functional",
+      "ui": true,
+      "area": "Invoices",
+      "plain": "The export button looks like the rest of the toolbar",
+      "done_when": "Screenshots of the toolbar in light and dark mode are approved.",
+      "kind": "design",
+      "description": "Style the export button like the existing toolbar buttons in light and dark mode",
+      "verify": "Open /invoices as admin in light and dark mode, screenshot the toolbar, the button matches its neighbours.",
+      "depends_on": [
+        "F1"
+      ],
+      "touches": [
+        "src/features/invoices/components/export-button.tsx"
+      ],
+      "passes": false,
+      "evidence": null
+    },
+    {
       "id": "E1",
       "category": "edge",
       "ui": false,
+      "area": "Invoices",
+      "plain": "Exporting an empty list gives a file with only the column names",
+      "done_when": "A filter with no results exports a file with one line.",
       "description": "Empty result set exports the header row only",
       "verify": "Filter to zero results, export, file has exactly one line.",
       "depends_on": [
@@ -49,6 +98,9 @@
       "id": "E2",
       "category": "edge",
       "ui": false,
+      "area": "Invoices",
+      "plain": "Customer names with commas, quotes or line breaks come out intact",
+      "done_when": "Any customer name survives the export and reads back unchanged.",
       "description": "Commas, quotes and newlines in customer names are escaped per RFC 4180",
       "verify": "Property test with fast-check over arbitrary strings round-trips through a CSV parser.",
       "depends_on": [
@@ -64,6 +116,9 @@
       "id": "E3",
       "category": "edge",
       "ui": false,
+      "area": "Invoices",
+      "plain": "Exporting ten thousand invoices finishes quickly",
+      "done_when": "Ten thousand invoices export in under ten seconds.",
       "description": "10k invoices export streams without timeout",
       "verify": "Seed 10k rows, export completes under 10 seconds, memory stays flat.",
       "depends_on": [
@@ -79,6 +134,9 @@
       "id": "R1",
       "category": "regression",
       "ui": false,
+      "area": "Safety checks",
+      "plain": "Filtering and paging through invoices work as before",
+      "done_when": "The existing invoice tests pass with the same count.",
       "description": "Existing invoice filters and pagination unchanged",
       "verify": "invoices.spec.ts green, baseline test count unchanged.",
       "depends_on": [],
@@ -92,6 +150,9 @@
       "id": "R2",
       "category": "regression",
       "ui": false,
+      "area": "Safety checks",
+      "plain": "Staff cannot download the export",
+      "done_when": "A staff user gets a refusal and no file.",
       "description": "Non-admin gets 403 from GET /api/invoices/export",
       "verify": "Request as staff user, expect 403 and no file.",
       "depends_on": [
