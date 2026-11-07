@@ -59,8 +59,11 @@ export type LogLine = { time: string; step: string; kind: string; text: string }
 
 export type LoopView = { name: string; label: string; task: string; path: string; snapshot: LoopSnapshot; logs: Record<string, LogLine[]> }
 
+// The '+ Add a task' form of the loop at `path`, as typed so far.
+export type AddDraft = { path: string; plain: string; doneWhen: string; area: string; kind: 'build' | 'eval' | 'design'; first: boolean; metrics: string }
+
 declare module 'claude-code' {
   interface PluginState {
-    'bussin-loop-status': { loops: LoopView[]; selected: string | null; renaming: string | null; showTokens: boolean; openAreas: Record<string, boolean>; openTask: string | null; technical: boolean; editDraft: { key: string; plain: string; doneWhen: string } | null }
+    'bussin-loop-status': { loops: LoopView[]; selected: string | null; renaming: string | null; showTokens: boolean; openAreas: Record<string, boolean>; openTask: string | null; technical: boolean; editDraft: { key: string; plain: string; doneWhen: string } | null; addDraft: AddDraft | null }
   }
 }
