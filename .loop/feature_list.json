@@ -146,8 +146,11 @@
         "mods/bussin-loop-status/hooks/register.tsx",
         "mods/bussin-loop-status/hooks/status.test.tsx"
       ],
-      "passes": false,
-      "evidence": null
+      "passes": true,
+      "evidence": {
+        "commit": "f917087e9d8a6c83f45f3d3d5aca894ca0bc0d98",
+        "ran": "bash .loop/verify.sh (fast shell suites + claude plugin test mods/bussin-loop-status: 51 pass, new test \"'+ Add a task' opens a form whose Add to the loop writes one add change\" on terminal, desktop and mobile)"
+      }
     },
     {
       "id": "F8",

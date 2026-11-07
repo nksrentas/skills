@@ -1,9 +1,0 @@
-{
-  "id": "F7",
-  "passes": true,
-  "evidence": {
-    "commit": "f917087e9d8a6c83f45f3d3d5aca894ca0bc0d98",
-    "ran": "bash .loop/verify.sh (fast shell suites + claude plugin test mods/bussin-loop-status: 51 pass, new test \"'+ Add a task' opens a form whose Add to the loop writes one add change\" on terminal, desktop and mobile)"
-  },
-  "notes": "Did: header Button pane-add '+ Add a task' (only where Input and Select exist, so not on mobile) toggles a bordered form: Inputs add-plain / add-done (rows 2), Selects add-area (the loop's areas plus 'Added by you', the default), add-kind (build / eval / design) and add-when (queued / next), and add-metrics for eval. The typed state lives in addDraftAtom (AddDraft type in types/index.d.ts, keyed by loop path). Add to the loop (add-submit) writes {op: 'add', plain, done_when, area, kind, metrics? (eval with at least one), first? (only true)} through sendChange, now typed Record<string, unknown>, then closes the form. Empty text toasts 'Say what the new task should do before adding it'. parseMetrics turns 'precision@5>=0.75, recall@10' into [{name, target}, {name}], dropping blank parts.\nLearned: the test harness mount has select({key, value}) for Selects. inbox.jq rejects newlines inside plain/done_when and enforces the caps (500 / 40 / 10 metrics), but the pane does not check them yet, so it can toast success for a change the driver later drops. That is E1's scope (caps and control-character stripping in the pane), for both the edit and add forms.\nLesson: [tests] the heredoc that appended the test was refused by the Bash guard (brace-quote expansion) → append test code with the Edit tool, not cat <<EOF."
-}
