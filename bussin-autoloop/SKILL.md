@@ -1,7 +1,7 @@
 ---
 name: bussin-autoloop
 description: Autonomous build loop for one feature or a new project. `init <task>` expands the task into `.loop/feature_list.json` with verify gates, then `run` completes ONE item per fresh session until every item passes with evidence. Use when the user wants something built autonomously, "in a loop", "until it's done", "overnight", with proof it works end-to-end, or mentions autoloop, feature_list or Ralph-style loops; modes fast, standard, thorough.
-argument-hint: "init <task> [--mode fast|standard|thorough] [--skills a,b,review:c] [--no-checkpoint] [--new] [--stack <text>] [--base <ref>] [--name <text>] | run | retro | status"
+argument-hint: "init <task> [--mode fast|standard|thorough] [--skills a,b,review:c] [--no-checkpoint] [--new] [--stack <text>] [--base <ref>] [--name <text>] | run | retro | status | telegram"
 ---
 
 # bussin-autoloop
@@ -17,6 +17,7 @@ Two prompts over one harness. `init` runs once and leaves artifacts in `.loop/`.
 | `/bussin-autoloop run --item <id>` | `references/run.md` | Worker mode for the parallel driver: that one item in its own worktree, result written to `.loop/results/<id>.json` |
 | `/bussin-autoloop retro` | `references/retro.md` | Turn the loop's `Lesson:` lines and failed items into rules: the project's `CODING_STANDARDS.md`, and a pull request to the skills repository for rules every project should follow |
 | `/bussin-autoloop status` | nothing | Run `bash <skill directory>/scripts/loop-status.sh` and show its output: progress, ETA, what runs now and next, cost, tokens, models and the latest progress notes. Then update the session title (see Session title). In Copilot desktop, also open the dashboard (see Status view) |
+| `/bussin-autoloop telegram` | nothing | Pick which loops send Telegram notifications. Run `bash <skill directory>/scripts/loop-status.sh --telegram` in the project: one line per loop in this repo and its worktrees, `on` or `off`, its name and its path. Ask which loops should notify, with the ones that are on preselected: in Claude Code a multi-select question when there are four loops or fewer, otherwise a numbered list in plain text. Apply each change with `loop-status.sh --telegram on <path>` or `--telegram off <path>`, then show the new list. When the script says Telegram is not set up, walk the user through Telegram notifications instead |
 | `/bussin-autoloop <text>` with no `.loop/` | `references/init.md` | Treat the text as the task |
 
 Installed as the `bussin` plugin, the command is `/bussin:bussin-autoloop`; everything else is the same. In Codex the skill is mentioned as `$bussin-autoloop`.
@@ -134,6 +135,8 @@ chmod 600 ~/.config/bussin-autoloop/telegram.env
 ```
 
 Safety: the file lives outside every repo, so loop sessions never commit or see it, and the driver refuses a file other users can read. The token reaches `curl` through its stdin config, never its command line, and only over HTTPS. Messages carry item ids, descriptions, counts and the last few output lines, never code or diffs. The loop only sends: nothing listens for incoming messages, so the bot cannot control the machine. A machine that sleeps or a driver that is killed outright cannot report itself. `LOOP_NOTIFY_CONFIG` points at a different file.
+
+Every loop notifies until you mute it. `/bussin-autoloop telegram` lists the loops with their state and lets you pick, or run `loop-status.sh --telegram off [project dir]` and `--telegram on [project dir]` yourself. Muted loops are listed in `telegram-muted` next to the config file, outside every repo, and the driver checks that list before every message, so muting a running loop takes effect at once.
 
 ### Running unattended
 

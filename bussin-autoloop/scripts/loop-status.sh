@@ -5,6 +5,7 @@ watch_seconds=""
 stop=0
 title=0
 rename=""
+telegram=""
 target=""
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -15,13 +16,17 @@ while [ $# -gt 0 ]; do
       ;;
     --stop) stop=1 ;;
     --title) title=1 ;;
+    --telegram)
+      telegram=list
+      if [[ "${2:-}" =~ ^(on|off)$ ]]; then telegram="$2"; shift; fi
+      ;;
     --rename)
       rename="${2:-}"
       [ -n "$rename" ] || { echo "loop-status.sh: --rename needs a name" >&2; exit 1; }
       shift
       ;;
     -h | --help)
-      echo "usage: loop-status.sh [--watch [seconds] | --stop | --rename <name> | --title] [project dir]"
+      echo "usage: loop-status.sh [--watch [seconds] | --stop | --rename <name> | --title | --telegram [on|off]] [project dir]"
       exit 0
       ;;
     *) target="$1" ;;
@@ -273,6 +278,34 @@ request_rename() {
   echo "autoloop: this loop is now called $(loop_label "$dir" "$(basename "$dir")")"
 }
 
+notify_config="${LOOP_NOTIFY_CONFIG:-$HOME/.config/bussin-autoloop/telegram.env}"
+muted_file="$(dirname "$notify_config")/telegram-muted"
+
+# Telegram is on for every loop until muted; the list lives outside the repo so muting never touches .loop/
+telegram_toggle() {
+  local dir state repo
+  if [ "$telegram" != list ]; then
+    dir="$(cd "${target:-.}" && { worker_main_dir || git rev-parse --show-toplevel 2> /dev/null || pwd; })"
+    [ -f "$dir/.loop/feature_list.json" ] || { echo "No autoloop in $dir." >&2; return 1; }
+    dir="$(cd "$dir" && pwd -P)"
+    mkdir -p "$(dirname "$muted_file")"
+    { grep -vxF -- "$dir" "$muted_file" 2> /dev/null || true; } > "$muted_file.tmp"
+    [ "$telegram" = on ] || echo "$dir" >> "$muted_file.tmp"
+    mv "$muted_file.tmp" "$muted_file"
+    echo "autoloop: Telegram notifications $telegram for $(loop_label "$dir" "$(basename "$dir")")"
+    return 0
+  fi
+  [ -f "$notify_config" ] || echo "Telegram is not set up on this machine: see Telegram notifications in the bussin-autoloop skill." >&2
+  repo="$(repo_name "${target:-.}")"
+  while IFS= read -r dir; do
+    [ -f "$dir/.loop/feature_list.json" ] || continue
+    dir="$(cd "$dir" && pwd -P)"
+    state=on
+    if grep -qxF -- "$dir" "$muted_file" 2> /dev/null; then state=off; fi
+    printf '%s\t%s\t%s\n' "$state" "$(loop_label "$dir" "$(short_name "$dir" "$repo")")" "$dir"
+  done < <(loop_dirs | awk '!seen[$0]++')
+}
+
 title_line() {
   local dir label progress state suffix=" · not running"
   dir="$(cd "${target:-.}" && { worker_main_dir || git rev-parse --show-toplevel 2> /dev/null || pwd; })"
@@ -286,6 +319,10 @@ title_line() {
 
 if [ "$title" = 1 ]; then
   title_line
+  exit
+fi
+if [ -n "$telegram" ]; then
+  telegram_toggle
   exit
 fi
 if [ "$stop" = 1 ]; then
