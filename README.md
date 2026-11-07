@@ -141,7 +141,7 @@ Run as many loops as you like, in different projects or worktrees: they share on
 To stop a loop without losing in-flight work, run `bash ~/.claude/skills/bussin-autoloop/scripts/loop-status.sh --stop`. Running sessions finish and parallel workers merge, then the loop exits. Run `loop.sh` again to resume.
 
 Inside Claude Code, the `bussin-loop-status` mod puts every running loop in a band above the prompt, one row per loop, including loops in git worktrees. The status line stays empty while loops run and shows a loop's outcome once none is running. `/autoloop-status`, or a row's Details button, opens a pane. The band rows and the pane each have a Stop button that works like `--stop`. The pane shows:
-- a card per loop on the left, and the selected loop's task, progress and ETA; a loop finished more than a day ago, or not running for more than a week, leaves the list, while its `.loop` files stay for `retro`
+- a card per loop on the left, and the selected loop's task, progress and ETA; a loop finished more than a day ago, or not running for more than a week, leaves the list, while its `.loop` files stay for `retro`; Dismiss takes a finished or stopped loop off the list now, until it runs again
 - each running item's step strip and its last log lines, with worker and attempt
 - elapsed time and the estimated finish
 - Rename and Stop, and how many loop sessions this Mac runs
