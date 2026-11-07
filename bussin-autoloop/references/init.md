@@ -24,13 +24,13 @@ If `.loop/retro.md` exists from a previous loop, read it, including the `## Prom
 
 ## 3a. Existing project: research
 
-Use the Explore subagent so the main context stays clean. Find: the feature area and its entry points, the data layer, anything similar already built (export, download, auth guards), the test runner and how tests are organised, the dev server command, lint and typecheck commands, CI config. Record the commands into `config.commands`. Keep `commands.test` to the fast suites (unit, integration) and put an end-to-end suite (Playwright, Cypress) in `commands.e2e`: the gate runs `commands.test` after every item, while the end-to-end suite runs once, in the last item (step 8).
+Use the Explore subagent so the main context stays clean. Find: the feature area and its entry points, the data layer, anything similar already built (export, download, auth guards), the test runner and how tests are organised, the dev server command, lint and typecheck commands, CI config. Record the commands into `config.commands`. Split the checks in two. `commands.test` is the gate after every item, so keep it to what is fast and relevant to every item: unit and integration tests, lint and typecheck. Everything slow goes in `commands.final`, which runs once, in the last item (step 8): end-to-end suites (Playwright, Cypress), the full suite when a fast subset exists, serial or slow-marked tests, builds and packaging. Join several commands with `&&` in either one. Do not write a custom `.loop/gate.sh` to split fast from slow; that is what `commands.final` is for.
 
 Run the test suite once. Write the baseline counts into `progress.md`. If something already fails, record it; do not fix it, the loop must not inherit unrelated work.
 
 ## 3b. New project: scaffold
 
-Ask for the stack only if `--stack` is missing and the task does not imply one. One question, then proceed. Scaffold with the stack's standard generator, add lint, typecheck, a unit test runner and Playwright, with the Playwright suite in `commands.e2e` rather than `commands.test`. Make the app boot to an empty page. The feature list for a new project is 50 to 200 small items ordered so earlier ones unblock later ones: project boots, schema, auth, each page, each API route, each validation rule, then edge cases.
+Ask for the stack only if `--stack` is missing and the task does not imply one. One question, then proceed. Scaffold with the stack's standard generator, add lint, typecheck, a unit test runner and Playwright, with the Playwright suite in `commands.final` rather than `commands.test`. Make the app boot to an empty page. The feature list for a new project is 50 to 200 small items ordered so earlier ones unblock later ones: project boots, schema, auth, each page, each API route, each validation rule, then edge cases.
 
 ## 3c. Pick the house skills for this stack
 
@@ -119,7 +119,7 @@ Two items run in parallel only when neither depends on the other and their `touc
 
 Order the list so that each item's `verify` steps can pass with only that item and the ones before it implemented. A verify example that also needs a later item (an input that only comes out right once trimming exists, for example) pulls that item's work forward and blurs the evidence. Pick a different example or reorder the items.
 
-When `commands.e2e` is set, end the list with one regression item `E2E`: "the end-to-end suite passes", verify `run <commands.e2e>, every test green`, `depends_on` every other id, `touches: ["**"]`. It is the only item that runs the suite, so the slow tests run once, after everything else is built, and any failure they find is fixed in that session.
+When `commands.final` is set, end the list with one regression item `FINAL`: "the final checks pass", verify `run <commands.final>, everything green`, `depends_on` every other id, `touches: ["**"]`. It is the only item that runs those checks, so the slow ones run once, after everything else is built, and any failure they find is fixed in that session.
 
 Mark UI-visible items with `"ui": true` so run knows the browser gate applies. All items start `"passes": false, "evidence": null`.
 

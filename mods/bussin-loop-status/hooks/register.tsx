@@ -20,7 +20,7 @@ import {
   livePid,
   loopLabel,
   loopTask,
-  finishedLongAgo,
+  longInactive,
   orderLoops,
   parentDir,
   progressBar,
@@ -217,7 +217,7 @@ async function loadLoops($: EngineInterface) {
     const view = await loadLoop($, dir, repoName, now)
     if (view !== null) views.push(view)
   }
-  return orderLoops(distinctLabels(views.filter(view => !finishedLongAgo(view.snapshot, now))))
+  return orderLoops(distinctLabels(views.filter(view => !longInactive(view.snapshot, now))))
 }
 
 async function refresh($: EngineInterface) {

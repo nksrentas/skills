@@ -21,7 +21,7 @@ Two prompts over one harness. `init` runs once and leaves artifacts in `.loop/`.
 
 Installed as the `bussin` plugin, the command is `/bussin:bussin-autoloop`; everything else is the same. In Codex the skill is mentioned as `$bussin-autoloop`.
 
-The driver `scripts/loop.sh` picks the first failing item that is not blocked and starts one headless agent session on it with `run --item <id> --sequential`, until no item has `passes:false`. It stops after `MAX_STALLS` sessions in a row (default 3) that neither commit nor change the number of failing items, and after `MAX_ITERATIONS` sessions in all (default 40, or twice the failing items at start when that is more); both limits also apply to parallel runs. An item is blocked when `progress.md` has a line `Blocked: <id>` or when it has failed `LOOP_ITEM_ATTEMPTS` sessions (default 3, counted in `.loop/attempts.json`); when every remaining item is blocked, the driver stops. The prompt starts with `/bussin-autoloop run`, the plugin form when the script lives in the plugin cache, or `$bussin-autoloop run` for Codex; override it with `LOOP_SKILL_COMMAND`. A session that exits on a usage limit is not a stall: the driver waits `LIMIT_WAIT` seconds (default 600) and retries. Start it from the project root:
+The driver `scripts/loop.sh` picks the first failing item that is not blocked and starts one headless agent session on it with `run --item <id> --sequential`, until no item has `passes:false`. It stops after `MAX_STALLS` sessions in a row (default 3) that neither commit nor change the number of failing items, and after `MAX_ITERATIONS` sessions in all (default 40, or twice the failing items at start when that is more); both limits also apply to parallel runs. An item is blocked when `progress.md` has a line `Blocked: <id>` or when it has failed `LOOP_ITEM_ATTEMPTS` sessions (default 3, counted in `.loop/attempts.json`); when every remaining item is blocked, the driver stops. The prompt starts with `/bussin-autoloop run`, the plugin form when the script lives in the plugin cache, or `$bussin-autoloop run` for Codex; override it with `LOOP_SKILL_COMMAND`. A session that exits on a usage limit is not a stall: the driver waits `LIMIT_WAIT` seconds (default 600) and retries. A session that exits non-zero within `LOOP_STARTUP_SECONDS` (default 10) never started working, because the agent CLI itself failed (sign-in, a bad flag or model): the driver does not count the attempt, lets running workers finish, prints the error and stops, instead of burning every item's attempts in seconds. Start it from the project root:
 
 ```bash
 bash <skill directory>/scripts/loop.sh
@@ -199,7 +199,7 @@ For UI work, add accessibility, SEO and Emil Kowalski's animation review: `/buss
   "mode": "standard",
   "new_project": false,
   "base": "<HEAD before the init commit>",
-  "commands": { "test": "npm test", "e2e": "npx playwright test", "dev": "npm run dev" },
+  "commands": { "test": "npm test", "final": "npx playwright test", "dev": "npm run dev" },
   "mutation_paths": ["src/**/*.ts", "src/**/*.tsx"],
   "gates": { "tests": true, "mutation": false, "browser": true },
   "skills": { "context": ["bussin-lean"], "implement": [], "review": [], "end": [] },

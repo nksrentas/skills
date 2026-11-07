@@ -317,12 +317,13 @@ test('finds loops in every worktree from the main checkout, running ones first',
   }
 })
 
-test('a loop finished more than a day ago drops out of the pane, a recent one stays', async ($, on) => {
-  const finishedAt = (secondsAgo: number) => JSON.stringify({ state: 'finished', started_at: NOW - secondsAgo - 600, updated_at: NOW - secondsAgo, running: [] })
+test('a loop finished over a day ago, or stopped over a week ago, drops out of the pane; recent ones stay', async ($, on) => {
+  const endedAt = (state: string, secondsAgo: number) => JSON.stringify({ state, started_at: NOW - secondsAgo - 600, updated_at: NOW - secondsAgo, running: [] })
   const files = { ...REPO_FILES }
   answerRepo(on, '/repo', [], files)
-  for (const [secondsAgo, shown] of [[2 * 86400, false], [3600, true]] as const) {
-    files['/repo/.loop/live.json'] = finishedAt(secondsAgo)
+  const cases = [['finished', 2 * 86400, false], ['finished', 3600, true], ['stopped', 8 * 86400, false], ['stopped', 2 * 86400, true]] as const
+  for (const [state, secondsAgo, shown] of cases) {
+    files['/repo/.loop/live.json'] = endedAt(state, secondsAgo)
     await $.command.run(RUN_COMMAND)
     const ui = await $.ui.mount({ ...PANE_TARGET, surface: 'desktop' })
     expect((await ui.find({ key: 'select-repo' })) !== undefined).toBe(shown)

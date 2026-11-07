@@ -35,7 +35,7 @@ rm -f "$stop_file"
 events_query='[split("\n")[] | fromjson? | objects]'
 
 usage_query='
-def base: {agent: $agent, item: $item, worker: $worker, started_at: $started, ended_at: $ended, outcome: $outcome};
+def base: {agent: $agent, item: $item, worker: $worker, started_at: $started, ended_at: $ended, outcome: $outcome} + (if $reason == "" then {} else {reason: $reason} end);
 def wall: ($ended - $started) * 1000;
 def last_result: map(select(.type == "result")) | last // {};
 
@@ -84,9 +84,13 @@ def copilot:
 if $agent == "codex" then codex elif $agent == "copilot" then copilot else claude end'
 
 record_usage() {
-  local item="$1" worker="$2" started="$3" output="$4" outcome="$5" ended="${6:-$(date +%s)}"
+  local item="$1" worker="$2" started="$3" output="$4" outcome="$5" ended="${6:-$(date +%s)}" errors="${7:-}" reason=""
+  # the next session truncates the item's log, so keep why this one did not pass for retro
+  case "$outcome" in passed | merged) ;; *)
+    reason="$({ cat ".loop/logs/$item.log" ${errors:+"$errors"}; } 2> /dev/null | grep -v '^[[:space:]]*$' | tail -n 3 | cut -c1-300 | tr -d '\000-\010\013-\037' | paste -sd '|' - || true)" ;;
+  esac
   { cat "$output" 2> /dev/null || true; } | jq -c -s -R "$events_query" \
-    | jq -c --arg agent "$agent" --arg model "$(model_label)" --arg item "$item" --argjson worker "$worker" \
+    | jq -c --arg agent "$agent" --arg model "$(model_label)" --arg item "$item" --argjson worker "$worker" --arg reason "$reason" \
       --argjson started "$started" --argjson ended "$ended" --arg outcome "$outcome" "$usage_query" >> "$usage_file"
   tail -n 1 "$usage_file" | jq -r '"autoloop: \(.item) \(.outcome) after \(.duration_ms / 60000 | floor)m, "
     + (if .cost_usd then "$\(.cost_usd * 100 | round / 100)" else "cost unknown" end)
@@ -113,9 +117,11 @@ pause() {
 
 lessons_hint() {
   local count
+  local failed
   count="$(grep -c '^Lesson:' .loop/progress.md 2> /dev/null || true)"
-  [ "${count:-0}" -gt 0 ] || return 0
-  echo "autoloop: this loop recorded $count lesson$([ "$count" = 1 ] || echo s); run /bussin-autoloop retro to turn them into rules"
+  failed="$(jq -s '[.[] | select(.outcome != "passed" and .outcome != "merged" and .outcome != "limit")] | length' "$usage_file" 2> /dev/null || echo 0)"
+  [ "${count:-0}" -gt 0 ] || [ "${failed:-0}" -gt 0 ] || return 0
+  echo "autoloop: this loop recorded ${count:-0} lesson$([ "${count:-0}" = 1 ] || echo s) and ${failed:-0} session$([ "${failed:-0}" = 1 ] || echo s) that did not pass; run /bussin-autoloop retro to turn them into rules"
 }
 
 closing_state() {

@@ -13,6 +13,7 @@ calls=\$(( \$(cat "$dir/calls" 2>/dev/null || echo 0) + 1 ))
 echo "\$calls" > "$dir/calls"
 if [ "$mode" = always-fail ] || { [ "$mode" != pass ] && [ "\$calls" -eq 1 ]; }; then
   [ "$mode" = limit-then-pass ] && echo "You've hit your session limit · resets 1pm (Europe/Athens)"
+  [ "$mode" = always-fail ] && echo "boom: tests red" >&2
   exit 1
 fi
 jq '.features[0].passes = true' .loop/feature_list.json > .loop/tmp && mv .loop/tmp .loop/feature_list.json
@@ -31,7 +32,7 @@ run_loop() {
 }
 
 tmp="$(mktemp -d)"
-export LOOP_SLOTS_DIR="$tmp/slots" LOOP_MACHINE_SESSIONS=8
+export LOOP_SLOTS_DIR="$tmp/slots" LOOP_MACHINE_SESSIONS=8 LOOP_STARTUP_SECONDS=0
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
 trap 'rm -rf "$tmp"' EXIT
 
@@ -43,6 +44,13 @@ grep -q "usage limit" "$tmp/limit/out" || { echo "FAIL: no usage limit notice"; 
 make_project "$tmp/fail" always-fail
 if run_loop "$tmp/fail"; then echo "FAIL: plain failure was not counted as a stall"; exit 1; fi
 grep -q "no progress (1/1)" "$tmp/fail/out" || { cat "$tmp/fail/out"; echo "FAIL: plain failure not reported as stall"; exit 1; }
+jq -e 'select(.outcome == "error") | .reason | test("boom: tests red")' "$tmp/fail/.loop/usage.jsonl" > /dev/null || { cat "$tmp/fail/.loop/usage.jsonl"; echo "FAIL: a failed session kept no reason for retro"; exit 1; }
+
+make_project "$tmp/nostart" always-fail
+if LOOP_STARTUP_SECONDS=10 run_loop "$tmp/nostart"; then echo "FAIL: an agent that cannot start did not stop the loop"; exit 1; fi
+grep -q "exited within 10s without working on A1" "$tmp/nostart/out" || { cat "$tmp/nostart/out"; echo "FAIL: no startup failure notice"; exit 1; }
+[ "$(cat "$tmp/nostart/calls")" -eq 1 ] || { echo "FAIL: the loop retried an agent that cannot start"; exit 1; }
+[ "$(jq -r '.A1 // 0' "$tmp/nostart/.loop/attempts.json")" = 0 ] || { echo "FAIL: a startup failure used up an attempt"; exit 1; }
 
 stop="$tmp/stop"
 mkdir -p "$stop/.loop" "$stop/bin"
@@ -233,7 +241,7 @@ lessons="$tmp/lessons"
 make_project "$lessons" pass
 printf '## Session 1 · A0\nLesson: [bussin-react] fetched in useEffect → load on the server\nLesson: [tests] flaky clock → freeze time\n' > "$lessons/.loop/progress.md"
 run_loop "$lessons" || { cat "$lessons/out"; echo "FAIL: the lessons project did not finish"; exit 1; }
-grep -q "recorded 2 lessons; run /bussin-autoloop retro" "$lessons/out" || { cat "$lessons/out"; echo "FAIL: a finished loop did not point at its lessons"; exit 1; }
+grep -q "recorded 2 lessons and 0 sessions that did not pass; run /bussin-autoloop retro" "$lessons/out" || { cat "$lessons/out"; echo "FAIL: a finished loop did not point at its lessons"; exit 1; }
 ! grep -q "lessons; run" "$tmp/stale/out" || { echo "FAIL: a loop without lessons printed the retro hint"; exit 1; }
 
 echo "autoloop-loop.test.sh: ok"
