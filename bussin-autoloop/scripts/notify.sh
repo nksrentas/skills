@@ -5,6 +5,7 @@ notify_config="${LOOP_NOTIFY_CONFIG:-$HOME/.config/bussin-autoloop/telegram.env}
 hang_minutes="${LOOP_HANG_MINUTES:-60}"
 notify_on=0
 hang_pid=""
+muted_file="$(dirname "$notify_config")/telegram-muted"
 
 notify_setting() { sed -n "s/^$1=//p" "$notify_config" | tail -n 1 | tr -d "\"' \r"; }
 
@@ -44,6 +45,8 @@ notify_send() {
 
 notify() {
   [ "$notify_on" = 1 ] || return 0
+  # checked on every message, so muting a running loop with loop-status.sh --telegram off takes effect at once
+  ! grep -qxF -- "$(pwd -P)" "$muted_file" 2> /dev/null || return 0
   local title
   title="$(bash "$script_dir/loop-status.sh" --title 2> /dev/null || echo "[loop] $LOOP_NAME")"
   (notify_send "$title

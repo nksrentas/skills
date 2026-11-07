@@ -85,4 +85,22 @@ config "$tmp/hang.env" 600
 expect=4 run_loop "$hang" LOOP_NOTIFY_CONFIG="$tmp/hang.env" SUMMARY_FAIL=1 LOOP_HANG_MINUTES=0
 check "a session running past LOOP_HANG_MINUTES is reported as possibly stuck" 'grep -q "A1 has been running for 0m; it may be stuck" "$hang/messages"'
 
+status="$(dirname "$loop")/loop-status.sh"
+muted="$tmp/muted"
+make_project "$muted"
+config "$tmp/muted.env" 600
+LOOP_NOTIFY_CONFIG="$tmp/muted.env" bash "$status" --telegram off "$muted" > "$tmp/muted-out"
+check "--telegram off names the loop it muted" 'grep -q "Telegram notifications off for muted" "$tmp/muted-out"'
+check "--telegram lists a muted loop as off" '[ "$(LOOP_NOTIFY_CONFIG="$tmp/muted.env" bash "$status" --telegram "$muted" | cut -f1,2)" = "$(printf "off\tmuted")" ]'
+expect=0 run_loop "$muted" LOOP_NOTIFY_CONFIG="$tmp/muted.env" SUMMARY_FAIL=1
+check "a muted loop sends nothing" '[ ! -e "$muted/curl.argv" ] && grep -q "all items passing" "$muted/out"'
+LOOP_NOTIFY_CONFIG="$tmp/muted.env" bash "$status" --telegram on "$muted" > /dev/null
+check "--telegram on lists the loop as on again and leaves no entry behind" '[ "$(LOOP_NOTIFY_CONFIG="$tmp/muted.env" bash "$status" --telegram "$muted" | cut -f1)" = on ] && [ ! -s "$tmp/telegram-muted" ]'
+git -C "$muted" -c user.email=t@t -c user.name=t commit -q --allow-empty -m again
+jq '.features[0].passes = false' "$muted/.loop/feature_list.json" > "$muted/f.tmp" && mv "$muted/f.tmp" "$muted/.loop/feature_list.json" && git -C "$muted" commit -qam reopen
+expect=3 run_loop "$muted" LOOP_NOTIFY_CONFIG="$tmp/muted.env" SUMMARY_FAIL=1
+check "an unmuted loop notifies again" '[ "$(grep -c "^---$" "$muted/messages")" -ge 3 ]'
+check "the muted list lives next to the config, never in the repo" '[ -z "$(find "$muted" -name telegram-muted)" ] && [ -f "$tmp/telegram-muted" ]'
+check "--telegram off on a folder with no loop is refused" '! LOOP_NOTIFY_CONFIG="$tmp/muted.env" bash "$status" --telegram off "$tmp" 2> /dev/null'
+
 [ "$failures" = 0 ] && echo "all notify checks passed" || { echo "$failures notify checks failed"; exit 1; }
