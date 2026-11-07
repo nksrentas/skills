@@ -1,11 +1,12 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { AddDraft, Area, ItemRow, ItemState, LogLine, LoopSnapshot, LoopView } from '../types'
+import type { AddDraft, Area, InboxChange, ItemRow, ItemState, LogLine, LoopSnapshot, LoopView } from '../types'
 import { currentStep, parseLog, SAFE_ITEM } from './session-log'
 import {
   areas,
   baseName,
+  clean,
   commonDirFromGitFile,
   compactLine,
   compute,
@@ -245,6 +246,58 @@ async function readLogs($: EngineInterface, dir: string, snapshot: LoopSnapshot)
   return logs
 }
 
+// The names sendChange writes; anything else in the folder is not ours to show or remove.
+const INBOX_NAME = /^[0-9]+-[A-Za-z0-9]+\.json$/
+const MAX_CHANGES = 50
+
+// Typed text is shown whole up to 80 characters; shortTitle would cut it at its first ': '.
+function quoted(text: string) {
+  return `'${text.length > 80 ? `${text.slice(0, 79).trimEnd()}…` : text}'`
+}
+
+function changeLine(change: Record<string, unknown>, plainOf: Map<string, string>) {
+  if (change.op === 'add') return `Add ${quoted(clean(change.plain))}`
+  if (change.op === 'review' && change.verdict === 'changes') return `Fix after review: ${quoted(clean(change.note))}`
+  const task = quoted(plainOf.get(clean(change.id)) || clean(change.id))
+  if (change.op === 'edit') return `Reword ${task}`
+  if (change.op === 'skip') return `Skip ${task}`
+  if (change.op === 'first') return `Run ${task} next`
+  if (change.op === 'review' && change.verdict === 'approved') return `Approve screenshots of ${task}`
+  return null
+}
+
+async function readInbox($: EngineInterface, dir: string, snapshot: LoopSnapshot) {
+  let names: string[]
+  try {
+    names = (await $.fs.list(`${dir}/.loop/inbox`)).map(entry => entry.name).filter(name => INBOX_NAME.test(name))
+  } catch {
+    return []
+  }
+  const plainOf = new Map(snapshot.items.map(row => [row.id, row.plain]))
+  const changes: InboxChange[] = []
+  for (const name of names.sort().slice(0, MAX_CHANGES)) {
+    const path = `${dir}/.loop/inbox/${name}`
+    try {
+      const change: unknown = JSON.parse((await readOptional($, path)) ?? '')
+      const line = typeof change === 'object' && change !== null ? changeLine(change as Record<string, unknown>, plainOf) : null
+      if (line !== null) changes.push({ name, path, line })
+    } catch {
+      // Unreadable or half-written: the driver drops it with a reason.
+    }
+  }
+  return changes
+}
+
+async function undoChange($: EngineInterface, change: InboxChange) {
+  try {
+    const { exitCode, stderr } = await $.process.run(['rm', '--', change.path], { timeoutMs: 5000 })
+    if (exitCode !== 0) throw new Error(stderr.trim() || `rm exited ${exitCode}`)
+  } catch (error) {
+    $.ui.toast(`Could not undo the change: ${error instanceof Error ? error.message : String(error)}`)
+  }
+  await refresh($)
+}
+
 async function loadLoop($: EngineInterface, dir: string, repoName: string, now: number): Promise<LoopView | null> {
   const features = await readOptional($, `${dir}/.loop/feature_list.json`)
   if (typeof features !== 'string') return null
@@ -270,6 +323,7 @@ async function loadLoop($: EngineInterface, dir: string, repoName: string, now: 
     path: dir,
     snapshot,
     logs,
+    changes: await readInbox($, dir, snapshot),
   }
 }
 
@@ -336,7 +390,8 @@ async function sendChange($: EngineInterface, loop: LoopView, change: Record<str
     $.ui.toast(`Could not save the change: ${error instanceof Error ? error.message : String(error)}`)
     return false
   }
-  $.ui.toast(`${done}. Applied before the next task starts.`)
+  $.ui.toast(`${done}. ${canStop(loop.snapshot) ? 'Applied before the next task starts.' : 'Applied when the loop runs next.'}`)
+  await refresh($)
   return true
 }
 
@@ -578,6 +633,21 @@ export const register: Register = on => {
       </Box>
     )
 
+    const yourChanges = view.changes.length > 0 && (
+      <Box flexDirection="column" borderStyle="round" borderColor="claude" paddingX={1}>
+        <Text bold>Your changes · {view.changes.length} waiting</Text>
+        {view.changes.map(change => (
+          <Box key={`change-${change.name}`} flexDirection="row" justifyContent="space-between" gap={1}>
+            <Box flexGrow={1} flexShrink={1}>
+              <Text>{change.line}</Text>
+            </Box>
+            <Button key={`undo-${change.name}`} label="Undo" onPress={() => undoChange($, change)} />
+          </Box>
+        ))}
+        <Text dimColor>{canStop(snapshot) ? 'Applied before the next task starts.' : 'Applied when the loop runs next.'}</Text>
+      </Box>
+    )
+
     const stale = snapshot.stale && (
       <Box flexDirection="column" borderStyle="round" borderColor="warning" paddingX={1}>
         <Text color="warning" bold>
@@ -782,6 +852,7 @@ export const register: Register = on => {
           {cards}
           <Box flexDirection="column" flexGrow={1} flexShrink={1} gap={1}>
             {header}
+            {yourChanges}
             {addForm}
             {stale}
             {areaList}
