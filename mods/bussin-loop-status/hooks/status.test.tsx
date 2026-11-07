@@ -664,7 +664,7 @@ test('a queued loop waits for a free session on this Mac', () => {
   expect(snapshot && compactLine('wt-a', snapshot)).toBe('◌ wt-a 1/4 queued · $2.00')
 })
 
-function answerLogged(on: On, files: Record<string, string>, reads: string[], written: Record<string, string>) {
+function answerLogged(on: On, files: Record<string, string>, reads: string[], written: Record<string, string>, toasts: string[] = []) {
   on('session.root', async () => ({ value: '/project' }))
   on('clock.now', async () => ({ value: NOW * 1000 }))
   on('fs.read', async (_, e) => {
@@ -683,7 +683,10 @@ function answerLogged(on: On, files: Record<string, string>, reads: string[], wr
   })
   on('ui.status', async () => ({ value: undefined }))
   on('ui.open', async () => ({ value: { isPlaced: true } }))
-  on('ui.toast', async () => ({ value: undefined }))
+  on('ui.toast', async (_, e) => {
+    toasts.push(e.text)
+    return { value: undefined }
+  })
 }
 
 test('the pane shows each running task with its phase from the session log, the band its step, and this Mac', async ($, on) => {
@@ -922,4 +925,75 @@ test('pressing a task opens it in place with its done-when line, technical detai
     await pane.press({ key: 'task-A1' })
     await pane.unmount()
   }
+})
+
+const STEER_FEATURES = JSON.stringify({
+  features: [
+    { id: 'A1', area: 'Search', plain: 'Search finds products by name', passes: false },
+    { id: 'A2', area: 'Search', plain: 'Empty search says so', done_when: 'An empty query shows a hint.', passes: false },
+    { id: 'A3', area: 'Search', plain: 'Search is fast', passes: true },
+  ],
+})
+const INBOX_FILE = /^\/project\/\.loop\/inbox\/4000000-[A-Za-z0-9]+\.json$/
+
+test('a task that has not started offers Edit, Do it next and Skip it, each writing one inbox change', async ($, on) => {
+  const files: Record<string, string> = {
+    '/project/.loop/feature_list.json': STEER_FEATURES,
+    '/project/.loop/live.json': JSON.stringify({ state: 'running', started_at: 1000, updated_at: 3990, running: [{ item: 'A1', worker: 1, started_at: 3700 }] }),
+  }
+  const written: Record<string, string> = {}
+  const toasts: string[] = []
+  answerLogged(on, files, [], written, toasts)
+  await $.command.run(RUN_COMMAND)
+  const changes = () => Object.entries(written).filter(([path]) => path.includes('/inbox/'))
+  for (const surface of ['terminal', 'desktop'] as const) {
+    for (const path of Object.keys(written)) delete written[path]
+    toasts.length = 0
+    const pane = await $.ui.mount({ ...PANE_TARGET, surface })
+    await pane.press({ key: 'task-A1' })
+    for (const key of ['edit-A1', 'first-A1', 'skip-A1']) expect(await pane.find({ key })).toBeUndefined()
+    await pane.press({ key: 'task-A3' })
+    for (const key of ['edit-A3', 'first-A3', 'skip-A3']) expect(await pane.find({ key })).toBeUndefined()
+    await pane.press({ key: 'task-A2' })
+    await pane.press({ key: 'first-A2' })
+    await pane.press({ key: 'skip-A2' })
+    await pane.press({ key: 'edit-A2' })
+    expect(await pane.find({ key: 'edit-plain-A2' })).toBeDefined()
+    await pane.input({ key: 'edit-plain-A2', text: '  An empty search explains what to type  ', kind: 'change' })
+    await pane.input({ key: 'edit-done-A2', text: 'A hint shows under the box.', kind: 'change' })
+    await pane.press({ key: 'edit-save-A2' })
+    expect(await pane.find({ key: 'edit-plain-A2' })).toBeUndefined()
+    const found = changes()
+    expect(found.every(([path]) => INBOX_FILE.test(path))).toBe(true)
+    expect(new Set(found.map(([path]) => path)).size).toBe(3)
+    expect(found.map(([, text]) => JSON.parse(text))).toEqual([
+      { op: 'first', id: 'A2' },
+      { op: 'skip', id: 'A2' },
+      { op: 'edit', id: 'A2', plain: 'An empty search explains what to type', done_when: 'A hint shows under the box.' },
+    ])
+    await pane.press({ key: 'edit-A2' })
+    await pane.input({ key: 'edit-plain-A2', text: '   ', kind: 'change' })
+    await pane.press({ key: 'edit-save-A2' })
+    expect(changes()).toHaveLength(3)
+    await pane.press({ key: 'edit-cancel-A2' })
+    expect(await pane.find({ key: 'edit-plain-A2' })).toBeUndefined()
+    expect(changes()).toHaveLength(3)
+    await pane.press({ key: 'edit-A2' })
+    await pane.press({ key: 'task-A2' })
+    await pane.press({ key: 'task-A2' })
+    expect(await pane.find({ key: 'edit-plain-A2' })).toBeUndefined()
+    expect(toasts).toEqual([
+      "'Empty search says so' runs next. Applied before the next task starts.",
+      "'Empty search says so' will be skipped. Applied before the next task starts.",
+      "Saved your edit of 'Empty search says so'. Applied before the next task starts.",
+      'Say what the task should do before saving',
+    ])
+    await pane.press({ key: 'task-A2' })
+    await pane.unmount()
+  }
+  const mobile = await $.ui.mount({ ...PANE_TARGET, surface: 'mobile' })
+  await mobile.press({ key: 'task-A2' })
+  expect(await mobile.find({ key: 'first-A2' })).toBeDefined()
+  expect(await mobile.find({ key: 'edit-A2' })).toBeUndefined()
+  await mobile.unmount()
 })
