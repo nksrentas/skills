@@ -80,8 +80,11 @@
         "mods/bussin-loop-status/hooks/register.tsx",
         "mods/bussin-loop-status/hooks/status.test.tsx"
       ],
-      "passes": false,
-      "evidence": null
+      "passes": true,
+      "evidence": {
+        "commit": "e233815906976e7947ef0be40cceb2eb6532cd0d",
+        "ran": "bash .loop/verify.sh (fast shell suites + claude plugin test mods/bussin-loop-status: 48 pass, new area-layout test on terminal and desktop)"
+      }
     },
     {
       "id": "F5",
