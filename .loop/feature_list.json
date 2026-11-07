@@ -124,8 +124,11 @@
         "mods/bussin-loop-status/hooks/register.tsx",
         "mods/bussin-loop-status/hooks/status.test.tsx"
       ],
-      "passes": false,
-      "evidence": null
+      "passes": true,
+      "evidence": {
+        "commit": "53d2dfe4eaedc879c149206f40e17fe21ba7e595",
+        "ran": "bash .loop/verify.sh (fast shell suites incl. autoloop-inbox, which applies the same edit/skip/first shapes at lines 34, 36, 57 + claude plugin test mods/bussin-loop-status: 50 pass, new test 'a task that has not started offers Edit, Do it next and Skip it, each writing one inbox change' on terminal, desktop and mobile)"
+      }
     },
     {
       "id": "F7",
