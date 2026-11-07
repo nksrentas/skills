@@ -1,6 +1,27 @@
 export type ItemState = 'done' | 'running' | 'waiting' | 'failing' | 'ready'
 
-export type ItemRow = { id: string; title: string; state: ItemState; note: string; waitingFor?: string[] }
+export type Metric = { name: string; value: number | null; target: number | null }
+
+export type ItemRow = {
+  id: string
+  title: string
+  state: ItemState
+  note: string
+  waitingFor?: string[]
+  area: string
+  plain: string
+  doneWhen: string
+  kind: 'build' | 'eval' | 'design'
+  description: string
+  verify: string
+  metrics: Metric[]
+  screenshots: string[]
+  review: 'approved' | 'changes' | null
+  finishedAt: number | null
+  phase: string | null
+}
+
+export type Area = { name: string; done: number; total: number; items: ItemRow[] }
 
 export type BlockedGroup = { waitingFor: string; items: string[] }
 

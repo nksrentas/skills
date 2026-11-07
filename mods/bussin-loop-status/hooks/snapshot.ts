@@ -1,6 +1,11 @@
-import type { BlockedGroup, ItemRow, LoopSnapshot, ModelRow, RunningRow, SessionRow } from '../types'
+import type { Area, BlockedGroup, ItemRow, LoopSnapshot, Metric, ModelRow, RunningRow, SessionRow } from '../types'
 
-type Feature = { id: string; description?: string; passes?: boolean; depends_on?: string[] }
+type Feature = {
+  id: string
+  passes?: boolean
+  depends_on?: string[]
+  details: Pick<ItemRow, 'area' | 'plain' | 'doneWhen' | 'kind' | 'description' | 'verify' | 'metrics' | 'screenshots' | 'review'>
+}
 
 type Usage = {
   item: string
@@ -100,12 +105,57 @@ const toLive = (value: unknown): Live | undefined => {
   }
 }
 
-const toFeature = (value: Record<string, unknown>): Feature => ({
-  id: clean(value.id),
-  description: clean(value.description),
-  passes: value.passes === true,
-  depends_on: (Array.isArray(value.depends_on) ? value.depends_on : []).map(clean),
-})
+const AREA_OF_CATEGORY: Record<string, string> = { functional: 'Features', edge: 'Edge cases', regression: 'Safety checks' }
+
+const KINDS = ['build', 'eval', 'design'] as const
+
+const nonEmpty = (value: unknown) => (typeof value === 'string' ? clean(value).trim() : '')
+
+// Targets from the item first, then values from its evidence; names only in the evidence come last.
+const toMetrics = (targets: unknown, values: unknown): Metric[] => {
+  const found = new Map(
+    Object.entries(isRecord(values) ? values : {})
+      .map(([name, value]) => [nonEmpty(name), optionalNum(value) ?? null] as const)
+      .filter(([name]) => name !== ''),
+  )
+  const wanted = (Array.isArray(targets) ? targets : [])
+    .filter(isRecord)
+    .map(metric => ({ name: nonEmpty(metric.name), target: optionalNum(metric.target) ?? null }))
+    .filter(metric => metric.name !== '')
+  const extra = [...found.keys()].filter(name => !wanted.some(metric => metric.name === name)).map(name => ({ name, target: null }))
+  return [...wanted, ...extra].map(metric => ({ ...metric, value: found.get(metric.name) ?? null }))
+}
+
+// Only files in the item's own evidence folder, so a hostile list cannot point the pane elsewhere.
+const toScreenshots = (id: string, paths: unknown) =>
+  (Array.isArray(paths) ? paths : [])
+    .filter((path): path is string => typeof path === 'string')
+    .map(clean)
+    .filter(path => path.startsWith(`.loop/evidence/${id}/`) && path.length > `.loop/evidence/${id}/`.length && !path.split('/').includes('..'))
+
+const toFeature = (value: Record<string, unknown>): Feature => {
+  const id = clean(value.id)
+  const description = clean(value.description)
+  const verify = clean(value.verify)
+  const evidence = isRecord(value.evidence) ? value.evidence : {}
+  const kind = KINDS.find(name => name === value.kind) ?? 'build'
+  return {
+    id,
+    passes: value.passes === true,
+    depends_on: (Array.isArray(value.depends_on) ? value.depends_on : []).map(clean),
+    details: {
+      area: nonEmpty(value.area) || (AREA_OF_CATEGORY[clean(value.category)] ?? 'Other'),
+      plain: nonEmpty(value.plain) || shortTitle(description),
+      doneWhen: nonEmpty(value.done_when) || verify,
+      kind,
+      description,
+      verify,
+      metrics: toMetrics(value.metrics, evidence.metrics),
+      screenshots: toScreenshots(id, evidence.screenshots),
+      review: value.review === 'approved' || value.review === 'changes' ? value.review : null,
+    },
+  }
+}
 
 const parseLines = (text: string | undefined): Usage[] =>
   (text ?? '')
@@ -118,7 +168,7 @@ const parseLines = (text: string | undefined): Usage[] =>
 const sum = (rows: Usage[], pick: (row: Usage) => number | undefined) =>
   rows.reduce((total, row) => total + (pick(row) ?? 0), 0)
 
-const title = (feature: Feature | undefined) => feature?.description ?? ''
+const title = (feature: Feature | undefined) => feature?.details.description ?? ''
 
 const loopStateOf = (live: Live | undefined, done: number, total: number, stopRequested: boolean): LoopSnapshot['loopState'] => {
   if (live?.state === 'running' && stopRequested) return 'stopping'
@@ -170,24 +220,48 @@ const spend = (sessions: Usage[]) => {
   ].filter(Boolean)
 }
 
+const PHASES = new Map([
+  ['orient', 'Reading the plan'],
+  ['implement', 'Writing the code'],
+  ['gate', 'Running the tests'],
+  ['review', 'Reviewing its own work'],
+  ['browser', 'Checking it in a browser'],
+  ['commit', 'Saving the work'],
+])
+
+// A running item's session-log step in plain words.
+export const phaseOf = (step: string) => PHASES.get(step) ?? 'Reading the plan'
+
 const itemRow = (feature: Feature, passed: Set<string>, running: Map<string, number>, usage: Usage[]): ItemRow => {
   const sessions = usage.filter(row => row.item === feature.id)
+  const base = { id: feature.id, title: title(feature), ...feature.details, finishedAt: null, phase: null }
   if (feature.passes) {
-    return { id: feature.id, title: title(feature), state: 'done', note: spend(sessions).join(' · ') || 'done' }
+    const finishedAt = sessions.findLast(row => OUTCOME_OK[row.outcome] === true)?.ended_at ?? null
+    return { ...base, state: 'done', note: spend(sessions).join(' · ') || 'done', finishedAt }
   }
   const worker = running.get(feature.id)
   if (worker !== undefined) {
-    return { id: feature.id, title: title(feature), state: 'running', note: worker > 0 ? `worker ${worker}` : 'now' }
+    return { ...base, state: 'running', note: worker > 0 ? `worker ${worker}` : 'now', phase: phaseOf('orient') }
   }
   if (sessions.length > 0) {
     const attempts = sessions.length === 1 ? '1 attempt' : `${sessions.length} attempts`
-    return { id: feature.id, title: title(feature), state: 'failing', note: [attempts, ...spend(sessions)].join(' · ') }
+    return { ...base, state: 'failing', note: [attempts, ...spend(sessions)].join(' · ') }
   }
   const waitingFor = (feature.depends_on ?? []).filter(id => !passed.has(id))
   if (waitingFor.length > 0) {
-    return { id: feature.id, title: title(feature), state: 'waiting', note: `waiting for ${waitingFor.join(', ')}`, waitingFor }
+    return { ...base, state: 'waiting', note: `waiting for ${waitingFor.join(', ')}`, waitingFor }
   }
-  return { id: feature.id, title: title(feature), state: 'ready', note: 'ready' }
+  return { ...base, state: 'ready', note: 'ready' }
+}
+
+export const areas = (items: ItemRow[]): Area[] => {
+  const byName = new Map<string, ItemRow[]>()
+  for (const row of items) {
+    const rows = byName.get(row.area)
+    if (rows) rows.push(row)
+    else byName.set(row.area, [row])
+  }
+  return [...byName.entries()].map(([name, rows]) => ({ name, done: rows.filter(row => row.state === 'done').length, total: rows.length, items: rows }))
 }
 
 const OUTCOME_OK: Record<string, boolean> = { passed: true, merged: true, failed: false, error: false, 'not merged': false }

@@ -2,7 +2,7 @@ import type { On } from 'claude-code'
 import { expect, test } from 'claude-code/testing'
 
 import { PANE } from './register'
-import { commonDirFromGitFile, compactLine, compute, distinctLabels, isDriverCommand, loopLabel, resumeCommand, formatDuration, formatTokens, shortModel, shortName, shortTitle, statusLine } from './snapshot'
+import { areas, commonDirFromGitFile, compactLine, compute, distinctLabels, isDriverCommand, loopLabel, phaseOf, resumeCommand, formatDuration, formatTokens, shortModel, shortName, shortTitle, statusLine } from './snapshot'
 import { currentStep, parseLog, stepStrip } from './session-log'
 
 const NOW = 4000
@@ -790,4 +790,73 @@ test('a large session log is read through tail, not whole', async ($, on) => {
   const pane = await $.ui.mount({ ...PANE_TARGET, surface: 'terminal' })
   expect(await pane.find({ type: 'Text', text: /^› Commit$/ })).toBeDefined()
   await pane.unmount()
+})
+
+const STEERABLE = JSON.stringify({
+  features: [
+    {
+      id: 'F1', category: 'functional', area: 'Search', plain: 'Search finds products by name', done_when: 'Typing a name lists matches.',
+      kind: 'eval', description: 'Search: index products', verify: 'Run the eval', passes: true, review: 'approved',
+      metrics: [{ name: 'precision@5', target: 0.75 }, { name: 'recall@10' }],
+      evidence: { commit: 'abc', metrics: { 'precision@5': 0.8, mrr: 0.5, '  ': 1 }, screenshots: ['.loop/evidence/F1/1-home.png', '.loop/evidence/F1/../F2/x.png', '.loop/evidence/F2/1-home.png', '/etc/passwd', 7] },
+    },
+    { id: 'F2', category: 'functional', area: 'Checkout', plain: 'Pay by card', done_when: 'A test card pays.', kind: 'design', passes: false, review: 'changes' },
+    { id: 'F3', category: 'edge', area: 'Search', plain: 'Empty search says so', done_when: 'An empty query shows a hint.', kind: 'odd', passes: false },
+  ],
+})
+
+test('each task carries its area, plain sentence, done-when line, kind, metrics, screenshots, review and finish time', () => {
+  const usage = [
+    { item: 'F1', outcome: 'failed', started_at: 1000, ended_at: 1200 },
+    { item: 'F1', outcome: 'merged', started_at: 1300, ended_at: 1500 },
+  ].map(row => JSON.stringify(row)).join('\n')
+  const live = JSON.stringify({ state: 'running', started_at: 1000, updated_at: 3990, running: [{ item: 'F2', worker: 0, started_at: 3700 }] })
+  const snapshot = compute({ features: STEERABLE, usage, live, now: NOW })
+  const [search, pay, empty] = snapshot?.items ?? []
+  expect(search).toMatchObject({
+    area: 'Search', plain: 'Search finds products by name', doneWhen: 'Typing a name lists matches.', kind: 'eval',
+    description: 'Search: index products', verify: 'Run the eval', review: 'approved', finishedAt: 1500, phase: null,
+    screenshots: ['.loop/evidence/F1/1-home.png'],
+  })
+  expect(search?.metrics).toEqual([
+    { name: 'precision@5', value: 0.8, target: 0.75 },
+    { name: 'recall@10', value: null, target: null },
+    { name: 'mrr', value: 0.5, target: null },
+  ])
+  expect(pay).toMatchObject({ kind: 'design', review: 'changes', phase: 'Reading the plan', finishedAt: null, metrics: [], screenshots: [] })
+  expect(empty).toMatchObject({ kind: 'build', review: null, phase: null })
+})
+
+test('every session step has a plain phase, and anything else reads the plan', () => {
+  expect(['orient', 'implement', 'gate', 'review', 'browser', 'commit', 'constructor', '-'].map(phaseOf)).toEqual([
+    'Reading the plan', 'Writing the code', 'Running the tests', 'Reviewing its own work', 'Checking it in a browser', 'Saving the work',
+    'Reading the plan', 'Reading the plan',
+  ])
+})
+
+test('tasks from older loops fall back to their category, description and verify steps', () => {
+  const features = JSON.stringify({
+    features: [
+      { id: 'A', category: 'functional', description: 'CSV export: download paid invoices as CSV', verify: 'Click export', passes: true },
+      { id: 'B', category: 'edge', description: 'Empty export', passes: false },
+      { id: 'C', category: 'regression', description: 'Filters unchanged', passes: false },
+      { id: 'D', description: 'No category', passes: false, evidence: { metrics: 'x', screenshots: 'y' } },
+    ],
+  })
+  const items = compute({ features, now: NOW })?.items ?? []
+  expect(items.map(row => row.area)).toEqual(['Features', 'Edge cases', 'Safety checks', 'Other'])
+  expect(items[0]).toMatchObject({ plain: 'CSV export', doneWhen: 'Click export', kind: 'build', review: null, finishedAt: null, metrics: [], screenshots: [] })
+  expect(items[3]).toMatchObject({ plain: 'No category', doneWhen: '', metrics: [], screenshots: [] })
+})
+
+test('the new task fields are stripped of control characters', () => {
+  const features = JSON.stringify({ features: [{ id: 'A', area: 'Se\u001b[2Jarch', plain: 'P\u0007lain', done_when: 'D\u001bone', metrics: [{ name: 'm\u001b1', target: 1 }], passes: false }] })
+  const shown = JSON.stringify(compute({ features, now: NOW })?.items[0])
+  expect(shown).not.toContain('\\u001b')
+  expect(shown).not.toContain('\\u0007')
+})
+
+test('areas keep first-seen order with done and total counts', () => {
+  const groups = areas(compute({ features: STEERABLE, now: NOW })?.items ?? [])
+  expect(groups.map(group => `${group.name} ${group.done}/${group.total} ${group.items.map(row => row.id).join(',')}`)).toEqual(['Search 1/2 F1,F3', 'Checkout 0/1 F2'])
 })
