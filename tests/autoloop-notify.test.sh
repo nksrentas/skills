@@ -67,9 +67,10 @@ check "a config other users can read is refused and nothing is sent" '[ ! -e "$o
 on="$tmp/on"
 make_project "$on"
 config "$tmp/on.env" 600
+echo '{"name":"Export flow"}' > "$on/.loop/config.json"
 expect=3 run_loop "$on" LOOP_NOTIFY_CONFIG="$tmp/on.env"
 check "start, each session and the end are sent" '[ "$(grep -c "^---$" "$on/messages")" -ge 3 ]'
-check "every message starts with the loop title and carries the LLM summary" '[ "$(grep -c "^\[loop\] on · " "$on/messages")" -ge 3 ] && grep -q "^LLM: " "$on/messages"'
+check "every message starts with the folder and the loop title, and carries the LLM summary" '[ "$(grep -c "^on · \[loop\] Export flow · " "$on/messages")" -ge 3 ] && grep -q "^LLM: " "$on/messages"'
 check "the summary call runs outside the project" '! grep -q "^LLM: $on" "$on/messages"'
 check "the token never reaches curl arguments, only its stdin config" '! grep -q "$token" "$on/curl.argv" && grep -q "bot$token/sendMessage" "$on/curl.stdin" && grep -qx "chat_id=42" "$on/curl.argv" && grep -qx -- "--proto" "$on/curl.argv"'
 
@@ -77,6 +78,7 @@ plain="$tmp/plain"
 make_project "$plain"
 config "$tmp/plain.env" 600
 expect=3 run_loop "$plain" LOOP_NOTIFY_CONFIG="$tmp/plain.env" SUMMARY_FAIL=1
+check "a loop named after its folder does not repeat the folder" '[ "$(grep -c "^\[loop\] plain · " "$plain/messages")" -ge 3 ] && ! grep -q "^plain · " "$plain/messages"'
 check "a failing summary falls back to the plain facts" 'grep -q "A1 passed: Export button" "$plain/messages" && grep -q "The loop finished: every item passes." "$plain/messages" && ! grep -q "^LLM:" "$plain/messages"'
 
 hang="$tmp/hang"

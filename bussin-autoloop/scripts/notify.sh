@@ -47,8 +47,11 @@ notify() {
   [ "$notify_on" = 1 ] || return 0
   # checked on every message, so muting a running loop with loop-status.sh --telegram off takes effect at once
   ! grep -qxF -- "$(pwd -P)" "$muted_file" 2> /dev/null || return 0
-  local title
+  local title folder
   title="$(bash "$script_dir/loop-status.sh" --title 2> /dev/null || echo "[loop] $LOOP_NAME")"
+  folder="$(basename "$PWD")"
+  # the folder names the project, so several loops stay apart on a phone; skip it when the title already is the folder
+  case "$title" in "[loop] $folder ·"*) ;; *) title="$folder · $title" ;; esac
   (notify_send "$title
 $(notify_summary "$*")") < /dev/null > /dev/null 2>&1 &
 }
