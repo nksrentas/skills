@@ -61,6 +61,6 @@ export type LoopView = { name: string; label: string; task: string; path: string
 
 declare module 'claude-code' {
   interface PluginState {
-    'bussin-loop-status': { loops: LoopView[]; selected: string | null; renaming: string | null; showTokens: boolean; openAreas: Record<string, boolean> }
+    'bussin-loop-status': { loops: LoopView[]; selected: string | null; renaming: string | null; showTokens: boolean; openAreas: Record<string, boolean>; openTask: string | null; technical: boolean }
   }
 }
