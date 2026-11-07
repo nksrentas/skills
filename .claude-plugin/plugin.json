@@ -1,7 +1,7 @@
 {
   "name": "bussin",
-  "version": "1.0.0",
-  "description": "Eleven bussin- skills: an autonomous build loop, a feature build workflow, lean code with a mandatory cleanup pass, portable TypeScript feature architecture, Drizzle data access, the house UI system, accessibility, SEO and JSON-LD, honest feedback and human-sounding writing, plus short aliases such as /autoloop.",
+  "version": "1.1.0",
+  "description": "Twelve bussin- skills: an autonomous build loop, a feature build workflow, lean code with a mandatory cleanup pass, portable TypeScript feature architecture, Drizzle data access, React and Next.js rules, the house UI system, accessibility, SEO and JSON-LD, honest feedback and human-sounding writing, plus short aliases such as /autoloop.",
   "author": {
     "name": "nrentas"
   },

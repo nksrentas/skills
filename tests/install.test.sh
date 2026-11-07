@@ -38,9 +38,12 @@ check "the skills are copied for Codex, by name and never with --all" 'grep -qE 
 
 git -C "$tmp/origin" -c user.email=t@t -c user.name=t commit -q --allow-empty -m "newer"
 rm "$tmp/home/.claude/skills/bussin-lean"
+rm "$tmp/home/.claude/skills/bussin-ui"
+mkdir -p "$tmp/home/.claude/skills/bussin-ui" && echo old > "$tmp/home/.claude/skills/bussin-ui/SKILL.md"
 run_install
 check "running it again updates the clone" '[ "$(git -C "$tmp/home/dev/skills" log -1 --format=%s)" = newer ]'
 check "running it again restores a missing link" '[ -L "$tmp/home/.claude/skills/bussin-lean" ]'
+check "an old copied skill folder is replaced by the link and kept as a backup" '[ "$(readlink "$tmp/home/.claude/skills/bussin-ui")" = "$tmp/home/dev/skills/bussin-ui" ] && grep -q old "$tmp"/home/.claude/skills-backup/bussin-ui-*/SKILL.md'
 check "it says how to finish" 'grep -q "Restart Claude Code, then type /autoloop" "$tmp/out"'
 
 [ "$failures" = 0 ] && echo "all install checks passed" || { echo "$failures install checks failed"; exit 1; }

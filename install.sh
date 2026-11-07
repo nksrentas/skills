@@ -22,7 +22,15 @@ mkdir -p "$skills_home"
 linked=0
 for skill in "$dir"/bussin-* "$dir"/aliases/*; do
   [ -f "$skill/SKILL.md" ] || continue
-  ln -sfn "$skill" "$skills_home/$(basename "$skill")"
+  target="$skills_home/$(basename "$skill")"
+  # an old copied folder would never update and ln would nest the link inside it, so move it aside
+  if [ -d "$target" ] && [ ! -L "$target" ]; then
+    backup="$HOME/.claude/skills-backup/$(basename "$skill")-$(date +%Y%m%d%H%M%S)"
+    mkdir -p "$(dirname "$backup")"
+    mv "$target" "$backup"
+    say "moved the old copy of $(basename "$skill") to $backup"
+  fi
+  ln -sfn "$skill" "$target"
   linked=$((linked + 1))
 done
 say "linked $linked skills into $skills_home"
