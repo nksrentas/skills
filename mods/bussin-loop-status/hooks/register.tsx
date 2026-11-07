@@ -45,9 +45,11 @@ export const renamingAtom = atom({ plugin: 'bussin-loop-status', key: 'renaming'
 export const showTokensAtom = atom({ plugin: 'bussin-loop-status', key: 'showTokens' } as const, false)
 // Keyed `<loop path>\n<area name>`; an area nobody toggled is open while it has running or failing tasks.
 export const openAreasAtom = atom({ plugin: 'bussin-loop-status', key: 'openAreas' } as const, {} as Record<string, boolean>)
-// Keyed `<loop path>\n<item id>`: one open task at a time; pressing any task hides technical details again.
+// Keyed `<loop path>\n<item id>`: one open task at a time; pressing any task hides technical details and drops an edit draft.
 export const openTaskAtom = atom({ plugin: 'bussin-loop-status', key: 'openTask' } as const, null as string | null)
 export const technicalAtom = atom({ plugin: 'bussin-loop-status', key: 'technical' } as const, false)
+// The task being reworded (keyed like openTask) and the text typed so far.
+export const editDraftAtom = atom({ plugin: 'bussin-loop-status', key: 'editDraft' } as const, null as { key: string; plain: string; doneWhen: string } | null)
 
 const LOG_ROWS = 6
 
@@ -301,6 +303,19 @@ async function dismiss($: EngineInterface, loop: LoopView) {
   await refresh($)
 }
 
+// One change file for the driver's inbox.sh / inbox.jq, applied between sessions.
+async function sendChange($: EngineInterface, loop: LoopView, change: Record<string, string>, done: string) {
+  const random = crypto.randomUUID().replace(/-/g, '').slice(0, 12)
+  try {
+    await $.fs.write(`${loop.path}/.loop/inbox/${await $.clock.now()}-${random}.json`, `${JSON.stringify(change)}\n`)
+  } catch (error) {
+    $.ui.toast(`Could not save the change: ${error instanceof Error ? error.message : String(error)}`)
+    return false
+  }
+  $.ui.toast(`${done}. Applied before the next task starts.`)
+  return true
+}
+
 function openPane($: EngineInterface) {
   return $.ui.open({ id: PANE, title: 'Autoloop status' })
 }
@@ -373,7 +388,8 @@ export const register: Register = on => {
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const elements = $.ui.resolve(e)
     const { Box, Button, Text } = elements
-    const Input = 'Input' in elements ? elements.Input : undefined
+    // Mobile's table still hands out an Input, drawn as an empty Box: the app has no text field yet.
+    const Input = e.surface !== 'mobile' && 'Input' in elements ? elements.Input : undefined
     const loops = await read($, loopsAtom)
     const view = primaryLoop(loops, await read($, selectedAtom))
     if (view === undefined) {
@@ -502,10 +518,26 @@ export const register: Register = on => {
     const openAreas = await read($, openAreasAtom)
     const openTask = await read($, openTaskAtom)
     const showTechnical = await read($, technicalAtom)
+    const draft = await read($, editDraftAtom)
     const plainOf = new Map(snapshot.items.map(row => [row.id, row.plain]))
     const taskBox = (row: ItemRow) => {
       const run = snapshot.runningRows.find(running => running.item === row.id)
       const lines = (view.logs[row.id] ?? []).slice(-LOG_ROWS)
+      const taskKey = `${view.path}\n${row.id}`
+      const pending = row.state !== 'done' && row.state !== 'running'
+      const editing = pending && Input !== undefined && draft?.key === taskKey ? draft : null
+      const setDraft = (field: 'plain' | 'doneWhen') => (value: string) => update($, editDraftAtom, current => current && { ...current, [field]: value })
+      const saveEdit = async () => {
+        if (editing === null) return
+        const plain = editing.plain.trim()
+        if (plain === '') {
+          $.ui.toast('Say what the task should do before saving')
+          return
+        }
+        if (await sendChange($, view, { op: 'edit', id: row.id, plain, done_when: editing.doneWhen.trim() }, `Saved your edit of '${row.plain}'`)) {
+          await update($, editDraftAtom, () => null)
+        }
+      }
       return (
         <Box key={`task-box-${row.id}`} flexDirection="column" borderStyle="round" borderColor="subtle" paddingX={1}>
           {run !== undefined && (
@@ -513,7 +545,44 @@ export const register: Register = on => {
               {row.phase ?? 'Working on it'} · running for {formatDuration(run.seconds)}
             </Text>
           )}
-          {row.doneWhen !== '' && <Text>Done when: {row.doneWhen}</Text>}
+          {editing === null && row.doneWhen !== '' && <Text>Done when: {row.doneWhen}</Text>}
+          {editing !== null && Input !== undefined && (
+            <Box flexDirection="column">
+              <Input
+                key={`edit-plain-${row.id}`}
+                label="What it should do"
+                rows={2}
+                value={editing.plain}
+                onInput={setDraft('plain')}
+                onSubmit={setDraft('plain')}
+              />
+              <Input
+                key={`edit-done-${row.id}`}
+                label="Done when"
+                rows={2}
+                value={editing.doneWhen}
+                onInput={setDraft('doneWhen')}
+                onSubmit={setDraft('doneWhen')}
+              />
+              <Box flexDirection="row" gap={1}>
+                <Button key={`edit-save-${row.id}`} label="Save" onPress={saveEdit} />
+                <Button key={`edit-cancel-${row.id}`} label="Cancel" onPress={() => update($, editDraftAtom, () => null)} />
+              </Box>
+            </Box>
+          )}
+          {pending && editing === null && (
+            <Box flexDirection="row" gap={1}>
+              {Input !== undefined && (
+                <Button
+                  key={`edit-${row.id}`}
+                  label="Edit"
+                  onPress={() => update($, editDraftAtom, () => ({ key: taskKey, plain: row.plain, doneWhen: row.doneWhen }))}
+                />
+              )}
+              <Button key={`first-${row.id}`} label="Do it next" onPress={() => sendChange($, view, { op: 'first', id: row.id }, `'${row.plain}' runs next`)} />
+              <Button key={`skip-${row.id}`} label="Skip it" onPress={() => sendChange($, view, { op: 'skip', id: row.id }, `'${row.plain}' will be skipped`)} />
+            </Box>
+          )}
           <Box flexDirection="row">
             <Button
               key={`tech-${row.id}`}
@@ -572,6 +641,7 @@ export const register: Register = on => {
                               label={row.plain}
                               onPress={async () => {
                                 await update($, technicalAtom, () => false)
+                                await update($, editDraftAtom, () => null)
                                 await update($, openTaskAtom, open => (open === taskKey ? null : taskKey))
                               }}
                             >
