@@ -317,6 +317,20 @@ test('finds loops in every worktree from the main checkout, running ones first',
   }
 })
 
+test('a loop finished more than a day ago drops out of the pane, a recent one stays', async ($, on) => {
+  const finishedAt = (secondsAgo: number) => JSON.stringify({ state: 'finished', started_at: NOW - secondsAgo - 600, updated_at: NOW - secondsAgo, running: [] })
+  const files = { ...REPO_FILES }
+  answerRepo(on, '/repo', [], files)
+  for (const [secondsAgo, shown] of [[2 * 86400, false], [3600, true]] as const) {
+    files['/repo/.loop/live.json'] = finishedAt(secondsAgo)
+    await $.command.run(RUN_COMMAND)
+    const ui = await $.ui.mount({ ...PANE_TARGET, surface: 'desktop' })
+    expect((await ui.find({ key: 'select-repo' })) !== undefined).toBe(shown)
+    expect(await ui.find({ key: 'select-wt-a' })).toBeDefined()
+    await ui.unmount()
+  }
+})
+
 test('finds the same loops from inside a worktree', async ($, on) => {
   const statuses: (string | undefined)[] = []
   answerRepo(on, '/elsewhere/wt-a', statuses)

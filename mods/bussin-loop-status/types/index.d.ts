@@ -24,6 +24,7 @@ export type LoopSnapshot = {
   waiting: number
   failing: number
   elapsedSec: number
+  lastActivityAt: number | null
   etaSec: number | null
   finishAt: number | null
   sessions: number

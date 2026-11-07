@@ -128,6 +128,12 @@ const loopStateOf = (live: Live | undefined, done: number, total: number, stopRe
 
 export const isActive = (loopState: LoopSnapshot['loopState']) => loopState === 'running' || loopState === 'stopping' || loopState === 'queued'
 
+const FINISHED_KEEP_SEC = 24 * 60 * 60
+
+// A loop finished more than a day ago drops out of the views; its .loop files stay for retro.
+export const finishedLongAgo = (snapshot: LoopSnapshot, now: number) =>
+  snapshot.loopState === 'finished' && snapshot.lastActivityAt !== null && now - snapshot.lastActivityAt > FINISHED_KEEP_SEC
+
 const modelRows = (usage: Usage[]): ModelRow[] => {
   const byName = new Map<string, ModelRow>()
   for (const row of usage) {
@@ -255,6 +261,7 @@ export const compute = (files: LoopFiles): LoopSnapshot | null => {
     waiting: items.filter(row => row.state === 'waiting').length,
     failing: items.filter(row => row.state === 'failing').length,
     elapsedSec,
+    lastActivityAt: live?.updated_at ?? usage[usage.length - 1]?.ended_at ?? null,
     etaSec,
     finishAt: etaSec === null ? null : files.now + etaSec,
     sessions: usage.length,
