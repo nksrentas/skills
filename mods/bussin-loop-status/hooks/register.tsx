@@ -52,6 +52,8 @@ export const technicalAtom = atom({ plugin: 'bussin-loop-status', key: 'technica
 // The task being reworded (keyed like openTask) and the text typed so far.
 export const editDraftAtom = atom({ plugin: 'bussin-loop-status', key: 'editDraft' } as const, null as { key: string; plain: string; doneWhen: string } | null)
 export const addDraftAtom = atom({ plugin: 'bussin-loop-status', key: 'addDraft' } as const, null as AddDraft | null)
+// The task whose screenshots are being sent back (keyed like openTask) and the note typed so far.
+export const reviewDraftAtom = atom({ plugin: 'bussin-loop-status', key: 'reviewDraft' } as const, null as { key: string; note: string } | null)
 
 const LOG_ROWS = 6
 const ADDED_AREA = 'Added by you'
@@ -291,8 +293,10 @@ async function readInbox($: EngineInterface, dir: string, snapshot: LoopSnapshot
     const path = `${dir}/.loop/inbox/${name}`
     try {
       const change: unknown = JSON.parse((await readOptional($, path)) ?? '')
-      const line = typeof change === 'object' && change !== null ? changeLine(change as Record<string, unknown>, plainOf) : null
-      if (line !== null) changes.push({ name, path, line })
+      if (typeof change !== 'object' || change === null) continue
+      const fields = change as Record<string, unknown>
+      const line = changeLine(fields, plainOf)
+      if (line !== null) changes.push({ name, path, line, reviewFor: fields.op === 'review' ? clean(fields.id) : null })
     } catch {
       // Unreadable or half-written: the driver drops it with a reason.
     }
@@ -308,6 +312,68 @@ async function undoChange($: EngineInterface, change: InboxChange) {
     $.ui.toast(`Could not undo the change: ${error instanceof Error ? error.message : String(error)}`)
   }
   await refresh($)
+}
+
+const MAX_SVG = 131072
+// One temp folder per session for sips thumbnails, cached by surface format, path and mtime.
+let thumbDir: Promise<string | null> | undefined
+// Unbounded, but holds one entry per evidence screenshot opened this session.
+const thumbs = new Map<string, { mtimeMs: number; source: string | null }>()
+
+async function makeThumbDir($: EngineInterface) {
+  try {
+    const { exitCode, stdout } = await $.process.run(['mktemp', '-d'], { timeoutMs: 5000 })
+    return exitCode === 0 && stdout.trim() !== '' ? stdout.trim() : null
+  } catch {
+    return null
+  }
+}
+
+// What to draw for the screenshot: an Svg source wrapping a small JPEG, or a small PNG's base64 for the
+// terminal's Image; null when sips cannot make one or the Svg would be too long.
+async function thumbnail($: EngineInterface, path: string, format: 'jpeg' | 'png') {
+  let mtimeMs: number
+  try {
+    mtimeMs = (await $.fs.stat(path)).mtimeMs
+  } catch {
+    return null
+  }
+  const key = `${format}\n${path}`
+  const cached = thumbs.get(key)
+  if (cached?.mtimeMs === mtimeMs) return cached.source
+  thumbDir ??= makeThumbDir($)
+  const dir = await thumbDir
+  if (dir === null) return null
+  // Named from the key, so thumbnails drawn at once never share a file.
+  let hash = 0x811c9dc5
+  for (const char of key) hash = Math.imul(hash ^ char.charCodeAt(0), 0x01000193) >>> 0
+  const out = `${dir}/${hash.toString(16)}.${format === 'jpeg' ? 'jpg' : 'png'}`
+  const argv = ['sips', '-Z', '480', '-s', 'format', format, ...(format === 'jpeg' ? ['-s', 'formatOptions', '70'] : []), path, '--out', out]
+  let source: string | null = null
+  try {
+    if ((await $.process.run(argv, { timeoutMs: 15000 })).exitCode === 0) {
+      const { base64 } = await $.fs.read(out, { as: 'bytes' })
+      if (format === 'png') source = base64
+      else {
+        // shortcut: a fixed 3:2 box letterboxes other shapes; read the size with sips -g if that looks wrong.
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="480" height="320" viewBox="0 0 480 320"><image href="data:image/jpeg;base64,${base64}" width="480" height="320"/></svg>`
+        if (svg.length <= MAX_SVG) source = svg
+      }
+    }
+  } catch {
+    // A failed sips run draws no thumbnail; the caption and Open full size stay.
+  }
+  thumbs.set(key, { mtimeMs, source })
+  return source
+}
+
+async function openFile($: EngineInterface, path: string) {
+  try {
+    const { exitCode, stderr } = await $.process.run(['open', path], { timeoutMs: 5000 })
+    if (exitCode !== 0) throw new Error(stderr.trim() || `open exited ${exitCode}`)
+  } catch (error) {
+    $.ui.toast(`Could not open the screenshot: ${error instanceof Error ? error.message : String(error)}`)
+  }
 }
 
 async function loadLoop($: EngineInterface, dir: string, repoName: string, now: number): Promise<LoopView | null> {
@@ -688,7 +754,82 @@ export const register: Register = on => {
     const openTask = await read($, openTaskAtom)
     const showTechnical = await read($, technicalAtom)
     const draft = await read($, editDraftAtom)
+    const reviewDraft = await read($, reviewDraftAtom)
     const plainOf = new Map(snapshot.items.map(row => [row.id, row.plain]))
+    // At runtime every table hands out Image and Svg; only the terminal draws Image, and every other surface Svg.
+    const Image = e.surface === 'terminal' && 'Image' in elements ? elements.Image : undefined
+    const Svg = e.surface !== 'terminal' && 'Svg' in elements ? elements.Svg : undefined
+    const openRow = snapshot.items.find(row => openTask === `${view.path}\n${row.id}`)
+    const shots = await Promise.all(
+      (openRow?.screenshots ?? []).map(async shot => {
+        const path = `${view.path}/${shot}`
+        const source = Svg !== undefined || Image !== undefined ? await thumbnail($, path, Svg !== undefined ? 'jpeg' : 'png') : null
+        return { path, name: baseName(shot), source }
+      }),
+    )
+    const screenshots = (row: ItemRow) => {
+      const taskKey = `${view.path}\n${row.id}`
+      const reviewing = Input !== undefined && reviewDraft?.key === taskKey ? reviewDraft : null
+      const waiting = view.changes.some(change => change.reviewFor === row.id)
+      const sendReview = async () => {
+        if (reviewing === null) return
+        const note = reviewing.note.trim()
+        if (note === '') {
+          $.ui.toast('Say what needs to change before sending it')
+          return
+        }
+        if (await sendChange($, view, { op: 'review', id: row.id, verdict: 'changes', note }, `Sent your notes on '${row.plain}'`)) {
+          await update($, reviewDraftAtom, () => null)
+        }
+      }
+      return (
+        <Box flexDirection="column">
+          {shots.map((shot, index) => (
+            <Box key={`shot-${row.id}-${index}`} flexDirection="column">
+              {Svg !== undefined && shot.source !== null && <Svg source={shot.source} alt={`Screenshot ${shot.name}`} />}
+              {Image !== undefined && shot.source !== null && <Image source={{ png: shot.source }} columns={40} rows={15} alt={`Screenshot ${shot.name}`} />}
+              <Box flexDirection="row" gap={1}>
+                <Text dimColor>{shot.name}</Text>
+                <Button key={`open-${row.id}-${index}`} label="Open full size" onPress={() => openFile($, shot.path)} />
+              </Box>
+            </Box>
+          ))}
+          {row.review === 'approved' ? (
+            <Text color="success">You approved these</Text>
+          ) : row.review === 'changes' ? (
+            <Text color="warning">You asked for changes</Text>
+          ) : waiting ? (
+            <Text dimColor>Your review is waiting for the loop</Text>
+          ) : reviewing !== null && Input !== undefined ? (
+            <Box flexDirection="column">
+              <Input
+                key={`review-note-${row.id}`}
+                label="What needs to change?"
+                rows={3}
+                value={reviewing.note}
+                onInput={(note: string) => update($, reviewDraftAtom, current => current && { ...current, note })}
+                onSubmit={(note: string) => update($, reviewDraftAtom, current => current && { ...current, note })}
+              />
+              <Box flexDirection="row" gap={1}>
+                <Button key={`review-send-${row.id}`} label="Send to the loop" onPress={sendReview} />
+                <Button key={`review-cancel-${row.id}`} label="Cancel" onPress={() => update($, reviewDraftAtom, () => null)} />
+              </Box>
+            </Box>
+          ) : (
+            <Box flexDirection="row" gap={1}>
+              <Button
+                key={`approve-${row.id}`}
+                label="Looks right"
+                onPress={() => sendChange($, view, { op: 'review', id: row.id, verdict: 'approved' }, `Approved the screenshots of '${row.plain}'`)}
+              />
+              {Input !== undefined && (
+                <Button key={`changes-${row.id}`} label="Needs changes" onPress={() => update($, reviewDraftAtom, () => ({ key: taskKey, note: '' }))} />
+              )}
+            </Box>
+          )}
+        </Box>
+      )
+    }
     const taskBox = (row: ItemRow) => {
       const run = snapshot.runningRows.find(running => running.item === row.id)
       const lines = (view.logs[row.id] ?? []).slice(-LOG_ROWS)
@@ -740,6 +881,7 @@ export const register: Register = on => {
               </Box>
             </Box>
           ))}
+          {row.screenshots.length > 0 && screenshots(row)}
           {editing !== null && Input !== undefined && (
             <Box flexDirection="column">
               <Input
@@ -836,6 +978,7 @@ export const register: Register = on => {
                               onPress={async () => {
                                 await update($, technicalAtom, () => false)
                                 await update($, editDraftAtom, () => null)
+                                await update($, reviewDraftAtom, () => null)
                                 await update($, openTaskAtom, open => (open === taskKey ? null : taskKey))
                               }}
                             >

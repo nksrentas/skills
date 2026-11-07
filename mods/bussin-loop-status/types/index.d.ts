@@ -59,8 +59,8 @@ export type LoopSnapshot = {
 
 export type LogLine = { time: string; step: string; kind: string; text: string }
 
-// A change file waiting in .loop/inbox, as one plain line.
-export type InboxChange = { name: string; path: string; line: string }
+// A change file waiting in .loop/inbox, as one plain line; reviewFor is the item a review change answers.
+export type InboxChange = { name: string; path: string; line: string; reviewFor: string | null }
 
 export type LoopView = { name: string; label: string; task: string; path: string; snapshot: LoopSnapshot; logs: Record<string, LogLine[]>; changes: InboxChange[] }
 
@@ -69,6 +69,6 @@ export type AddDraft = { path: string; plain: string; doneWhen: string; area: st
 
 declare module 'claude-code' {
   interface PluginState {
-    'bussin-loop-status': { loops: LoopView[]; selected: string | null; renaming: string | null; showTokens: boolean; openAreas: Record<string, boolean>; openTask: string | null; technical: boolean; editDraft: { key: string; plain: string; doneWhen: string } | null; addDraft: AddDraft | null }
+    'bussin-loop-status': { loops: LoopView[]; selected: string | null; renaming: string | null; showTokens: boolean; openAreas: Record<string, boolean>; openTask: string | null; technical: boolean; editDraft: { key: string; plain: string; doneWhen: string } | null; addDraft: AddDraft | null; reviewDraft: { key: string; note: string } | null }
   }
 }

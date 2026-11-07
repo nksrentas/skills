@@ -670,7 +670,8 @@ function answerLogged(on: On, files: Record<string, string>, reads: string[], wr
   on('fs.read', async (_, e) => {
     reads.push(e.path)
     const text = files[e.path]
-    return text === undefined ? { deny: `ENOENT: ${e.path}` } : { value: text }
+    if (text === undefined) return { deny: `ENOENT: ${e.path}` }
+    return { value: e.as === 'bytes' ? { base64: text } : text }
   })
   on('fs.write', async (_, e) => {
     written[e.path] = e.text
@@ -1171,4 +1172,107 @@ test("waiting changes show as plain lines in 'Your changes', with when they appl
   const empty = await $.ui.mount({ ...PANE_TARGET, surface: 'desktop' })
   expect(await empty.find({ type: 'Text', text: /^Your changes/ })).toBeUndefined()
   await empty.unmount()
+})
+
+test('a design task shows its screenshots as thumbnails to open full size, then Looks right or Needs changes', async ($, on) => {
+  const shot = (id: string, name: string) => `.loop/evidence/${id}/${name}`
+  // A 1×1 PNG: the terminal's Image refuses bytes that are not a real PNG.
+  const PNG_HEAD = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='
+  const files: Record<string, string> = {
+    '/project/.loop/feature_list.json': JSON.stringify({
+      features: [
+        { id: 'D1', area: 'Design', plain: 'The pricing page looks like the sketch', kind: 'design', passes: true, evidence: { commit: 'abc', screenshots: [shot('D1', '1-home.png'), shot('D1', '2-pricing.png')] } },
+        { id: 'D2', area: 'Design', plain: 'The footer looks right', kind: 'design', passes: true, review: 'approved', evidence: { commit: 'def', screenshots: [shot('D2', '1-footer.png')] } },
+        { id: 'D3', area: 'Design', plain: 'The header looks right', kind: 'design', passes: true, evidence: { commit: 'ghi', screenshots: [shot('D3', '1-header.png')] } },
+        { id: 'D4', area: 'Design', plain: 'The menu looks right', kind: 'design', passes: true, review: 'changes', evidence: { commit: 'jkl', screenshots: [shot('D4', '1-menu.png')] } },
+        { id: 'D5', area: 'Design', plain: 'The poster looks right', kind: 'design', passes: true, evidence: { commit: 'mno', screenshots: [shot('D5', '1-huge.png')] } },
+      ],
+    }),
+    '/project/.loop/live.json': JSON.stringify({ state: 'stopped', started_at: 1000, updated_at: 3990, running: [] }),
+  }
+  for (const name of ['D1/1-home', 'D1/2-pricing', 'D2/1-footer', 'D3/1-header', 'D4/1-menu', 'D5/1-huge']) files[`/project/.loop/evidence/${name}.png`] = 'png'
+  const written: Record<string, string> = {}
+  const toasts: string[] = []
+  const runs: string[][] = []
+  answerLogged(on, files, [], written, toasts)
+  on('fs.list', async (_, e) =>
+    e.path === '/project/.loop/inbox'
+      ? { value: Object.keys(files).flatMap(path => (path.startsWith('/project/.loop/inbox/') ? [{ ...ENTRY, kind: 'file' as const, name: path.slice(21) }] : [])) }
+      : { deny: `ENOENT: ${e.path}` },
+  )
+  on('process.run', async (_, e) => {
+    runs.push(e.argv)
+    const out = e.argv.at(-1) ?? ''
+    // Each JPEG's bytes name its screenshot, so two thumbnails drawn at once cannot swap; the poster is too big for an Svg.
+    const input = e.argv.at(-3) ?? ''
+    if (e.argv[0] === 'sips') files[out] = out.endsWith('.png') ? PNG_HEAD : input.includes('huge') ? 'A'.repeat(140000) : btoa(input)
+    const stdout = e.argv[0] === 'mktemp' ? '/tmp/thumbs\n' : ''
+    return { value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+  })
+  await $.command.run(RUN_COMMAND)
+  const changes = () => Object.entries(written).filter(([path]) => path.includes('/inbox/'))
+
+  const desktop = await $.ui.mount({ ...PANE_TARGET, surface: 'desktop' })
+  await desktop.press({ key: 'area-Design' })
+  await desktop.press({ key: 'task-D1' })
+  const svgs = await desktop.findAll({ type: 'Svg' })
+  expect(svgs.map(svg => /base64,([^"]+)"/.exec(String(svg.props.source))?.[1])).toEqual([btoa('/project/.loop/evidence/D1/1-home.png'), btoa('/project/.loop/evidence/D1/2-pricing.png')])
+  expect(svgs.every(svg => String(svg.props.source).startsWith('<svg ') && svg.props.isInteractive === undefined)).toBe(true)
+  expect(await desktop.find({ type: 'Image' })).toBeUndefined()
+  expect((await desktop.findAll({ type: 'Text', text: /^\d-\w+\.png$/ })).map(text => text.text)).toEqual(['1-home.png', '2-pricing.png'])
+  await desktop.press({ key: 'open-D1-1' })
+  expect(runs.filter(argv => argv[0] === 'open')).toEqual([['open', '/project/.loop/evidence/D1/2-pricing.png']])
+  await desktop.press({ key: 'approve-D1' })
+  expect(await desktop.find({ type: 'Text', text: /^Your review is waiting for the loop$/ })).toBeDefined()
+  expect(await desktop.find({ key: 'approve-D1' })).toBeUndefined()
+  await desktop.press({ key: 'task-D3' })
+  await desktop.press({ key: 'changes-D3' })
+  await desktop.press({ key: 'review-send-D3' })
+  await desktop.input({ key: 'review-note-D3', text: '  The logo is cut off on mobile  ', kind: 'change' })
+  await desktop.press({ key: 'review-send-D3' })
+  expect(await desktop.find({ key: 'review-note-D3' })).toBeUndefined()
+  expect(await desktop.find({ type: 'Text', text: /^Your review is waiting for the loop$/ })).toBeDefined()
+  expect(changes().map(([, text]) => JSON.parse(text))).toEqual([
+    { op: 'review', id: 'D1', verdict: 'approved' },
+    { op: 'review', id: 'D3', verdict: 'changes', note: 'The logo is cut off on mobile' },
+  ])
+  expect(changes().every(([path]) => INBOX_FILE.test(path))).toBe(true)
+  expect(toasts).toEqual([
+    "Approved the screenshots of 'The pricing page looks like the sketch'. Applied when the loop runs next.",
+    'Say what needs to change before sending it',
+    "Sent your notes on 'The header looks right'. Applied when the loop runs next.",
+  ])
+  await desktop.press({ key: 'task-D2' })
+  expect(await desktop.find({ type: 'Text', text: /^You approved these$/ })).toBeDefined()
+  expect(await desktop.find({ key: 'approve-D2' })).toBeUndefined()
+  expect(await desktop.findAll({ type: 'Svg' })).toHaveLength(1)
+  await desktop.press({ key: 'task-D4' })
+  expect(await desktop.find({ type: 'Text', text: /^You asked for changes$/ })).toBeDefined()
+  expect(await desktop.find({ key: 'approve-D4' })).toBeUndefined()
+  await desktop.press({ key: 'task-D5' })
+  expect(await desktop.find({ type: 'Svg' })).toBeUndefined()
+  expect(await desktop.find({ type: 'Text', text: /^1-huge\.png$/ })).toBeDefined()
+  expect(await desktop.find({ key: 'open-D5-0' })).toBeDefined()
+  await desktop.unmount()
+
+  const terminal = await $.ui.mount({ ...PANE_TARGET, surface: 'terminal' })
+  await terminal.press({ key: 'task-D1' })
+  const images = await terminal.findAll({ type: 'Image' })
+  expect(images.map(image => image.props.source)).toEqual([{ png: PNG_HEAD }, { png: PNG_HEAD }])
+  expect(images.every(image => image.props.columns === 40)).toBe(true)
+  await terminal.unmount()
+  // Redraws reuse thumbnails: one sips run per screenshot and format, each to its own file in one temp folder.
+  const sips = runs.filter(argv => argv[0] === 'sips')
+  const made = sips.map(argv => `${argv[5]} ${argv.at(-3)}`)
+  expect(new Set(made).size).toBe(made.length)
+  expect(made).toEqual(expect.arrayContaining(['jpeg /project/.loop/evidence/D1/1-home.png', 'png /project/.loop/evidence/D1/1-home.png', 'png /project/.loop/evidence/D1/2-pricing.png']))
+  expect(new Set(sips.map(argv => argv.at(-1))).size).toBe(sips.length)
+  expect(sips.every(argv => argv.at(-1)?.startsWith('/tmp/thumbs/'))).toBe(true)
+  expect(runs.filter(argv => argv[0] === 'mktemp')).toHaveLength(1)
+
+  const mobile = await $.ui.mount({ ...PANE_TARGET, surface: 'mobile' })
+  await mobile.press({ key: 'task-D5' })
+  expect(await mobile.find({ key: 'approve-D5' })).toBeDefined()
+  expect(await mobile.find({ key: 'changes-D5' })).toBeUndefined()
+  await mobile.unmount()
 })
