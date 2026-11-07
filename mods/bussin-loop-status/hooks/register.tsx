@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { AddDraft, Area, InboxChange, ItemRow, ItemState, LogLine, LoopSnapshot, LoopView } from '../types'
+import type { AddDraft, Area, InboxChange, ItemRow, ItemState, LogLine, LoopSnapshot, LoopView, Metric } from '../types'
 import { currentStep, parseLog, SAFE_ITEM } from './session-log'
 import {
   areas,
@@ -76,6 +76,18 @@ function parseMetrics(text: string) {
       const target = match === null ? NaN : Number(match[2])
       return match !== null && Number.isFinite(target) ? { name: match[1] ?? part, target } : { name: part }
     })
+}
+
+const missed = (metric: Metric) => metric.value !== null && metric.target !== null && metric.value < metric.target
+
+function metricsTable(metrics: Metric[]) {
+  const shown = (value: number | null) => (value === null ? '—' : value.toFixed(2))
+  const rows = metrics.map(metric => {
+    const met = metric.value === null || metric.target === null ? '—' : missed(metric) ? '✗ below' : '✓ met'
+    // A '|' in a metric name would split its cell.
+    return `| ${metric.name.replace(/\|/g, '\\|')} | ${shown(metric.value)} | ${shown(metric.target)} | ${met} |`
+  })
+  return ['| Metric | Value | Target | |', '| --- | ---: | ---: | --- |', ...rows].join('\n')
 }
 
 const TASK_MARK: Record<ItemState, { icon: string; color: string }> = {
@@ -466,7 +478,7 @@ export const register: Register = on => {
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const elements = $.ui.resolve(e)
-    const { Box, Button, Text } = elements
+    const { Box, Button, Markdown, Text } = elements
     // Mobile's table still hands out an Input, drawn as an empty Box: the app has no text field yet.
     const Input = e.surface !== 'mobile' && 'Input' in elements ? elements.Input : undefined
     const Select = Input !== undefined && 'Select' in elements ? elements.Select : undefined
@@ -703,6 +715,31 @@ export const register: Register = on => {
             </Text>
           )}
           {editing === null && row.doneWhen !== '' && <Text>Done when: {row.doneWhen}</Text>}
+          {row.metrics.length > 0 && <Markdown key={`metrics-${row.id}`} text={metricsTable(row.metrics)} />}
+          {(row.dataset !== '' || row.command !== '') && (
+            <Text dimColor>{[row.dataset !== '' && `Dataset: ${row.dataset}`, row.command !== '' && `Command: ${row.command}`].filter(Boolean).join(' · ')}</Text>
+          )}
+          {row.metrics.filter(missed).map(metric => (
+            <Box key={`missed-${row.id}-${metric.name}`} flexDirection="column">
+              <Text color="warning">
+                ⚠ {metric.name} is {metric.value?.toFixed(2)}, below its target of {metric.target?.toFixed(2)}
+              </Text>
+              <Box flexDirection="row">
+                <Button
+                  key={`reach-${row.id}-${metric.name}`}
+                  label="Add a task to reach it"
+                  onPress={() =>
+                    sendChange(
+                      $,
+                      view,
+                      { op: 'add', plain: `Raise ${metric.name} to at least ${metric.target}`, kind: 'eval', area: row.area, metrics: [{ name: metric.name, target: metric.target }] },
+                      `Added 'Raise ${metric.name} to at least ${metric.target}'`,
+                    )
+                  }
+                />
+              </Box>
+            </Box>
+          ))}
           {editing !== null && Input !== undefined && (
             <Box flexDirection="column">
               <Input
