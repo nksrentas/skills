@@ -72,15 +72,23 @@ The speed-up depends on the list's shape, not on the cap. Items that all edit on
 
 ### Session title
 
-A session that creates, starts or watches a loop is always titled `[loop] <loop name> · <done/total>`, for example `[loop] Invoice reminders · 11/19`, with `· not running` added while its driver is stopped. The loop name is the same one the status views show, so a session, its terminal and the band row all carry one name. `bash <skill directory>/scripts/loop-status.sh --title`, run in the loop's checkout (or one of its workers), prints that line.
+A session that creates, starts or watches a loop is always titled `[loop <icon> <done>/<total>] <loop name>`, followed by what is happening now:
 
-- **Claude desktop app:** rename this session to that line with the app's session-title tool (`set_session_title`, session `self`):
-  - after `init` commits the loop
-  - after starting a loop driver
-  - after `status`
-  - whenever you report on loops
-  
-  A mod cannot rename sessions, so the title changes when Claude acts, not on a timer. Rename only sessions that are about loops.
+| Icon | Meaning | Example |
+|------|---------|---------|
+| `▸` | running, with the item and its step out of six (Orient, Implement, Gate, Review, Browser, Commit), or the worker count | `[loop ▸ 11/19] Invoice reminders · F12 Gate 3/6`, `[loop ▸ 11/19] Invoice reminders · 3 workers` |
+| `■` | the driver is stopped | `[loop ■ 11/19] Invoice reminders · stopped` |
+| `◆` | stopped with an item only a human can unblock (`Blocked:` in `progress.md` or out of attempts) | `[loop ◆ 11/19] Invoice reminders · F12 blocked` |
+| `✓` | every item passes | `[loop ✓ 19/19] Invoice reminders` |
+
+The loop name is the same one the status views show, so a session, its terminal and the band row all carry one name. `bash <skill directory>/scripts/loop-status.sh --title`, run in the loop's checkout (or one of its workers), prints that line.
+
+- **Claude desktop app:** rename this session to that line with the app's session-title tool (`set_session_title`, session `self`) after `init` commits the loop, after starting a loop driver, after `status` and whenever you report on loops. Then keep it current: a mod cannot rename sessions, so every rename is followed by a watcher.
+  1. Run `bash <skill directory>/scripts/loop-status.sh --next-title "<the title you just set>"` in the loop's checkout as a background command (`run_in_background`). It waits until the title changes (next step, next item, a pass, a stop) and prints the new one.
+  2. When it exits, rename the session to the line it printed, without waiting for the user.
+  3. Start the watcher again with that line while the title shows `▸`. Stop once it shows `■`, `◆` or `✓`; the next rename after `status` or a new driver starts it again.
+
+  Run one watcher per session, never two. Rename only sessions that are about loops.
 - **Terminal:** `loop.sh` sets the same line as the terminal window title every time it updates `live.json`, so a terminal tab running a loop is always current.
 
 ### Status view

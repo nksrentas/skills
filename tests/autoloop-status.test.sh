@@ -119,13 +119,24 @@ start_driver loop.sh
 jq -n --argjson now "$now" --argjson pid "$driver" '{state: "running", pid: $pid, started_at: $now, updated_at: $now, running: []}' > "$titled/.loop/live.json"
 jq -n --argjson now "$now" --argjson pid "$driver" '{state: "queued", pid: $pid, started_at: $now, updated_at: $now, running: []}' > "$tmp/titled-second/.loop/live.json"
 jq '.features[1].passes = true' "$titled/.loop/feature_list.json" > "$tmp/titled-second/.loop/feature_list.json"
-check "--title starts with [loop] and this checkout's loop name, then its progress" '[ "$(cd "$titled" && bash "$status" --title)" = "[loop] Invoice reminders · 1/3" ]'
-check "--title in another worktree names that worktree's loop" '[ "$(cd "$tmp/titled-second" && bash "$status" --title)" = "[loop] titled-second · 2/3" ]'
-check "--title inside a parallel worker names the loop it works for" '[ "$(cd "$tmp/titled.loop-workers/w1" && bash "$status" --title)" = "[loop] Invoice reminders · 1/3" ]'
+check "--title shows the running icon, progress and this checkout's loop name" '[ "$(cd "$titled" && bash "$status" --title)" = "[loop ▸ 1/3] Invoice reminders" ]'
+check "--title in another worktree names that worktree's loop" '[ "$(cd "$tmp/titled-second" && bash "$status" --title)" = "[loop ▸ 2/3] titled-second" ]'
+check "--title inside a parallel worker names the loop it works for" '[ "$(cd "$tmp/titled.loop-workers/w1" && bash "$status" --title)" = "[loop ▸ 1/3] Invoice reminders" ]'
 bash "$status" --rename "Reminders v2" "$titled" > /dev/null
-check "--title follows a rename" '[ "$(cd "$titled" && bash "$status" --title)" = "[loop] Reminders v2 · 1/3" ]'
+check "--title follows a rename" '[ "$(cd "$titled" && bash "$status" --title)" = "[loop ▸ 1/3] Reminders v2" ]'
+check "--title names the running item and its step out of six" '[ "$(cd "$live" && bash "$status" --title)" = "[loop ▸ 0/1] Landing page · E4 Gate 3/6" ]'
+jq '.running = [{item: "B", worker: 1}, {item: "C", worker: 2}]' "$titled/.loop/live.json" > "$tmp/l" && mv "$tmp/l" "$titled/.loop/live.json"
+check "--title counts workers when several items run" '[ "$(cd "$titled" && bash "$status" --title)" = "[loop ▸ 1/3] Reminders v2 · 2 workers" ]'
 jq -n --argjson now "$now" '{state: "running", pid: 999999, started_at: $now, updated_at: $now, running: []}' > "$tmp/titled-second/.loop/live.json"
-check "--title marks a loop whose driver has exited" '[ "$(cd "$tmp/titled-second" && bash "$status" --title)" = "[loop] titled-second · 2/3 · not running" ]'
-check "--title still names the loop when nothing runs" '[ "$(cd "$esc" && rm -f .loop/live.json && bash "$status" --title)" = "[loop] esc · 0/1 · not running" ]'
+check "--title marks a loop whose driver has exited as stopped" '[ "$(cd "$tmp/titled-second" && bash "$status" --title)" = "[loop ■ 2/3] titled-second · stopped" ]'
+check "--title still names the loop when nothing runs" '[ "$(cd "$esc" && rm -f .loop/live.json && bash "$status" --title)" = "[loop ■ 0/1] esc · stopped" ]'
+echo "Blocked: C needs an API key" >> "$tmp/titled-second/.loop/progress.md"
+check "--title marks a stopped loop with a held item as blocked" '[ "$(cd "$tmp/titled-second" && bash "$status" --title)" = "[loop ◆ 2/3] titled-second · C blocked" ]'
+cp "$tmp/titled-second/.loop/live.json" "$titled/.loop/live.json"
+echo '{"A": 5, "B": 3, "C": 1}' > "$titled/.loop/attempts.json"
+check "--title counts an item out of attempts as blocked, not one that passed" '[ "$(cd "$titled" && bash "$status" --title)" = "[loop ◆ 1/3] Reminders v2 · B blocked" ]'
+check "--next-title returns at once when the title already moved on" '[ "$(cd "$tmp/titled-second" && bash "$status" --next-title "[loop ▸ 2/3] titled-second")" = "[loop ◆ 2/3] titled-second · C blocked" ]'
+jq '.features[2].passes = true' "$tmp/titled-second/.loop/feature_list.json" > "$tmp/l" && mv "$tmp/l" "$tmp/titled-second/.loop/feature_list.json"
+check "--title shows a tick once every item passes" '[ "$(cd "$tmp/titled-second" && bash "$status" --title)" = "[loop ✓ 3/3] titled-second" ]'
 
 [ "$failures" = 0 ] && echo "all status checks passed" || { echo "$failures status checks failed"; exit 1; }
