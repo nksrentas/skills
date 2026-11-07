@@ -24,6 +24,7 @@ import {
   longInactive,
   orderLoops,
   parentDir,
+  phaseOf,
   progressBar,
   resumeCommand,
   shortModel,
@@ -192,7 +193,7 @@ async function loadLoop($: EngineInterface, dir: string, repoName: string, now: 
   const features = await readOptional($, `${dir}/.loop/feature_list.json`)
   if (typeof features !== 'string') return null
   const live = await readOptional($, `${dir}/.loop/live.json`)
-  const snapshot = compute({
+  const computed = compute({
     features,
     usage: await readOptional($, `${dir}/.loop/usage.jsonl`),
     live,
@@ -201,7 +202,9 @@ async function loadLoop($: EngineInterface, dir: string, repoName: string, now: 
     driverAlive: await driverAlive($, livePid(live)),
     now,
   })
-  if (snapshot === null || dismissed(snapshot, await readOptional($, `${dir}/.loop/dismissed`))) return null
+  if (computed === null || dismissed(computed, await readOptional($, `${dir}/.loop/dismissed`))) return null
+  const logs = await readLogs($, dir, computed)
+  const snapshot = { ...computed, items: computed.items.map(row => (row.state === 'running' && Object.hasOwn(logs, row.id) ? { ...row, phase: phaseOf(currentStep(logs[row.id] ?? [])) } : row)) }
   const name = shortName(baseName(dir), repoName)
   const config = await readOptional($, `${dir}/.loop/config.json`)
   return {
@@ -210,7 +213,7 @@ async function loadLoop($: EngineInterface, dir: string, repoName: string, now: 
     task: loopTask(config),
     path: dir,
     snapshot,
-    logs: await readLogs($, dir, snapshot),
+    logs,
   }
 }
 
