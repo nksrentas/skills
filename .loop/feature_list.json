@@ -58,8 +58,11 @@
         "mods/bussin-loop-status/hooks/snapshot.ts",
         "mods/bussin-loop-status/hooks/status.test.tsx"
       ],
-      "passes": false,
-      "evidence": null
+      "passes": true,
+      "evidence": {
+        "commit": "1108c48791d7dff9a4b2492caa9d16f47a462a8e",
+        "ran": "bash .loop/verify.sh (claude plugin test mods/bussin-loop-status: 48 pass, 5 new; shell suites green)"
+      }
     },
     {
       "id": "F4",

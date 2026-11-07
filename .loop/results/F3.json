@@ -1,9 +1,0 @@
-{
-  "id": "F3",
-  "passes": true,
-  "evidence": {
-    "commit": "1108c48791d7dff9a4b2492caa9d16f47a462a8e",
-    "ran": "bash .loop/verify.sh (claude plugin test mods/bussin-loop-status: 48 pass, 5 new; shell suites green)"
-  },
-  "notes": "Did: ItemRow gains area, plain, doneWhen, kind, description, verify, metrics, screenshots, review, finishedAt and phase (types/index.d.ts, snapshot.ts). Fallbacks for old lists: area from category, plain from shortTitle(description), doneWhen from verify. New exports: areas(items) -> [{name, done, total, items}] in first-seen order, and phaseOf(step). compute() gives running rows phase 'Reading the plan'; loadLoop in register.tsx then sets each running row's phase from its session log (phaseOf(currentStep(lines))), so F4 can read row.phase straight from the snapshot.\nLearned: the mod's test harness `$` has no atom store (read($, loopsAtom) throws), so the loaded view is only testable through what the pane renders. Phase wiring in loadLoop gets its pane test in F4. Screenshot paths are kept only when they start with .loop/evidence/<id>/ and have no '..' segment; metric names from evidence are trimmed and blank ones dropped.\nLesson: [tests] tests/autoloop-inbox.test.sh e2e failed inside a parallel worker because LOOP_WORKERS leaked from the parent driver's env into the nested loop.sh, which then ran parallel with a fake agent that writes no result file. Fixed by pinning LOOP_WORKERS=1 there. Rule: a test that starts loop.sh sets every LOOP_* knob it depends on.\nLesson: [bussin-lean] the first version ran compute() twice per poll to feed log steps in, and indexed a plain-object map with a key from the repo (prototype keys). Review caught both. Rule: enrich a computed snapshot after the fact rather than recompute it, and look up repo-controlled keys with a Map or Object.hasOwn."
-}
