@@ -877,3 +877,49 @@ test('the pane lists areas with counts and status, opens and closes them, and ne
     await pane.unmount()
   }
 })
+
+const OPEN_FEATURES = JSON.stringify({
+  features: [
+    { id: 'A1', area: 'Search', plain: 'Search finds products by name', done_when: 'Typing a name lists matches.', description: 'Search index over product names', verify: 'Type mug, see two rows', passes: false },
+    { id: 'A2', area: 'Search', plain: 'Empty search says so', done_when: 'An empty query shows a hint.', description: 'Empty query hint', verify: 'Clear the box', passes: false },
+  ],
+})
+
+test('pressing a task opens it in place with its done-when line, technical details on request, and one open at a time', async ($, on) => {
+  const log = Array.from({ length: 8 }, (_, i) => `10:00:0${i}\t${i < 7 ? 'implement' : 'gate'}\tBash\tstep ${i}`).join('\n')
+  const files: Record<string, string> = {
+    '/project/.loop/feature_list.json': OPEN_FEATURES,
+    '/project/.loop/live.json': JSON.stringify({ state: 'running', started_at: 1000, updated_at: 3990, running: [{ item: 'A1', worker: 1, started_at: 3700 }] }),
+    '/project/.loop/logs/A1.log': log,
+  }
+  answerLogged(on, files, [], {})
+  await $.command.run(RUN_COMMAND)
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const pane = await $.ui.mount({ ...PANE_TARGET, surface })
+    expect(await pane.find({ type: 'Text', text: /^Done when/ })).toBeUndefined()
+    await pane.press({ key: 'task-A2' })
+    expect(await pane.find({ type: 'Text', text: /^Done when: An empty query shows a hint\.$/ })).toBeDefined()
+    const shown = [...(await pane.findAll({ type: 'Text' })), ...(await pane.findAll({ type: 'Button' }))].map(element => element.text)
+    expect(shown.filter(text => /\bA[12]\b/.test(text))).toEqual([])
+    await pane.press({ key: 'tech-A2' })
+    for (const text of [/^Id: A2$/, /^Empty query hint$/, /^Verify: Clear the box$/]) expect(await pane.find({ type: 'Text', text })).toBeDefined()
+    await pane.press({ key: 'tech-A2' })
+    expect(await pane.find({ type: 'Text', text: /^Id: A2$/ })).toBeUndefined()
+    await pane.press({ key: 'tech-A2' })
+    await pane.press({ key: 'task-A1' })
+    expect(await pane.find({ type: 'Text', text: /^Done when: An empty query shows a hint\.$/ })).toBeUndefined()
+    expect(await pane.find({ type: 'Text', text: /^Id: A2$/ })).toBeUndefined()
+    expect(await pane.find({ type: 'Text', text: /^Done when: Typing a name lists matches\.$/ })).toBeDefined()
+    expect(await pane.find({ type: 'Text', text: /^Running the tests · running for 5m$/ })).toBeDefined()
+    expect(await pane.find({ type: 'Text', text: /step [0-7]/ })).toBeUndefined()
+    await pane.press({ key: 'tech-A1' })
+    expect(await pane.find({ type: 'Text', text: /^Id: A1$/ })).toBeDefined()
+    expect((await pane.findAll({ type: 'Text', text: /step \d$/ })).map(text => text.text)).toEqual([2, 3, 4, 5, 6, 7].map(i => `10:00:0${i} Bash step ${i}`))
+    await pane.press({ key: 'task-A1' })
+    expect(await pane.find({ type: 'Text', text: /^Done when/ })).toBeUndefined()
+    await pane.press({ key: 'task-A1' })
+    expect(await pane.find({ type: 'Text', text: /^Id: A1$/ })).toBeUndefined()
+    await pane.press({ key: 'task-A1' })
+    await pane.unmount()
+  }
+})

@@ -45,6 +45,11 @@ export const renamingAtom = atom({ plugin: 'bussin-loop-status', key: 'renaming'
 export const showTokensAtom = atom({ plugin: 'bussin-loop-status', key: 'showTokens' } as const, false)
 // Keyed `<loop path>\n<area name>`; an area nobody toggled is open while it has running or failing tasks.
 export const openAreasAtom = atom({ plugin: 'bussin-loop-status', key: 'openAreas' } as const, {} as Record<string, boolean>)
+// Keyed `<loop path>\n<item id>`: one open task at a time; pressing any task hides technical details again.
+export const openTaskAtom = atom({ plugin: 'bussin-loop-status', key: 'openTask' } as const, null as string | null)
+export const technicalAtom = atom({ plugin: 'bussin-loop-status', key: 'technical' } as const, false)
+
+const LOG_ROWS = 6
 
 const TASK_MARK: Record<ItemState, { icon: string; color: string }> = {
   running: { icon: '◆', color: 'claude' },
@@ -495,7 +500,41 @@ export const register: Register = on => {
     )
 
     const openAreas = await read($, openAreasAtom)
+    const openTask = await read($, openTaskAtom)
+    const showTechnical = await read($, technicalAtom)
     const plainOf = new Map(snapshot.items.map(row => [row.id, row.plain]))
+    const taskBox = (row: ItemRow) => {
+      const run = snapshot.runningRows.find(running => running.item === row.id)
+      const lines = (view.logs[row.id] ?? []).slice(-LOG_ROWS)
+      return (
+        <Box key={`task-box-${row.id}`} flexDirection="column" borderStyle="round" borderColor="subtle" paddingX={1}>
+          {run !== undefined && (
+            <Text color="claude">
+              {row.phase ?? 'Working on it'} · running for {formatDuration(run.seconds)}
+            </Text>
+          )}
+          {row.doneWhen !== '' && <Text>Done when: {row.doneWhen}</Text>}
+          <Box flexDirection="row">
+            <Button
+              key={`tech-${row.id}`}
+              plain
+              dimColor
+              label={showTechnical ? 'Hide technical details' : 'Technical details'}
+              onPress={() => update($, technicalAtom, shown => !shown)}
+            />
+          </Box>
+          {showTechnical && <Text dimColor>Id: {row.id}</Text>}
+          {showTechnical && row.description !== '' && <Text dimColor>{row.description}</Text>}
+          {showTechnical && row.verify !== '' && <Text dimColor>Verify: {row.verify}</Text>}
+          {showTechnical &&
+            lines.map((entry, index) => (
+              <Text key={`log-${row.id}-${index}`} dimColor wrap="truncate-end">
+                {entry.time} {entry.kind} {entry.text}
+              </Text>
+            ))}
+        </Box>
+      )
+    }
     const areaList = (
       <Box flexDirection="column" gap={1}>
         {areas(snapshot.items).map(area => {
@@ -521,19 +560,33 @@ export const register: Register = on => {
               {isOpen &&
                 [...area.items]
                   .sort((a, b) => TASK_ORDER[a.state] - TASK_ORDER[b.state])
-                  .map(row => (
-                    <Box key={`task-${row.id}`} flexDirection="row" gap={1}>
-                      <Text color={TASK_MARK[row.state].color}>{TASK_MARK[row.state].icon}</Text>
-                      <Box flexGrow={1} flexShrink={1}>
-                        <Text dimColor={row.state === 'done'} wrap="truncate-end">
-                          {row.plain}
-                        </Text>
+                  .map(row => {
+                    const taskKey = `${view.path}\n${row.id}`
+                    return (
+                      <Box key={`task-row-${row.id}`} flexDirection="column">
+                        <Box flexDirection="row" gap={1}>
+                          <Box flexGrow={1} flexShrink={1}>
+                            <Button
+                              key={`task-${row.id}`}
+                              plain
+                              label={row.plain}
+                              onPress={async () => {
+                                await update($, technicalAtom, () => false)
+                                await update($, openTaskAtom, open => (open === taskKey ? null : taskKey))
+                              }}
+                            >
+                              <Text color={TASK_MARK[row.state].color}>{TASK_MARK[row.state].icon}</Text>{' '}
+                              <Text dimColor={row.state === 'done'}>{row.plain}</Text>
+                            </Button>
+                          </Box>
+                          <Box flexShrink={0}>
+                            <Text color={row.state === 'running' ? 'claude' : 'subtle'}>{taskNote(row, plainOf)}</Text>
+                          </Box>
+                        </Box>
+                        {openTask === taskKey && taskBox(row)}
                       </Box>
-                      <Box flexShrink={0}>
-                        <Text color={row.state === 'running' ? 'claude' : 'subtle'}>{taskNote(row, plainOf)}</Text>
-                      </Box>
-                    </Box>
-                  ))}
+                    )
+                  })}
             </Box>
           )
         })}
