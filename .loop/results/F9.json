@@ -1,9 +1,0 @@
-{
-  "id": "F9",
-  "passes": true,
-  "evidence": {
-    "commit": "ffd97e284716b1397b66a4d297762fd2f102c772",
-    "ran": "bash .loop/verify.sh (fast shell suites + claude plugin test mods/bussin-loop-status: 53 pass, new test 'an eval task shows its metrics as a table with targets, and a missed target offers a task to reach it' on terminal and desktop)"
-  },
-  "notes": "Did: an open task with metrics shows a Markdown table keyed metrics-<id> (Metric | Value | Target | , values toFixed(2), '—' for a missing value or target, '✓ met' / '✗ below'; a '|' in a name is escaped). Each missed metric (value < target) gets a warning line '⚠ <name> is <v>, below its target of <t>' and a Button reach-<id>-<metric> 'Add a task to reach it' that sends {op: 'add', plain: 'Raise <name> to at least <target>', kind: 'eval', area: row.area, metrics: [{name, target}]} through sendChange. ItemRow gains dataset and command (from evidence, via nonEmpty in snapshot.ts; types/index.d.ts and snapshot.ts are outside F9's touches but no running item shares them), shown as a dim caption 'Dataset: x · Command: y' when present.\nLearned: Markdown is in every surface's element table (desktop, terminal, vscode, mobile), so it needs no check like Input. Higher is assumed better for every metric target, matching the spec's 'at least'. The add change leaves done_when out; inbox.jq accepts that.\nAssumptions: met means value >= target; the met column shows '—' when either value or target is missing."
-}

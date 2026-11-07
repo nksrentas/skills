@@ -191,8 +191,11 @@
         "mods/bussin-loop-status/hooks/register.tsx",
         "mods/bussin-loop-status/hooks/status.test.tsx"
       ],
-      "passes": false,
-      "evidence": null
+      "passes": true,
+      "evidence": {
+        "commit": "ffd97e284716b1397b66a4d297762fd2f102c772",
+        "ran": "bash .loop/verify.sh (fast shell suites + claude plugin test mods/bussin-loop-status: 53 pass, new test 'an eval task shows its metrics as a table with targets, and a missed target offers a task to reach it' on terminal and desktop)"
+      }
     },
     {
       "id": "F10",
