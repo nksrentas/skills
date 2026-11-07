@@ -20,3 +20,8 @@ Did: init.md step 8 describes area, plain, done_when, optional kind and metrics,
 Learned: a parallel worker's environment leaks LOOP_WORKERS=2 into tests that run loop.sh. tests/autoloop-loop, autoloop-agents and autoloop-notify (the final suites) also run loop.sh without pinning LOOP_WORKERS, so FINAL may hit the same failure when run under a parallel driver.
 Lesson: [tests] tests/autoloop-inbox.test.sh e2e failed in the worker gate because it inherited LOOP_WORKERS=2 from the driver → tests that start loop.sh must pin or unset every LOOP_* setting they depend on (fixed here with LOOP_WORKERS=1).
 Lesson: [bussin-autoloop docs] review flagged 'the pane groups by area' as a claim nothing backs yet → document only behaviour that exists or that the item's spec requires.
+
+## F2 · worker 1 · 2026-11-08
+Did: run.md step 4 has eval items run their evaluation before the gate and record evidence.metrics, dataset and command; a missed target goes to progress.md (worker: notes) and pass/fail rests on verify alone. Step 6 has design items always run the browser step and ui/design items save PNGs to .loop/evidence/<id>/<n>-<page>.png listed in evidence.screenshots; a design item without them stays false. Worker-mode and step 7 examples show the new evidence fields.
+Learned: config.commands has no eval key; an eval command not in config.commands may be denied in unattended Claude sessions (allowlist), so init should add one when the list has eval items.
+Lesson: [bussin-autoloop docs] first draft named a 'project eval command in config.commands' that does not exist → check init.md's config shape before referencing a config key.

@@ -37,8 +37,11 @@
       "touches": [
         "bussin-autoloop/references/run.md"
       ],
-      "passes": false,
-      "evidence": null
+      "passes": true,
+      "evidence": {
+        "commit": "50f9aa9d284ecf79ae3ed767d8854342a9e640aa",
+        "ran": "bash .loop/verify.sh (fast suites incl. skills-structure + 43 mod tests green); read run.md: worker-mode example and step 7 examples carry metrics, dataset, command and screenshots; step 4 has the eval run, step 6 names .loop/evidence/<id>/<n>-<page>.png"
+      }
     },
     {
       "id": "F3",

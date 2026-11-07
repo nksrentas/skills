@@ -1,9 +1,0 @@
-{
-  "id": "F2",
-  "passes": true,
-  "evidence": {
-    "commit": "50f9aa9d284ecf79ae3ed767d8854342a9e640aa",
-    "ran": "bash .loop/verify.sh (fast suites incl. skills-structure + 43 mod tests green); read run.md: worker-mode example and step 7 examples carry metrics, dataset, command and screenshots; step 4 has the eval run, step 6 names .loop/evidence/<id>/<n>-<page>.png"
-  },
-  "notes": "Did: run.md step 4 has eval items run their evaluation before the gate and record evidence.metrics, dataset and command; a missed target goes to progress.md (worker: notes) and pass/fail rests on verify alone. Step 6 has design items always run the browser step and ui/design items save PNGs to .loop/evidence/<id>/<n>-<page>.png listed in evidence.screenshots; a design item without them stays false. Worker-mode and step 7 examples show the new evidence fields.\nLearned: config.commands has no eval key; an eval command not in config.commands may be denied in unattended Claude sessions (allowlist), so init should add one when the list has eval items.\nLesson: [bussin-autoloop docs] first draft named a 'project eval command in config.commands' that does not exist → check init.md's config shape before referencing a config key."
-}
