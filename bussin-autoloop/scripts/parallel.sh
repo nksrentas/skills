@@ -17,6 +17,7 @@ slot_started=()
 slot_pointers=()
 slot_admin=()
 slot_machine=()
+slot_watch=()
 machine_full=0
 
 ready_query='
@@ -77,6 +78,8 @@ launch() {
     > /dev/null 2> "$state_dir/w$slot.log" < /dev/null &
   slot_pid[$slot]=$!
   slot_item[$slot]="$id"
+  watch_hang "$id"
+  slot_watch[$slot]="$hang_pid"
   slot_started[$slot]="$(date +%s)"
   launched=$((launched + 1))
 }
@@ -213,11 +216,13 @@ any_worker_redirected() {
 stop_on_tamper() {
   local i
   for ((i = 1; i <= workers; i++)); do
+    unwatch_hang "${slot_watch[$i]:-}"
     if [ -n "${slot_pid[$i]}" ]; then kill -- -"${slot_pid[$i]}" 2>/dev/null || true; fi
     release_slot "${slot_machine[$i]:-}"
   done
   trap - EXIT
   write_live stopped parallel "$workers" "[]"
+  notify "The loop stopped: a session changed git settings or a worker's git directory, which loops may not do. Check the terminal."
   release_lock
   exit 1
 }
@@ -226,6 +231,7 @@ finish() {
   local slot="$1" id="${slot_item[$1]}" started="${slot_started[$1]}" status=0 merge_status=0 outcome
   local branch="loop/$LOOP_NAME/$id" output="$state_dir/w$1.log" result="$state_dir/w$1.json"
   wait "${slot_pid[$slot]}" || status=$?
+  unwatch_hang "${slot_watch[$slot]:-}"
   kill -- -"${slot_pid[$slot]}" 2>/dev/null || true
   release_slot "${slot_machine[$slot]}"
   slot_machine[$slot]=""
@@ -268,8 +274,9 @@ running_json() {
 }
 
 stop_workers() {
-  local i
+  local code=$? i
   for ((i = 1; i <= workers; i++)); do
+    unwatch_hang "${slot_watch[$i]:-}"
     if [ -n "${slot_pid[$i]:-}" ]; then kill -- -"${slot_pid[$i]}" 2>/dev/null || true; fi
     release_slot "${slot_machine[$i]:-}"
     remove_worktree "$i"
@@ -278,6 +285,7 @@ stop_workers() {
   rmdir "$worker_root" 2>/dev/null || true
   rm -rf "$state_dir"
   write_live "$(closing_state)" parallel "$workers" "[]"
+  notify_loop_end "$code"
   release_lock
 }
 
@@ -326,6 +334,7 @@ run_parallel() {
   git stash list --format=%H > "$state_dir/stashes" 2>/dev/null || true
   warn_on_load
   log "running up to $workers workers on $integration, $(remaining) items remaining"
+  notify "The loop started: $(remaining) items left, up to $workers sessions at once."
   while :; do
     if git_controls_changed || any_worker_redirected; then stop_on_tamper; fi
     for ((i = 1; i <= workers; i++)); do
