@@ -110,6 +110,17 @@ Write `.loop/feature_list.json` following `assets/feature-list.example.json`. Th
 - **edge**: walk this checklist against every functional item and add what applies: empty or none, boundaries (0, 1, max, off by one), invalid or malformed input, permissions and roles, duplicates and concurrency, time (timezone, DST, past and future), size and performance, encoding and i18n, dependency failure (network, DB, third party), partial state and retries.
 - **regression**: the existing behaviour around the code you will touch, plus "existing test suite stays green".
 
+Give every item three plain fields, which the status pane shows to people who never read `description`:
+
+- `area`: a short product area, 1 to 3 words, shared by related items, for example `"Invoices"` or `"Sign-in"`.
+- `plain`: one sentence in product terms a non-developer understands, with no ids or file names, for example `"Admins can export the invoice list"`.
+- `done_when`: one plain sentence saying when the item is finished, for example `"An admin sees the export button and a staff user does not."`
+
+Two optional fields set how an item is judged:
+
+- `kind`: `"build"` (the default, leave it out), `"eval"` for an evaluation that returns metrics, or `"design"` for work judged by screenshots, for example `"kind": "eval"`.
+- `metrics`: eval items only, the numbers the evaluation must return, each with an optional target, for example `"metrics": [{"name": "precision@5", "target": 0.75}, {"name": "recall@10"}]`.
+
 Give every item two scheduling fields, which the parallel driver uses to run independent items at the same time:
 
 - `depends_on`: the ids of items that must pass first, because this item builds on their code or its `verify` steps need their behaviour. Leave it empty when the item stands alone.

@@ -84,7 +84,7 @@ git -C "$e2e" init -q
 git -C "$e2e" add .loop/feature_list.json
 git -C "$e2e" commit -qm init
 echo '{"op":"add","plain":"Added before the run","first":true}' > "$e2e/.loop/inbox/1.json"
-(cd "$e2e" && PATH="$e2e/bin:$PATH" LOOP_NOTIFY_CONFIG="$tmp/no-telegram" LOOP_SLOTS_DIR="$tmp/slots" LOOP_MACHINE_SESSIONS=8 LOOP_STARTUP_SECONDS=0 MAX_STALLS=1 \
+(cd "$e2e" && PATH="$e2e/bin:$PATH" LOOP_NOTIFY_CONFIG="$tmp/no-telegram" LOOP_SLOTS_DIR="$tmp/slots" LOOP_MACHINE_SESSIONS=8 LOOP_STARTUP_SECONDS=0 MAX_STALLS=1 LOOP_WORKERS=1 \
   bash "$scripts/loop.sh" > "$e2e/out" 2>&1) || { cat "$e2e/out"; fail "the loop did not finish with a pane change"; }
 [ "$(tr '\n' ' ' < "$e2e/ran")" = "U1 A1 " ] || fail "the added task did not run first: $(cat "$e2e/ran")"
 grep -q "from the status pane: added U1" "$e2e/out" || fail "the loop did not report the change"
