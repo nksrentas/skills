@@ -315,8 +315,11 @@
       "touches": [
         "**"
       ],
-      "passes": false,
-      "evidence": null
+      "passes": true,
+      "evidence": {
+        "commit": "3663c0ea03c260ac70ad83ec0a43bc47c718bcb5",
+        "ran": "bash tests/autoloop-agents.test.sh && bash tests/autoloop-loop.test.sh && bash tests/autoloop-notify.test.sh && bash tests/autoloop-parallel.test.sh (all green), bash .loop/verify.sh (green, 56 mod tests)"
+      }
     }
   ]
 }
