@@ -67,17 +67,25 @@ const WHEN_OPTIONS = [
   { value: 'next', label: 'Next' },
 ]
 
+// Typed text as inbox.jq accepts it: whitespace runs become one space, control characters go, trimmed and capped in code points.
+const typed = (text: string, max: number) => [...clean(text.replace(/\s+/g, ' ')).trim()].slice(0, max).join('').trim()
+// A draft keeps newlines and tabs; any other control character makes the engine refuse the whole pane.
+const editable = (text: string) => text.replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g, '')
+const TEXT_MAX = 500
+const NAME_MAX = 40
+
 // 'precision@5>=0.75, recall@10' -> [{ name: 'precision@5', target: 0.75 }, { name: 'recall@10' }]
 function parseMetrics(text: string) {
   return text
     .split(',')
-    .map(part => part.trim())
+    .map(part => typed(part, TEXT_MAX))
     .filter(part => part !== '')
     .map(part => {
       const match = /^(.+?)\s*>=\s*(.+)$/.exec(part)
       const target = match === null ? NaN : Number(match[2])
-      return match !== null && Number.isFinite(target) ? { name: match[1] ?? part, target } : { name: part }
+      return match !== null && Number.isFinite(target) ? { name: typed(match[1] ?? part, NAME_MAX), target } : { name: typed(part, NAME_MAX) }
     })
+    .slice(0, 10)
 }
 
 const missed = (metric: Metric) => metric.value !== null && metric.target !== null && metric.value < metric.target
@@ -617,7 +625,7 @@ export const register: Register = on => {
     const setAdd = (patch: Partial<AddDraft>) => update($, addDraftAtom, current => current && { ...current, ...patch })
     const submitAdd = async () => {
       if (adding === null) return
-      const plain = adding.plain.trim()
+      const plain = typed(adding.plain, TEXT_MAX)
       if (plain === '') {
         $.ui.toast('Say what the new task should do before adding it')
         return
@@ -626,8 +634,8 @@ export const register: Register = on => {
       const change = {
         op: 'add',
         plain,
-        done_when: adding.doneWhen.trim(),
-        area: adding.area,
+        done_when: typed(adding.doneWhen, TEXT_MAX),
+        area: typed(adding.area, NAME_MAX),
         kind: adding.kind,
         ...(metrics.length > 0 ? { metrics } : {}),
         ...(adding.first ? { first: true } : {}),
@@ -636,8 +644,15 @@ export const register: Register = on => {
     }
     const addForm = adding !== null && Input !== undefined && Select !== undefined && (
       <Box flexDirection="column" borderStyle="round" borderColor="claude" paddingX={1}>
-        <Input key="add-plain" label="What should it do?" rows={2} value={adding.plain} onInput={(plain: string) => setAdd({ plain })} onSubmit={(plain: string) => setAdd({ plain })} />
-        <Input key="add-done" label="Done when" rows={2} value={adding.doneWhen} onInput={(doneWhen: string) => setAdd({ doneWhen })} onSubmit={(doneWhen: string) => setAdd({ doneWhen })} />
+        <Input key="add-plain" label="What should it do?" rows={2} value={adding.plain} onInput={(plain: string) => setAdd({ plain: editable(plain) })} onSubmit={(plain: string) => setAdd({ plain: editable(plain) })} />
+        <Input
+          key="add-done"
+          label="Done when"
+          rows={2}
+          value={adding.doneWhen}
+          onInput={(doneWhen: string) => setAdd({ doneWhen: editable(doneWhen) })}
+          onSubmit={(doneWhen: string) => setAdd({ doneWhen: editable(doneWhen) })}
+        />
         <Select
           key="add-area"
           label="Area"
@@ -652,8 +667,8 @@ export const register: Register = on => {
             key="add-metrics"
             label="Metrics to return"
             value={adding.metrics}
-            onInput={(metrics: string) => setAdd({ metrics })}
-            onSubmit={(metrics: string) => setAdd({ metrics })}
+            onInput={(metrics: string) => setAdd({ metrics: editable(metrics) })}
+            onSubmit={(metrics: string) => setAdd({ metrics: editable(metrics) })}
           />
         )}
         <Box flexDirection="row" gap={1}>
@@ -771,7 +786,7 @@ export const register: Register = on => {
       const waiting = view.changes.some(change => change.reviewFor === row.id)
       const sendReview = async () => {
         if (reviewing === null) return
-        const note = reviewing.note.trim()
+        const note = typed(reviewing.note, TEXT_MAX)
         if (note === '') {
           $.ui.toast('Say what needs to change before sending it')
           return
@@ -805,8 +820,8 @@ export const register: Register = on => {
                 label="What needs to change?"
                 rows={3}
                 value={reviewing.note}
-                onInput={(note: string) => update($, reviewDraftAtom, current => current && { ...current, note })}
-                onSubmit={(note: string) => update($, reviewDraftAtom, current => current && { ...current, note })}
+                onInput={(note: string) => update($, reviewDraftAtom, current => current && { ...current, note: editable(note) })}
+                onSubmit={(note: string) => update($, reviewDraftAtom, current => current && { ...current, note: editable(note) })}
               />
               <Box flexDirection="row" gap={1}>
                 <Button key={`review-send-${row.id}`} label="Send to the loop" onPress={sendReview} />
@@ -834,15 +849,15 @@ export const register: Register = on => {
       const taskKey = `${view.path}\n${row.id}`
       const pending = row.state !== 'done' && row.state !== 'running'
       const editing = pending && Input !== undefined && draft?.key === taskKey ? draft : null
-      const setDraft = (field: 'plain' | 'doneWhen') => (value: string) => update($, editDraftAtom, current => current && { ...current, [field]: value })
+      const setDraft = (field: 'plain' | 'doneWhen') => (value: string) => update($, editDraftAtom, current => current && { ...current, [field]: editable(value) })
       const saveEdit = async () => {
         if (editing === null) return
-        const plain = editing.plain.trim()
+        const plain = typed(editing.plain, TEXT_MAX)
         if (plain === '') {
           $.ui.toast('Say what the task should do before saving')
           return
         }
-        if (await sendChange($, view, { op: 'edit', id: row.id, plain, done_when: editing.doneWhen.trim() }, `Saved your edit of '${row.plain}'`)) {
+        if (await sendChange($, view, { op: 'edit', id: row.id, plain, done_when: typed(editing.doneWhen, TEXT_MAX) },`Saved your edit of '${row.plain}'`)) {
           await update($, editDraftAtom, () => null)
         }
       }
@@ -871,7 +886,13 @@ export const register: Register = on => {
                     sendChange(
                       $,
                       view,
-                      { op: 'add', plain: `Raise ${metric.name} to at least ${metric.target}`, kind: 'eval', area: row.area, metrics: [{ name: metric.name, target: metric.target }] },
+                      {
+                        op: 'add',
+                        plain: typed(`Raise ${metric.name} to at least ${metric.target}`, TEXT_MAX),
+                        kind: 'eval',
+                        area: typed(row.area, NAME_MAX),
+                        metrics: [{ name: typed(metric.name, NAME_MAX), target: metric.target }],
+                      },
                       `Added 'Raise ${metric.name} to at least ${metric.target}'`,
                     )
                   }

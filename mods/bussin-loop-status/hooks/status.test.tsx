@@ -1100,6 +1100,45 @@ test("'+ Add a task' opens a form whose Add to the loop writes one add change", 
   await mobile.unmount()
 })
 
+test('typed text is stripped of control characters and capped before it reaches the inbox', async ($, on) => {
+  const longArea = `Area ${'z'.repeat(60)}`
+  const { features } = JSON.parse(STEER_FEATURES)
+  const files: Record<string, string> = {
+    '/project/.loop/feature_list.json': JSON.stringify({ features: [...features, { id: 'A4', area: longArea, plain: 'Lives in a long area', passes: false }] }),
+    '/project/.loop/live.json': JSON.stringify({ state: 'running', started_at: 1000, updated_at: 3990, running: [{ item: 'A1', worker: 1, started_at: 3700 }] }),
+  }
+  const written: Record<string, string> = {}
+  answerLogged(on, files, [], written, [])
+  await $.command.run(RUN_COMMAND)
+  const pane = await $.ui.mount({ ...PANE_TARGET, surface: 'desktop' })
+  await pane.press({ key: 'pane-add' })
+  await pane.input({ key: 'add-plain', text: `  Line one\nline\ttwo\u0007 ${'x'.repeat(600)}`, kind: 'change' })
+  await pane.input({ key: 'add-done', text: `\u0001\u001b${'d'.repeat(600)}`, kind: 'change' })
+  await pane.select({ key: 'add-area', value: longArea })
+  await pane.select({ key: 'add-kind', value: 'eval' })
+  const metrics =Array.from({ length: 12 }, (_, n) => `m${n}${'y'.repeat(50)}>=0.5`)
+  await pane.input({ key: 'add-metrics', text: metrics.join(','), kind: 'change' })
+  await pane.press({ key: 'add-submit' })
+  await pane.press({ key: 'task-A2' })
+  await pane.press({ key: 'edit-A2' })
+  await pane.input({ key: 'edit-plain-A2', text: '\u0000\u0007 \n', kind: 'change' })
+  await pane.press({ key: 'edit-save-A2' })
+  await pane.input({ key: 'edit-plain-A2', text: 'Quote " and émoji 🎉\r\n ok', kind: 'change' })
+  await pane.input({ key: 'edit-done-A2', text: `${'🎉'.repeat(499)}éé`, kind: 'change' })
+  await pane.press({ key: 'edit-save-A2' })
+  await pane.unmount()
+  const found = Object.entries(written).filter(([path]) => path.includes('/inbox/'))
+  expect(found.every(([path]) => INBOX_FILE.test(path))).toBe(true)
+  const [add, edit] = found.map(([, text]) => JSON.parse(text))
+  expect(found).toHaveLength(2)
+  expect(add.plain).toBe(`Line one line two ${'x'.repeat(600)}`.slice(0, 500))
+  expect(add.done_when).toBe('d'.repeat(500))
+  expect(add.area).toBe(longArea.slice(0, 40))
+  expect(add.metrics).toHaveLength(10)
+  expect(add.metrics[0]).toEqual({ name: `m0${'y'.repeat(38)}`, target: 0.5 })
+  expect(edit).toEqual({ op: 'edit', id: 'A2', plain: 'Quote " and émoji 🎉 ok', done_when: `${'🎉'.repeat(499)}é` })
+})
+
 test("waiting changes show as plain lines in 'Your changes', with when they apply and an Undo that removes the file", async ($, on) => {
   const inbox: Record<string, unknown> = {
     '3999001-a1.json': { op: 'add', plain: 'Search: suggests products as you type', area: 'Search' },
