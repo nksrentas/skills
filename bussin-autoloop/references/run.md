@@ -63,11 +63,11 @@ Run it in the foreground and wait for it, however long it takes. Under Copilot, 
 
 ## 5. Review
 
-In `fast` mode, skip the subagent but still run the `bussin-lean` cleanup pass yourself on the diff before the gate. Otherwise spawn one review subagent with read-only tools (Read, Glob, Grep). An agent without subagents does the review as a separate pass: re-read the item and the diff cold, as if someone else wrote it, before changing any code. Give it the item's `description` and `verify` steps as the spec, the output of `git diff <config.base> -- . ':(exclude).loop'`, and `CODING_STANDARDS.md`. It writes nothing and returns two lists:
+In `fast` mode, skip the subagent but still run the lean cleanup pass (the Lean list below) yourself on the diff before the gate. Otherwise spawn one review subagent with read-only tools (Read, Glob, Grep). An agent without subagents does the review as a separate pass: re-read the item and the diff cold, as if someone else wrote it, before changing any code. Give it the item's `description` and `verify` steps as the spec, the output of `git diff <config.base> -- . ':(exclude).loop'`, and `CODING_STANDARDS.md`. It writes nothing and returns two lists:
 
 - **Spec**: a requirement in the item that is missing, only looks implemented (dead code path, hard-coded value, test that never reaches it), or scope beyond the item.
 - **Standards**: each rule in `CODING_STANDARDS.md` the diff breaks, with file and line.
-- **Lean**: the `bussin-lean` cleanup pass applied to the diff. Leftovers from earlier implementations (dead code, unused exports, files, flags or dependencies, debug logging, commented-out code), over-engineering (an abstraction, parameter or dependency with no real use today, pass-through layers, duplicate types), structure problems, and wasteful allocation or data access. Tell the subagent to load `bussin-lean` for the full checklist when it is installed.
+- **Lean**: the cleanup pass applied to the diff. Leftovers from earlier implementations (dead code, unused exports, files, flags or dependencies, debug logging, commented-out code), over-engineering (an abstraction, parameter or dependency with no real use today, pass-through layers, duplicate types), structure problems, and wasteful allocation or data access. When the ponytail plugin is installed, tell the subagent to apply `ponytail-review` as well. Any comment the diff adds counts as a leftover, including ponytail's `shortcut:` markers.
 
 Any Spec or Lean finding means the item stays `false`: fix it, re-run the gate, review again with a fresh subagent. Fix Standards findings when cheap and log the rest in `progress.md`.
 

@@ -1,6 +1,6 @@
 ---
 name: bussin-feature
-description: Workflow for creating, updating or refactoring a TypeScript/JavaScript application feature end to end - ground it in the repo, implement every state (loading, error, empty, success), update every dependent file and registration, keep the feature folder portable, run the bussin-lean cleanup pass and verify with the project's checks. Use for frontend, backend or full-stack features. Not for explanations or isolated edits.
+description: Workflow for creating, updating or refactoring a TypeScript/JavaScript application feature end to end - ground it in the repo, implement every state (loading, error, empty, success), update every dependent file and registration, reuse what already exists, keep the feature folder portable, run the cleanup pass and verify with the project's checks. Use for frontend, backend or full-stack features. Not for explanations or isolated edits.
 argument-hint: "<feature to build or change>"
 ---
 
@@ -31,7 +31,7 @@ Choose files from actual responsibilities, not from a template, and omit layers 
 
 ## Keep code self-explanatory
 
-- Do not add explanatory comments, commented-out code, or TODO narration.
+- No comments in application code: no explanatory comments, no commented-out code, no TODO narration. This overrides ponytail's one-line "why" comments and its `shortcut:` markers; put a shortcut's limit in the final report instead.
 - Use names, types, small functions, and explicit boundaries to make the code readable.
 - Preserve required license headers, tool directives, generated markers, and documentation comments required by a public API or project convention.
 - Remove stale comments in touched code when they no longer describe behavior.
@@ -49,11 +49,11 @@ For mutations, also provide appropriate pending protection and success/failure f
 
 ## Accessible and findable
 
-For any React or Next.js UI, load `bussin-react` and `bussin-a11y`; for any public page or route, also load `bussin-seo` and `bussin-schema`. For a backend endpoint, server action or Hono route, read `references/backend.md` in `bussin-ts-architecture`. Their review checklists are part of this feature's quality gate.
+For any React or Next.js UI, load `bussin-react` and `bussin-a11y`; for any public page or route, also load `bussin-seo`. For a backend endpoint, server action or Hono route, read `references/backend.md` in `bussin-ts-architecture`. Their review checklists are part of this feature's quality gate.
 
 ## Keep it lean
 
-Load `bussin-lean` before writing code and follow its rules while you write: nothing speculative, no abstraction without a second real use, no wasteful allocation or data access. Its cleanup pass is a mandatory step of this workflow (step 6). If that skill is not installed, apply the same cleanup pass by hand: leftovers, over-engineering, structure, allocation.
+Lean code comes from the [ponytail](https://github.com/DietrichGebert/ponytail) plugin: nothing speculative, no abstraction without a second real use, the smallest complete change. Its `ponytail-review` is the cleanup pass in step 6. Without the plugin, write to the same rules and run the step 6 checklist by hand.
 
 ## Prefer simple, established tools
 
@@ -74,12 +74,12 @@ Consumers outside the feature folder should only be the composition root, thin r
 
 <workflow>
 
-1. Ground the change in repository evidence and identify the feature boundary.
+1. Ground the change in repository evidence and identify the feature boundary. Before building a component, page, hook or service, search for one that already exists: `src/shared/`, then other features (move a match into `src/shared/` instead of importing across features), then the shadcn registry with `npx shadcn@latest search`. Extend what you find through a new part, slot or variant; never change how its existing callers behave.
 2. Choose the minimum justified files and roles from `bussin-ts-architecture`.
 3. Implement end-to-end behavior, including applicable loading, error, empty, and success paths.
 4. Update the complete dependent-file set and remove obsolete paths created by the change.
 5. Run focused tests first, then the import-boundary check, type-check, lint, broader tests, and build commands available in the repository.
-6. Run the `bussin-lean` cleanup pass on the whole diff and fix what it finds: leftovers from earlier implementations, over-engineering, structure, allocation. Also check for scope growth, imports from other features, comments, duplicated contracts and missed consumers. Re-run the tests after the fixes. This step is mandatory.
+6. Run the cleanup pass on the whole diff (`git diff <base>` plus untracked files) and fix what it finds. Use `/ponytail-review` when the plugin is installed. Either way, check by hand for leftovers from earlier implementations (unused code, exports, files, flags, dependencies, debug logging, commented-out code), over-engineering (an abstraction, option or dependency with no real use today, pass-through layers), N+1 queries and unbounded caches, scope growth, imports from other features, any comment, duplicated contracts and missed consumers. Re-run the tests after the fixes. This step is mandatory.
 
 </workflow>
 
@@ -90,11 +90,12 @@ Do not call the feature complete until the relevant checks pass or their failure
 - Each file has one coherent role; no pass-through layers exist.
 - External data is validated or safely mapped at the boundary when needed.
 - All applicable runtime/UI states are implemented and distinguishable.
-- New application code is comment-free except for required exceptions.
+- New application code is comment-free except for required exceptions, including ponytail's `shortcut:` comments.
+- Existing components and services were searched for first, and extended without changing existing callers' behaviour.
 - All known dependents and registrations are updated.
 - The solution uses existing or simple primitives unless a library is justified.
 - Tests cover changed behavior and available verification commands have been run.
-- The `bussin-lean` cleanup pass ran on the final diff and came back clean.
+- The cleanup pass ran on the final diff and came back clean.
 </quality_gate>
 
 <auditable_reasoning>

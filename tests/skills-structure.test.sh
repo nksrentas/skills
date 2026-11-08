@@ -49,7 +49,7 @@ kebab_file_names() {
   return 1
 }
 
-retired_names='bussin-code-feature|ts-feature-architecture|drizzle-data-access|edefy-ui'
+retired_names='bussin-code-feature|ts-feature-architecture|drizzle-data-access|edefy-ui|bussin-lean|bussin-schema'
 pocock='(tdd|code-review|test-audit|retro)'
 before='(^|[^A-Za-z0-9_.-])'
 after='([^A-Za-z0-9_.-]|$)'

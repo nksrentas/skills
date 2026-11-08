@@ -67,7 +67,7 @@ Read the one that matches the work before writing markup:
 
 ## Accessibility and SEO
 
-Every page and component built with this skill also follows `bussin-a11y`, and every public page follows `bussin-seo` and `bussin-schema`. Load them alongside this skill; the house look never overrides semantic HTML, contrast, focus or metadata.
+Every page and component built with this skill also follows `bussin-a11y`, and every public page follows `bussin-seo`. Load them alongside this skill; the house look never overrides semantic HTML, contrast, focus or metadata.
 
 ## Animation skills
 

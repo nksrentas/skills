@@ -59,9 +59,8 @@ Sessions only follow the house rules they load, so init picks the context skills
 
 | When | Add |
 |---|---|
-| Always (the presets already include it) | `bussin-lean` |
 | `react` or `next` is a dependency, or the task builds UI | `bussin-ts-architecture`, `bussin-react`, `bussin-a11y` |
-| The task touches public pages or routes, ones a visitor reaches without signing in | `bussin-seo`, `bussin-schema` |
+| The task touches public pages or routes, ones a visitor reaches without signing in | `bussin-seo` |
 | `hono` is a dependency, or the task adds route handlers, server actions or API endpoints | `bussin-ts-architecture` |
 | `drizzle-orm` is a dependency, or the task changes tables or queries | `bussin-drizzle` |
 | `gsap` or `lenis` is a dependency, or the task asks for the house look | `bussin-ui`, plus `review:review-animations` when that skill is installed |

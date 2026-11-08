@@ -1,6 +1,6 @@
 ---
 name: bussin-react
-description: House rules for React 19 and Next.js App Router code - server components first with small client islands, shadcn/ui owned in src/shared/ui, compound components for multi-part widgets, TanStack Query for client-side server state, forms that reuse the feature's zod DTOs, and fast, secure UI. Use whenever writing or reviewing React components, hooks, forms, data fetching or Next.js pages, or when bussin-feature or bussin-autoloop loads it.
+description: House rules for React 19 and Next.js App Router code - server components first with small client islands, shadcn/ui owned in src/shared/ui, reuse before building, compound components by default so components extend without breaking callers, TanStack Query for client-side server state, forms that reuse the feature's zod DTOs, and fast, secure UI. Use whenever writing or reviewing React components, hooks, forms, data fetching or Next.js pages, or when bussin-feature or bussin-autoloop loads it.
 argument-hint: "[component, hook, form or page to build or review]"
 ---
 
@@ -48,10 +48,32 @@ Use what the project already has before adding any of these. Add a library only 
 
 Components never call `fetch`, never hold business rules, and never import from another feature. Shared primitives come from `src/shared/ui/`.
 
+## Find before you build
+
+Before writing a new component, page or hook, search for one that already does the job, in this order:
+
+1. `src/shared/ui/` and `src/shared/`.
+2. Other features. A match there moves into `src/shared/` (with its callers updated) instead of being imported across features or copied.
+3. The shadcn registry: `npx shadcn@latest search <name>`, then `npx shadcn@latest add`.
+
+Build new only when none of these fits, and say in the report what you searched.
+
+## Extend, never break
+
+Existing components are closed for modification and open for extension:
+
+- Add behaviour through a new part, a new slot passed as `children`, or a new `cva` variant.
+- Never change what an existing prop, part or variant does, rename it, or remove it while it has callers.
+- Every existing caller renders and behaves the same after the change, and its tests pass without edits.
+
 ## Components
 
-- **Compose with children before adding props.** A component with more than about six props, or with boolean flags that switch its layout, wants composition instead.
-- **Compound components** suit widgets with several parts that share state: tabs, steppers, data tables with toolbar and pagination, comboboxes. One root owns the state and gives it to its parts through context. The parts are exported together, and a part used outside its root throws a clear error. Do not build one for a component with a single part. [references/components.md](references/components.md) has the pattern.
+- **Compound components by default.** Any component with two or more regions (trigger and content, header, body and footer, list and item, toolbar, rows and pagination), or one that pages will arrange or configure differently, is a compound component: one root owns the state and shares it through context, and the parts are exported together. A part used outside its root throws a clear error. Callers compose parts instead of passing configuration props, so a new need is a new part, not a new prop on every caller. [references/components.md](references/components.md) has the pattern.
+- **Single-element components stay plain:** a button, badge or input is a component with `cva` variants and `className`, not a compound.
+- **No boolean props that switch layout or mode.** `isCompact`, `showHeader` or `variant`-like booleans become explicit variant components or composed parts.
+- **Children over render props.** Pass parts as `children`, not as `renderHeader` or `renderItem` props.
+- **The root is the only place that knows how state is stored.** Its context exposes `state`, `actions` and `meta`; parts never reach past it to a store or a query.
+- **No prop drilling.** Data that would pass through more than one component that does not use it comes from the root's context or from composition instead.
 - **Props:** use a named `type` per component, plus `ComponentProps<'button'>` when wrapping a native element. Pass `ref` as a normal prop (React 19).
 - **State:**
   - Keep it as close to where it is used as possible.
@@ -67,6 +89,7 @@ Components never call `fetch`, never hold business rules, and never import from 
 - Generated components are house code: edit them in place to match the theme tokens (with `bussin-ui`, the colours, radii and type from its `theme.css`). Never wrap a shadcn component in another component that only forwards props.
 - A feature-specific variant is a `cva` variant added to the shared component, or a composition inside the feature. Never fork the file into the feature.
 - Keep the Radix behaviour that shadcn brings: focus management, keyboard handling, ARIA. Do not replace a `Dialog`, `Select` or `DropdownMenu` with hand-rolled `div`s.
+- The official shadcn skill (`npx skills add shadcn-ui/ui@shadcn`) owns Tailwind and component-usage details: semantic colour tokens, `gap` instead of `space-y`, `size-*`, `cn()`, full `Card` composition, `Empty`, `Skeleton` and `Alert` instead of custom markup. Where it and this skill disagree, this skill wins.
 
 ## Data
 
@@ -98,6 +121,9 @@ Components never call `fetch`, never hold business rules, and never import from 
 - **Images and fonts:** images use `next/image` with `sizes`; fonts use `next/font`.
 - **Don't break code splitting:** no barrel files that re-export a whole feature to the client, and `index.ts` stays server wiring.
 - **Context:** a context value that changes often is split from the ones that do not, so a keystroke does not re-render the whole tree.
+- **Await late:** move an `await` into the branch that uses it, and check cheap conditions before awaiting.
+- **Deduplicate server reads** within one request with `React.cache`.
+- **Never define a component inside another component;** it remounts on every render.
 
 ## Security
 
@@ -127,7 +153,8 @@ When bussin-autoloop loads this skill, copy this list into `CODING_STANDARDS.md`
 - Server actions and route handlers authenticate, parse with the DTO, and authorize in the service.
 - Server data is never kept in `useState` or Zustand; TanStack Query keys come from the feature's key factory, and mutations invalidate exact keys.
 - No `useEffect` for fetching or derived state.
-- Multi-part widgets use a compound component with context; no prop drilling deeper than two levels.
+- Components with two or more regions are compound components with context; no boolean layout props, no `renderX` props, no prop drilling.
+- Existing shared and feature components were searched before building new ones; existing components were extended by a part, slot or variant without changing what current callers see.
 - shadcn components live in `src/shared/ui/` and are edited in place; no pass-through wrappers and no forked copies in features.
 - Every data view handles loading, error, empty and success.
 - Forms reuse the feature's DTO schema, label every input, tie errors to inputs, and keep input on failure.

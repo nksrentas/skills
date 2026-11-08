@@ -203,7 +203,7 @@ Presets live in `assets/presets.json`. Choose with `--mode`; the default is `sta
 |---|---|---|---|
 | Tests gate | yes | yes | yes |
 | Implement stage | tests after code | test-first | test-first |
-| Review stage | `bussin-lean` cleanup pass, inline | spec, standards and lean review | spec, standards and lean review, plus test audit |
+| Review stage | lean cleanup pass, inline | spec, standards and lean review | spec, standards and lean review, plus test audit |
 | Mutation gate (Stryker) | no | no | yes |
 | Browser verification | no | UI items | UI items |
 | End stage | none | none | retro note in `retro.md` |
@@ -224,14 +224,12 @@ House context skills:
 | `bussin-drizzle` | The feature reads or writes a SQL database from TypeScript |
 | `bussin-react` | Any React or Next.js UI: server components first, shadcn/ui, compound components, TanStack Query, forms, performance and security |
 | `bussin-ui` | Landing pages and dashboards in Next.js + Tailwind v4 + GSAP + Lenis with the house look |
-| `bussin-lean` | Always on: every preset loads it, and the review stage blocks on its findings |
 | `bussin-a11y` | Any UI work: WCAG 2.2 AA, native HTML first |
-| `bussin-seo` | Public pages and routes: metadata, headings, sitemap, Core Web Vitals |
-| `bussin-schema` | Public pages that need JSON-LD |
+| `bussin-seo` | Public pages and routes: metadata, headings, sitemap, Core Web Vitals, JSON-LD |
 
 Example: `/bussin-autoloop init "Invoice reminders" --skills bussin-ts-architecture,bussin-drizzle`. Init copies each one's review checklist into `CODING_STANDARDS.md`, so the review stage enforces it.
 
-For UI work, add accessibility, SEO and Emil Kowalski's animation review: `/bussin-autoloop init "Pricing page" --skills bussin-ts-architecture,bussin-ui,bussin-a11y,bussin-seo,bussin-schema,review:review-animations`.
+For UI work, add accessibility, SEO and Emil Kowalski's animation review: `/bussin-autoloop init "Pricing page" --skills bussin-ts-architecture,bussin-ui,bussin-a11y,bussin-seo,review:review-animations`.
 
 ## Config shape
 
@@ -245,7 +243,7 @@ For UI work, add accessibility, SEO and Emil Kowalski's animation review: `/buss
   "commands": { "test": "npm test", "final": "npx playwright test", "dev": "npm run dev" },
   "mutation_paths": ["src/**/*.ts", "src/**/*.tsx"],
   "gates": { "tests": true, "mutation": false, "browser": true },
-  "skills": { "context": ["bussin-lean"], "implement": [], "review": [], "end": [] },
+  "skills": { "context": [], "implement": [], "review": [], "end": [] },
   "checkpoint": true
 }
 ```

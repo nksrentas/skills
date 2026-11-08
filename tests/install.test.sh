@@ -37,12 +37,14 @@ check "the installer says which mod version is installed" 'grep -q "status mod i
 check "the skills are copied for Codex, by name and never with --all" 'grep -qE "npx -y skills@[0-9]+\.[0-9]+\.[0-9]+ add nksrentas/skills -g -y --skill" "$tmp/calls" && grep -q " -a codex" "$tmp/calls" && ! grep -q -- "--all" "$tmp/calls"'
 
 git -C "$tmp/origin" -c user.email=t@t -c user.name=t commit -q --allow-empty -m "newer"
-rm "$tmp/home/.claude/skills/bussin-lean"
+rm "$tmp/home/.claude/skills/bussin-feature"
+ln -s "$tmp/home/dev/skills/bussin-retired" "$tmp/home/.claude/skills/bussin-retired"
 rm "$tmp/home/.claude/skills/bussin-ui"
 mkdir -p "$tmp/home/.claude/skills/bussin-ui" && echo old > "$tmp/home/.claude/skills/bussin-ui/SKILL.md"
 run_install
 check "running it again updates the clone" '[ "$(git -C "$tmp/home/dev/skills" log -1 --format=%s)" = newer ]'
-check "running it again restores a missing link" '[ -L "$tmp/home/.claude/skills/bussin-lean" ]'
+check "running it again restores a missing link" '[ -L "$tmp/home/.claude/skills/bussin-feature" ]'
+check "a link to a skill removed from the repository is deleted" '[ ! -L "$tmp/home/.claude/skills/bussin-retired" ]'
 check "an old copied skill folder is replaced by the link and kept as a backup" '[ "$(readlink "$tmp/home/.claude/skills/bussin-ui")" = "$tmp/home/dev/skills/bussin-ui" ] && grep -q old "$tmp"/home/.claude/skills-backup/bussin-ui-*/SKILL.md'
 check "it says how to finish" 'grep -q "Restart Claude Code, then type /autoloop" "$tmp/out"'
 

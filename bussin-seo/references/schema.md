@@ -1,14 +1,6 @@
----
-name: bussin-schema
-description: Detect, validate or generate Schema.org JSON-LD and keep it eligible for Google rich results, with an up-to-date list of active, restricted and deprecated types (FAQ rich results retired in May 2026). Load it whenever a page needs structured data - Organization, BreadcrumbList, Article, Product, LocalBusiness, Event and more - when building a public page with bussin-seo, or when asked about schema markup, rich results or JSON-LD.
-user-invocable: true
-argument-hint: "[page, entity or URL]"
-license: MIT
----
+# Schema markup: detection, validation and generation
 
-# Schema Markup Analysis & Generation
-
-Adapted from [AgriciDaniel/claude-seo](https://github.com/AgriciDaniel/claude-seo) `seo-schema` (MIT, commit 4b99de2, see `license.txt`), with its `schema-types.md` reference. The house rules near the end are this repository's additions.
+Adapted from [AgriciDaniel/claude-seo](https://github.com/AgriciDaniel/claude-seo) `seo-schema` (MIT, commit 4b99de2, see `../license.txt`), with its `schema-types.md` reference. The house rules near the end are this repository's additions. Product, Article and BreadcrumbList examples are in [structured-data.md](structured-data.md).
 
 ## Detection
 
@@ -36,15 +28,13 @@ Adapted from [AgriciDaniel/claude-seo](https://github.com/AgriciDaniel/claude-se
 
 ## Schema Type Status (as of June 2026)
 
-Read `references/schema-types.md` for the full list. Key rules:
+Read [schema-types.md](schema-types.md) for the full list. Key rules:
 
 ### ACTIVE (recommend freely):
 Organization, LocalBusiness, SoftwareApplication, WebApplication, Product (with Certification markup as of April 2025), ProductGroup, Offer, Service, Article, BlogPosting, NewsArticle, Review, AggregateRating, BreadcrumbList, WebSite, WebPage, Person, ProfilePage, ContactPage, VideoObject, ImageObject, Event, JobPosting, Course, DiscussionForumPosting
 
 ### VIDEO & SPECIALIZED (recommend freely):
 BroadcastEvent, Clip, SeekToAction, SoftwareSourceCode
-
-See `schema/templates.json` for ready-to-use JSON-LD templates for these types.
 
 > **JSON-LD and JavaScript rendering:** Google supports structured data generated with JavaScript, but its "Generate structured data with JavaScript" guide (last updated 2025-12-10) warns that dynamically generated Product markup can make Shopping crawls less frequent and less reliable for fast-changing price and availability. For time-sensitive markup (especially Product, Offer), include JSON-LD in the initial server-rendered HTML.
 
@@ -169,10 +159,10 @@ When generating schema for a page:
 
 ## Review checklist
 
-Copy these into `CODING_STANDARDS.md` when bussin-autoloop loads this skill:
+`bussin-seo`'s review checklist includes these:
 
 - JSON-LD lives in `<feature>.jsonld.ts` and is rendered server-side with `<` escaped.
-- No deprecated or retired types (see `references/deprecated-types-2024-2026.md`).
+- No deprecated or retired types (see [deprecated-types-2024-2026.md](deprecated-types-2024-2026.md)).
 - Required properties present for each type; values match visible content.
 - One `Organization` and `WebSite` site-wide; `BreadcrumbList` matches the visible breadcrumb.
 

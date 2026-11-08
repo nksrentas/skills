@@ -31,7 +31,7 @@ A feature needs a different look? Add a variant to the shared component's `cva` 
 
 ## Compound components
 
-Use one when a widget has several parts that must agree on shared state, and the caller should arrange the parts. A data table with a toolbar, rows and pagination is the typical case: one place owns the sort and page state, and the parts read it.
+This is the default shape for any component with two or more regions, or one that pages arrange differently. A new need becomes a new part, so existing callers never change. A data table with a toolbar, rows and pagination is the typical case: one place owns the sort and page state, and the parts read it.
 
 ```tsx
 'use client'
@@ -107,7 +107,8 @@ Rules:
 - Parts are attached to the root and exported together, so the folder exposes one name.
 - `use(Context)` and `<Context value>` are React 19; on older React use `useContext` and `<Context.Provider>`.
 - Split the context in two (state and setters) when parts that only set state re-render too often.
-- A widget with one part, or with no shared state between parts, stays a plain component.
+- A single-element component (button, badge, input) stays a plain component with `cva` variants.
+- Extending: add a part (`InvoiceTable.Summary`) or a variant. Never change what an existing part renders for callers that already use it.
 
 ## Forms
 

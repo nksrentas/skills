@@ -1,13 +1,13 @@
 ---
 name: bussin-seo
-description: On-page and technical SEO for public pages - a specific title and meta description, one h1 and a logical heading outline, canonical URLs, crawlable links, sitemap and robots, image alt, hreflang, Core Web Vitals (LCP, INP, CLS) and AI-search discoverability. Load it whenever building or changing a public page, landing page or marketing site, or when asked to improve SEO, rank in Google, fix meta tags, add a sitemap or speed up a page.
+description: On-page and technical SEO for public pages - a specific title and meta description, one h1 and a logical heading outline, canonical URLs, crawlable links, sitemap and robots, image alt, hreflang, Core Web Vitals (LCP, INP, CLS), AI-search discoverability, and Schema.org JSON-LD that stays eligible for Google rich results (up-to-date active and deprecated types; FAQ rich results retired in May 2026). Load it whenever building or changing a public page, landing page or marketing site, or when asked to improve SEO, rank in Google, fix meta tags, add a sitemap, speed up a page, or add or audit structured data, schema markup, rich results or JSON-LD.
 argument-hint: "[page, route or URL]"
 license: MIT
 ---
 
 # SEO optimization
 
-Adapted from [addyosmani/web-quality-skills](https://github.com/addyosmani/web-quality-skills) `seo`, with its `core-web-vitals` skill folded in as `references/core-web-vitals.md` (MIT, commit afa8da9, see `license.txt`). The house rules near the end are this repository's additions.
+Adapted from [addyosmani/web-quality-skills](https://github.com/addyosmani/web-quality-skills) `seo`, with its `core-web-vitals` skill folded in as `references/core-web-vitals.md` (MIT, commit afa8da9, see `license.txt`). The structured-data workflow in `references/schema.md` is adapted from [AgriciDaniel/claude-seo](https://github.com/AgriciDaniel/claude-seo) `seo-schema` (MIT, commit 4b99de2). The house rules near the end are this repository's additions.
 
 Search engine optimization based on Lighthouse SEO audits and Google Search guidelines. Focus on technical SEO, on-page optimization, and structured data.
 
@@ -253,7 +253,7 @@ Treat title-link rewriting separately from truncation. Google may build a differ
 
 ## Structured data (JSON-LD)
 
-Read [the structured data reference](references/structured-data.md) when the user requests schema markup or an audit surfaces a structured-data issue. It contains Organization, Article, Product and Breadcrumb examples, a note on retired FAQ markup, and validation links.
+Read [the schema reference](references/schema.md) whenever a page needs JSON-LD, the user asks for schema markup or rich results, or an audit surfaces a structured-data issue. It covers detection, validation, which types are active or deprecated, generation, the house rules for `<feature>.jsonld.ts`, and the report format. [structured-data.md](references/structured-data.md) has Organization, Article, Product and Breadcrumb examples.
 
 * **Describe visible, accurate content.** Do not add a type or claim solely to obtain a rich result.
 * **Use the most specific applicable type.** Keep identifiers and absolute URLs stable across renders.
@@ -412,7 +412,7 @@ body {
 - `next/image` with `width` and `height` (or `fill` plus `sizes`), `priority` on the LCP image, and `next/font` for fonts, so layout does not shift.
 - Put the page's main query naturally in the title, the `h1`, the first paragraph and the URL slug.
 
-**Layout:** landmarks (`header`, `nav`, `main`, `footer`), one `h1`, headings in order, a visible breadcrumb on deep pages (mirrored in `bussin-schema`), and descriptive link text instead of "click here". `bussin-ui` sections already use this structure; keep the `h1` in the hero.
+**Layout:** landmarks (`header`, `nav`, `main`, `footer`), one `h1`, headings in order, a visible breadcrumb on deep pages (mirrored in `BreadcrumbList` JSON-LD), and descriptive link text instead of "click here". `bussin-ui` sections already use this structure; keep the `h1` in the hero.
 
 ## Review checklist
 
@@ -424,7 +424,9 @@ Copy these into `CODING_STANDARDS.md` when bussin-autoloop loads this skill:
 - Images have `alt`, dimensions and `sizes`; the LCP image has `priority`.
 - `sitemap.ts` and `robots.ts` include new public routes; private routes are `noindex`.
 - No layout shift from fonts, images or late-loading content; INP-heavy handlers are deferred.
-- Structured data follows `bussin-schema`.
+- JSON-LD lives in `<feature>.jsonld.ts` and is rendered server-side with `<` escaped.
+- No deprecated or retired schema types; required properties are present and values match visible content.
+- One `Organization` and `WebSite` site-wide; `BreadcrumbList` matches the visible breadcrumb.
 
 ## References
 

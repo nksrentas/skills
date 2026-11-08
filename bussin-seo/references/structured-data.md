@@ -86,7 +86,7 @@ Use the type that matches the page's visible content and current search-feature 
 
 ## FAQ
 
-Google retired FAQ rich results for all sites on May 7, 2026, so `FAQPage` markup no longer earns a rich result. Do not add it for search; use `QAPage` for genuine user Q&A pages. See `bussin-schema` for the current list of active and retired types.
+Google retired FAQ rich results for all sites on May 7, 2026, so `FAQPage` markup no longer earns a rich result. Do not add it for search; use `QAPage` for genuine user Q&A pages. See [schema-types.md](schema-types.md) for the current list of active and retired types.
 
 ## Breadcrumbs
 

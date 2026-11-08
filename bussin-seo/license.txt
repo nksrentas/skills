@@ -19,3 +19,10 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+---
+
+references/schema.md and its schema-types.md and deprecated-types-2024-2026.md references are adapted from
+https://github.com/AgriciDaniel/claude-seo under the same MIT License terms above.
+
+Copyright (c) 2026 AgriciDaniel

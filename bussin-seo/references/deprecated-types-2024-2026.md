@@ -2,7 +2,7 @@
 
 Authoritative reference for every rich result Google retired during the
 2024–2025 cleanup. Whenever a user asks for one of these, the
-`bussin-schema` skill must explain that the type is deprecated and either
+`bussin-seo` skill must explain that the type is deprecated and either
 redirect to an active alternative or note that no replacement exists.
 
 ## Retired June 12, 2025

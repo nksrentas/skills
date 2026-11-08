@@ -33,6 +33,10 @@ for skill in "$dir"/bussin-* "$dir"/aliases/*; do
   ln -sfn "$skill" "$target"
   linked=$((linked + 1))
 done
+for link in "$skills_home"/*; do
+  [ -L "$link" ] && [ ! -e "$link" ] || continue
+  case "$(readlink "$link")" in "$dir"/*) rm "$link" && say "removed $(basename "$link"), which is no longer in the repository" ;; esac
+done
 say "linked $linked skills into $skills_home"
 
 if command -v claude > /dev/null; then
