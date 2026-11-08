@@ -182,11 +182,9 @@ function taskNote(row: ItemRow, plainOf: Map<string, string>) {
 }
 
 function workingOn(view: LoopView) {
-  return view.snapshot.runningRows
-    .map(row => {
-      const lines = view.logs[row.item] ?? []
-      return lines.length > 0 ? `${row.item} ${currentStep(lines)}` : row.item
-    })
+  return view.snapshot.items
+    .filter(row => row.state === 'running')
+    .map(row => [shortTitle(row.plain), row.phase].filter(Boolean).join(' · '))
     .join(', ')
 }
 
