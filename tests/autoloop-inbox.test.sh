@@ -68,6 +68,39 @@ apply || { cat "$tmp/out"; fail "apply_inbox failed"; }
 [ "$(item U3 '[.plain, .depends_on, .area, .kind, .ui]')" = '["Fix after review: The login button is too small",["F1"],"Accounts","design",true]' ] || fail "fix task after review: $(item U3 .)"
 grep -q "say what should change" "$tmp/out" || fail "an empty review note was not refused"
 
+# awkward changes are each applied cleanly or dropped with a reason, and the list stays valid
+long() { printf "%${1}s" "" | tr ' ' "$2"; }
+odd() {
+  printf '%s' "$3" > "$repo/.loop/inbox/odd.json"
+  apply || { cat "$tmp/out"; fail "apply_inbox failed on $2"; }
+  jq -e . "$repo/.loop/feature_list.json" > /dev/null || fail "feature_list.json is invalid after $2"
+  git -C "$repo" show HEAD:.loop/feature_list.json | jq -e . > /dev/null || fail "an invalid feature_list.json was committed after $2"
+  [ ! -e "$repo/.loop/inbox/odd.json" ] || fail "$2 was left in the inbox"
+  if [ "$1" = applied ]; then
+    grep -q "from the status pane: added" "$tmp/out" || fail "$2 was not applied: $(cat "$tmp/out")"
+  else
+    grep -q "dropped odd.json from the status pane: ." "$tmp/out" || fail "$2 was not dropped with a reason: $(cat "$tmp/out")"
+  fi
+}
+odd dropped "an empty file" ''
+odd dropped "whitespace only" '   '
+odd dropped "a blank plain" '{"op":"add","plain":"  \t "}'
+odd dropped "501 characters" "{\"op\":\"add\",\"plain\":\"$(long 501 x)\"}"
+odd applied "500 characters" "{\"op\":\"add\",\"plain\":\"$(long 500 x)\"}"
+odd dropped "a newline" '{"op":"add","plain":"one\ntwo"}'
+odd dropped "a control character" '{"op":"edit","id":"F2","plain":"bell\u0007"}'
+odd applied "quotes and backslashes" '{"op":"add","plain":"Say \"hi\" \\ and '\''bye'\''"}'
+odd applied "unicode" '{"op":"add","plain":"Ünïcødé tâsk 🎉 работает"}'
+odd dropped "an array" '[{"op":"add","plain":"x"}]'
+odd dropped "a string" '"add a task"'
+odd dropped "an empty object" '{}'
+odd dropped "an unknown op" '{"op":"explode","id":"F2"}'
+odd dropped "a numeric id" '{"op":"edit","id":5,"plain":"x"}'
+odd dropped "a string metric target" '{"op":"add","plain":"x","kind":"eval","metrics":[{"name":"m","target":"high"}]}'
+odd dropped "eleven metrics" "{\"op\":\"add\",\"plain\":\"x\",\"metrics\":[$(for n in 0 1 2 3 4 5 6 7 8 9 10; do printf '{"name":"m%s"},' "$n"; done | sed 's/,$//')]}"
+odd dropped "a 41-character area" "{\"op\":\"add\",\"plain\":\"x\",\"area\":\"$(long 41 a)\"}"
+[ "$(item U6 .plain)" = '"Ünïcødé tâsk 🎉 работает"' ] || fail "unicode text changed on the way: $(item U6 .plain)"
+
 # end to end: a change waiting before the run is applied, runs, and the audit accepts it
 e2e="$tmp/e2e"
 mkdir -p "$e2e/.loop/inbox" "$e2e/bin"
@@ -84,7 +117,7 @@ git -C "$e2e" init -q
 git -C "$e2e" add .loop/feature_list.json
 git -C "$e2e" commit -qm init
 echo '{"op":"add","plain":"Added before the run","first":true}' > "$e2e/.loop/inbox/1.json"
-(cd "$e2e" && PATH="$e2e/bin:$PATH" LOOP_NOTIFY_CONFIG="$tmp/no-telegram" LOOP_SLOTS_DIR="$tmp/slots" LOOP_MACHINE_SESSIONS=8 LOOP_STARTUP_SECONDS=0 MAX_STALLS=1 \
+(cd "$e2e" && PATH="$e2e/bin:$PATH" LOOP_NOTIFY_CONFIG="$tmp/no-telegram" LOOP_SLOTS_DIR="$tmp/slots" LOOP_MACHINE_SESSIONS=8 LOOP_STARTUP_SECONDS=0 MAX_STALLS=1 LOOP_WORKERS=1 \
   bash "$scripts/loop.sh" > "$e2e/out" 2>&1) || { cat "$e2e/out"; fail "the loop did not finish with a pane change"; }
 [ "$(tr '\n' ' ' < "$e2e/ran")" = "U1 A1 " ] || fail "the added task did not run first: $(cat "$e2e/ran")"
 grep -q "from the status pane: added U1" "$e2e/out" || fail "the loop did not report the change"

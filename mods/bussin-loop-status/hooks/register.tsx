@@ -1,10 +1,12 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { ItemState, LogLine, LoopSnapshot, LoopView } from '../types'
-import { currentStep, parseLog, SAFE_ITEM, stepStrip } from './session-log'
+import type { AddDraft, Area, InboxChange, ItemRow, ItemState, LogLine, LoopSnapshot, LoopView, Metric } from '../types'
+import { currentStep, parseLog, SAFE_ITEM } from './session-log'
 import {
+  areas,
   baseName,
+  clean,
   commonDirFromGitFile,
   compactLine,
   compute,
@@ -24,6 +26,7 @@ import {
   longInactive,
   orderLoops,
   parentDir,
+  phaseOf,
   progressBar,
   resumeCommand,
   shortModel,
@@ -33,7 +36,6 @@ import {
 } from './snapshot'
 
 const REFRESH_MS = 5000
-const LOG_ROWS = 6
 const MAX_LOG_READ = 256 * 1024
 
 export const PANE = 'autoloop-status'
@@ -42,8 +44,70 @@ export const loopsAtom = atom({ plugin: 'bussin-loop-status', key: 'loops' } as 
 export const selectedAtom = atom({ plugin: 'bussin-loop-status', key: 'selected' } as const, null as string | null)
 export const renamingAtom = atom({ plugin: 'bussin-loop-status', key: 'renaming' } as const, null as string | null)
 export const showTokensAtom = atom({ plugin: 'bussin-loop-status', key: 'showTokens' } as const, false)
+// Keyed `<loop path>\n<area name>`; an area nobody toggled is open while it has running or failing tasks.
+export const openAreasAtom = atom({ plugin: 'bussin-loop-status', key: 'openAreas' } as const, {} as Record<string, boolean>)
+// Keyed `<loop path>\n<item id>`: one open task at a time; pressing any task hides technical details and drops an edit draft.
+export const openTaskAtom = atom({ plugin: 'bussin-loop-status', key: 'openTask' } as const, null as string | null)
+export const technicalAtom = atom({ plugin: 'bussin-loop-status', key: 'technical' } as const, false)
+// The task being reworded (keyed like openTask) and the text typed so far.
+export const editDraftAtom = atom({ plugin: 'bussin-loop-status', key: 'editDraft' } as const, null as { key: string; plain: string; doneWhen: string } | null)
+export const addDraftAtom = atom({ plugin: 'bussin-loop-status', key: 'addDraft' } as const, null as AddDraft | null)
+// The task whose screenshots are being sent back (keyed like openTask) and the note typed so far.
+export const reviewDraftAtom = atom({ plugin: 'bussin-loop-status', key: 'reviewDraft' } as const, null as { key: string; note: string } | null)
 
-const STATE_COLOR: Record<ItemState, string> = { done: 'success', running: 'claude', waiting: 'subtle', failing: 'error', ready: 'text' }
+const LOG_ROWS = 6
+const ADDED_AREA = 'Added by you'
+const KIND_OPTIONS = [
+  { value: 'build', label: 'Build a feature' },
+  { value: 'eval', label: 'Evaluation: returns metrics' },
+  { value: 'design', label: 'Design: send me screenshots' },
+]
+const WHEN_OPTIONS = [
+  { value: 'queued', label: 'After what is queued' },
+  { value: 'next', label: 'Next' },
+]
+
+// Typed text as inbox.jq accepts it: whitespace runs become one space, control characters go, trimmed and capped in code points.
+const typed = (text: string, max: number) => [...clean(text.replace(/\s+/g, ' ')).trim()].slice(0, max).join('').trim()
+// A draft keeps newlines and tabs; any other control character makes the engine refuse the whole pane.
+const editable = (text: string) => text.replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g, '')
+const TEXT_MAX = 500
+const NAME_MAX = 40
+
+// 'precision@5>=0.75, recall@10' -> [{ name: 'precision@5', target: 0.75 }, { name: 'recall@10' }]
+function parseMetrics(text: string) {
+  return text
+    .split(',')
+    .map(part => typed(part, TEXT_MAX))
+    .filter(part => part !== '')
+    .map(part => {
+      const match = /^(.+?)\s*>=\s*(.+)$/.exec(part)
+      const target = match === null ? NaN : Number(match[2])
+      return match !== null && Number.isFinite(target) ? { name: typed(match[1] ?? part, NAME_MAX), target } : { name: typed(part, NAME_MAX) }
+    })
+    .slice(0, 10)
+}
+
+const missed = (metric: Metric) => metric.value !== null && metric.target !== null && metric.value < metric.target
+
+function metricsTable(metrics: Metric[]) {
+  const shown = (value: number | null) => (value === null ? '—' : value.toFixed(2))
+  const rows = metrics.map(metric => {
+    const met = metric.value === null || metric.target === null ? '—' : missed(metric) ? '✗ below' : '✓ met'
+    // A '|' in a metric name would split its cell.
+    return `| ${metric.name.replace(/\|/g, '\\|')} | ${shown(metric.value)} | ${shown(metric.target)} | ${met} |`
+  })
+  return ['| Metric | Value | Target | |', '| --- | ---: | ---: | --- |', ...rows].join('\n')
+}
+
+const TASK_MARK: Record<ItemState, { icon: string; color: string }> = {
+  running: { icon: '◆', color: 'claude' },
+  failing: { icon: '↻', color: 'warning' },
+  ready: { icon: '○', color: 'subtle' },
+  waiting: { icon: '○', color: 'subtle' },
+  done: { icon: '✓', color: 'success' },
+}
+const TASK_ORDER: Record<ItemState, number> = { running: 0, failing: 1, ready: 2, waiting: 3, done: 4 }
 const LOOP_COLOR: Record<LoopSnapshot['loopState'], string> = {
   running: 'claude',
   stopping: 'warning',
@@ -52,7 +116,6 @@ const LOOP_COLOR: Record<LoopSnapshot['loopState'], string> = {
   stopped: 'subtle',
   idle: 'subtle',
 }
-const KIND_COLOR: Record<string, string> = { Error: 'error', Done: 'success', Edit: 'claude', Bash: 'text', Say: 'subtle' }
 
 function costSummary(snapshot: LoopSnapshot) {
   const priced = snapshot.sessions - snapshot.unpricedSessions
@@ -109,12 +172,27 @@ function machineText(loops: LoopView[]) {
   return `This Mac: ${machine.inUse} of ${machine.sessions} loop sessions in use · ${room > 0 ? `room for ${room} more` : 'full, new sessions wait for a free one'}`
 }
 
+function areaStatus(area: Area) {
+  const busy = area.items.filter(row => row.state === 'running').length
+  if (busy > 0) return { text: `◆ building ${busy}`, color: 'claude' }
+  const failing = area.items.filter(row => row.state === 'failing').length
+  if (failing > 0) return { text: `${failing} ${failing === 1 ? 'needs' : 'need'} a look`, color: 'warning' }
+  if (area.done === area.total) return { text: '✓ all work', color: 'success' }
+  return { text: 'waiting its turn', color: 'subtle' }
+}
+
+function taskNote(row: ItemRow, plainOf: Map<string, string>) {
+  if (row.state === 'running') return row.phase ?? ''
+  if (row.state === 'failing') return 'trying again'
+  if (row.state === 'done') return row.finishedAt === null ? 'done' : formatClock(row.finishedAt)
+  const after = (row.waitingFor ?? []).flatMap(id => plainOf.get(id) || [])
+  return row.state === 'waiting' && after.length > 0 ? `after ${after.map(text => shortTitle(text, 40)).join(', ')}` : 'not started'
+}
+
 function workingOn(view: LoopView) {
-  return view.snapshot.runningRows
-    .map(row => {
-      const lines = view.logs[row.item] ?? []
-      return lines.length > 0 ? `${row.item} ${currentStep(lines)}` : row.item
-    })
+  return view.snapshot.items
+    .filter(row => row.state === 'running')
+    .map(row => [shortTitle(row.plain), row.phase].filter(Boolean).join(' · '))
     .join(', ')
 }
 
@@ -188,11 +266,127 @@ async function readLogs($: EngineInterface, dir: string, snapshot: LoopSnapshot)
   return logs
 }
 
+// The names sendChange writes; anything else in the folder is not ours to show or remove.
+const INBOX_NAME = /^[0-9]+-[A-Za-z0-9]+\.json$/
+const MAX_CHANGES = 50
+
+// Typed text is shown whole up to 80 characters; shortTitle would cut it at its first ': '.
+function quoted(text: string) {
+  return `'${text.length > 80 ? `${text.slice(0, 79).trimEnd()}…` : text}'`
+}
+
+function changeLine(change: Record<string, unknown>, plainOf: Map<string, string>) {
+  if (change.op === 'add') return `Add ${quoted(clean(change.plain))}`
+  if (change.op === 'review' && change.verdict === 'changes') return `Fix after review: ${quoted(clean(change.note))}`
+  const task = quoted(plainOf.get(clean(change.id)) || clean(change.id))
+  if (change.op === 'edit') return `Reword ${task}`
+  if (change.op === 'skip') return `Skip ${task}`
+  if (change.op === 'first') return `Run ${task} next`
+  if (change.op === 'review' && change.verdict === 'approved') return `Approve screenshots of ${task}`
+  return null
+}
+
+async function readInbox($: EngineInterface, dir: string, snapshot: LoopSnapshot) {
+  let names: string[]
+  try {
+    names = (await $.fs.list(`${dir}/.loop/inbox`)).map(entry => entry.name).filter(name => INBOX_NAME.test(name))
+  } catch {
+    return []
+  }
+  const plainOf = new Map(snapshot.items.map(row => [row.id, row.plain]))
+  const changes: InboxChange[] = []
+  for (const name of names.sort().slice(0, MAX_CHANGES)) {
+    const path = `${dir}/.loop/inbox/${name}`
+    try {
+      const change: unknown = JSON.parse((await readOptional($, path)) ?? '')
+      if (typeof change !== 'object' || change === null) continue
+      const fields = change as Record<string, unknown>
+      const line = changeLine(fields, plainOf)
+      if (line !== null) changes.push({ name, path, line, reviewFor: fields.op === 'review' ? clean(fields.id) : null })
+    } catch {
+      // Unreadable or half-written: the driver drops it with a reason.
+    }
+  }
+  return changes
+}
+
+async function undoChange($: EngineInterface, change: InboxChange) {
+  try {
+    const { exitCode, stderr } = await $.process.run(['rm', '--', change.path], { timeoutMs: 5000 })
+    if (exitCode !== 0) throw new Error(stderr.trim() || `rm exited ${exitCode}`)
+  } catch (error) {
+    $.ui.toast(`Could not undo the change: ${error instanceof Error ? error.message : String(error)}`)
+  }
+  await refresh($)
+}
+
+const MAX_SVG = 131072
+// One temp folder per session for sips thumbnails, cached by surface format, path and mtime.
+let thumbDir: Promise<string | null> | undefined
+// Unbounded, but holds one entry per evidence screenshot opened this session.
+const thumbs = new Map<string, { mtimeMs: number; source: string | null }>()
+
+async function makeThumbDir($: EngineInterface) {
+  try {
+    const { exitCode, stdout } = await $.process.run(['mktemp', '-d'], { timeoutMs: 5000 })
+    return exitCode === 0 && stdout.trim() !== '' ? stdout.trim() : null
+  } catch {
+    return null
+  }
+}
+
+// What to draw for the screenshot: an Svg source wrapping a small JPEG, or a small PNG's base64 for the
+// terminal's Image; null when sips cannot make one or the Svg would be too long.
+async function thumbnail($: EngineInterface, path: string, format: 'jpeg' | 'png') {
+  let mtimeMs: number
+  try {
+    mtimeMs = (await $.fs.stat(path)).mtimeMs
+  } catch {
+    return null
+  }
+  const key = `${format}\n${path}`
+  const cached = thumbs.get(key)
+  if (cached?.mtimeMs === mtimeMs) return cached.source
+  thumbDir ??= makeThumbDir($)
+  const dir = await thumbDir
+  if (dir === null) return null
+  // Named from the key, so thumbnails drawn at once never share a file.
+  let hash = 0x811c9dc5
+  for (const char of key) hash = Math.imul(hash ^ char.charCodeAt(0), 0x01000193) >>> 0
+  const out = `${dir}/${hash.toString(16)}.${format === 'jpeg' ? 'jpg' : 'png'}`
+  const argv = ['sips', '-Z', '480', '-s', 'format', format, ...(format === 'jpeg' ? ['-s', 'formatOptions', '70'] : []), path, '--out', out]
+  let source: string | null = null
+  try {
+    if ((await $.process.run(argv, { timeoutMs: 15000 })).exitCode === 0) {
+      const { base64 } = await $.fs.read(out, { as: 'bytes' })
+      if (format === 'png') source = base64
+      else {
+        // shortcut: a fixed 3:2 box letterboxes other shapes; read the size with sips -g if that looks wrong.
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="480" height="320" viewBox="0 0 480 320"><image href="data:image/jpeg;base64,${base64}" width="480" height="320"/></svg>`
+        if (svg.length <= MAX_SVG) source = svg
+      }
+    }
+  } catch {
+    // A failed sips run draws no thumbnail; the caption and Open full size stay.
+  }
+  thumbs.set(key, { mtimeMs, source })
+  return source
+}
+
+async function openFile($: EngineInterface, path: string) {
+  try {
+    const { exitCode, stderr } = await $.process.run(['open', path], { timeoutMs: 5000 })
+    if (exitCode !== 0) throw new Error(stderr.trim() || `open exited ${exitCode}`)
+  } catch (error) {
+    $.ui.toast(`Could not open the screenshot: ${error instanceof Error ? error.message : String(error)}`)
+  }
+}
+
 async function loadLoop($: EngineInterface, dir: string, repoName: string, now: number): Promise<LoopView | null> {
   const features = await readOptional($, `${dir}/.loop/feature_list.json`)
   if (typeof features !== 'string') return null
   const live = await readOptional($, `${dir}/.loop/live.json`)
-  const snapshot = compute({
+  const computed = compute({
     features,
     usage: await readOptional($, `${dir}/.loop/usage.jsonl`),
     live,
@@ -201,7 +395,9 @@ async function loadLoop($: EngineInterface, dir: string, repoName: string, now: 
     driverAlive: await driverAlive($, livePid(live)),
     now,
   })
-  if (snapshot === null || dismissed(snapshot, await readOptional($, `${dir}/.loop/dismissed`))) return null
+  if (computed === null || dismissed(computed, await readOptional($, `${dir}/.loop/dismissed`))) return null
+  const logs = await readLogs($, dir, computed)
+  const snapshot = { ...computed, items: computed.items.map(row => (row.state === 'running' && Object.hasOwn(logs, row.id) ? { ...row, phase: phaseOf(currentStep(logs[row.id] ?? [])) } : row)) }
   const name = shortName(baseName(dir), repoName)
   const config = await readOptional($, `${dir}/.loop/config.json`)
   return {
@@ -210,7 +406,8 @@ async function loadLoop($: EngineInterface, dir: string, repoName: string, now: 
     task: loopTask(config),
     path: dir,
     snapshot,
-    logs: await readLogs($, dir, snapshot),
+    logs,
+    changes: await readInbox($, dir, snapshot),
   }
 }
 
@@ -266,6 +463,20 @@ async function dismiss($: EngineInterface, loop: LoopView) {
   }
   $.ui.toast(`${loop.label} dismissed; it shows again if it runs`)
   await refresh($)
+}
+
+// One change file for the driver's inbox.sh / inbox.jq, applied between sessions.
+async function sendChange($: EngineInterface, loop: LoopView, change: Record<string, unknown>, done: string) {
+  const random = crypto.randomUUID().replace(/-/g, '').slice(0, 12)
+  try {
+    await $.fs.write(`${loop.path}/.loop/inbox/${await $.clock.now()}-${random}.json`, `${JSON.stringify(change)}\n`)
+  } catch (error) {
+    $.ui.toast(`Could not save the change: ${error instanceof Error ? error.message : String(error)}`)
+    return false
+  }
+  $.ui.toast(`${done}. ${canStop(loop.snapshot) ? 'Applied before the next task starts.' : 'Applied when the loop runs next.'}`)
+  await refresh($)
+  return true
 }
 
 function openPane($: EngineInterface) {
@@ -339,8 +550,10 @@ export const register: Register = on => {
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const elements = $.ui.resolve(e)
-    const { Box, Button, Text } = elements
-    const Input = 'Input' in elements ? elements.Input : undefined
+    const { Box, Button, Markdown, Text } = elements
+    // Mobile's table still hands out an Input, drawn as an empty Box: the app has no text field yet.
+    const Input = e.surface !== 'mobile' && 'Input' in elements ? elements.Input : undefined
+    const Select = Input !== undefined && 'Select' in elements ? elements.Select : undefined
     const loops = await read($, loopsAtom)
     const view = primaryLoop(loops, await read($, selectedAtom))
     if (view === undefined) {
@@ -360,23 +573,6 @@ export const register: Register = on => {
         <Text bold>{text}</Text>
       </Box>
     )
-    const line = (key: string, heading: string, id: string, title: string, note: string, color: string) => (
-      <Box key={key} flexDirection="row">
-        {label(heading)}
-        <Box width={6}>
-          <Text color={color}>{id}</Text>
-        </Box>
-        <Box flexGrow={1} flexShrink={1}>
-          <Text color={color} wrap="truncate-end">
-            {title}
-          </Text>
-        </Box>
-        <Box flexShrink={0}>
-          <Text dimColor> {note}</Text>
-        </Box>
-      </Box>
-    )
-
     const cards = loops.length > 1 && (
       <Box flexDirection="column" width={28} flexShrink={0}>
         {loops.map(loop => (
@@ -419,9 +615,68 @@ export const register: Register = on => {
     const elapsed = snapshot.elapsedSec > 0 ? `elapsed ${formatDuration(snapshot.elapsedSec)}` : null
     const spent = snapshot.sessions > snapshot.unpricedSessions ? `${formatCost(snapshot.costUsd)} so far` : null
     const resume = resumeCommand(view.path, snapshot)
-    const runningIds = snapshot.runningRows.map(row => row.item).join(', ')
-    const open = snapshot.items.filter(row => row.state === 'failing' || row.state === 'ready')
-    const nextShown = open.slice(0, 4)
+    const runningTasks = snapshot.items
+      .filter(row => row.state === 'running')
+      .map(row => row.plain)
+      .join(', ')
+    const loopAreas = areas(snapshot.items)
+    const storedAdd = await read($, addDraftAtom)
+    const adding = Input !== undefined && Select !== undefined && storedAdd?.path === view.path ? storedAdd : null
+    const setAdd = (patch: Partial<AddDraft>) => update($, addDraftAtom, current => current && { ...current, ...patch })
+    const submitAdd = async () => {
+      if (adding === null) return
+      const plain = typed(adding.plain, TEXT_MAX)
+      if (plain === '') {
+        $.ui.toast('Say what the new task should do before adding it')
+        return
+      }
+      const metrics = adding.kind === 'eval' ? parseMetrics(adding.metrics) : []
+      const change = {
+        op: 'add',
+        plain,
+        done_when: typed(adding.doneWhen, TEXT_MAX),
+        area: typed(adding.area, NAME_MAX),
+        kind: adding.kind,
+        ...(metrics.length > 0 ? { metrics } : {}),
+        ...(adding.first ? { first: true } : {}),
+      }
+      if (await sendChange($, view, change, `Added '${plain}'`)) await update($, addDraftAtom, () => null)
+    }
+    const addForm = adding !== null && Input !== undefined && Select !== undefined && (
+      <Box flexDirection="column" borderStyle="round" borderColor="claude" paddingX={1}>
+        <Input key="add-plain" label="What should it do?" rows={2} value={adding.plain} onInput={(plain: string) => setAdd({ plain: editable(plain) })} onSubmit={(plain: string) => setAdd({ plain: editable(plain) })} />
+        <Input
+          key="add-done"
+          label="Done when"
+          rows={2}
+          value={adding.doneWhen}
+          onInput={(doneWhen: string) => setAdd({ doneWhen: editable(doneWhen) })}
+          onSubmit={(doneWhen: string) => setAdd({ doneWhen: editable(doneWhen) })}
+        />
+        <Select
+          key="add-area"
+          label="Area"
+          options={[...new Set([...loopAreas.map(area => area.name), ADDED_AREA])].map(value => ({ value }))}
+          value={adding.area}
+          onSelect={(area: string) => setAdd({ area })}
+        />
+        <Select key="add-kind" label="Kind" options={KIND_OPTIONS} value={adding.kind} onSelect={(kind: string) => setAdd({ kind: kind as AddDraft['kind'] })} />
+        <Select key="add-when" label="When" options={WHEN_OPTIONS} value={adding.first ? 'next' : 'queued'} onSelect={(when: string) => setAdd({ first: when === 'next' })} />
+        {adding.kind === 'eval' && (
+          <Input
+            key="add-metrics"
+            label="Metrics to return"
+            value={adding.metrics}
+            onInput={(metrics: string) => setAdd({ metrics: editable(metrics) })}
+            onSubmit={(metrics: string) => setAdd({ metrics: editable(metrics) })}
+          />
+        )}
+        <Box flexDirection="row" gap={1}>
+          <Button key="add-submit" label="Add to the loop" onPress={submitAdd} />
+          <Button key="add-cancel" label="Cancel" onPress={() => update($, addDraftAtom, () => null)} />
+        </Box>
+      </Box>
+    )
 
     const header = (
       <Box flexDirection="column">
@@ -430,6 +685,17 @@ export const register: Register = on => {
             {loopIcon(snapshot)} {view.label}
           </Text>
           <Box flexDirection="row" gap={1} flexShrink={0}>
+            {Select !== undefined && (
+              <Button
+                key="pane-add"
+                label="+ Add a task"
+                onPress={() =>
+                  update($, addDraftAtom, current =>
+                    current?.path === view.path ? null : { path: view.path, plain: '', doneWhen: '', area: ADDED_AREA, kind: 'build', first: false, metrics: '' },
+                  )
+                }
+              />
+            )}
             <Button key="pane-rename" label="Rename" onPress={() => update($, renamingAtom, () => view.path)} />
             {canStop(snapshot) && <Button key="pane-stop" label="Stop" onPress={() => requestStop($, view)} />}
             {canDismiss(snapshot) && <Button key="pane-dismiss" label="Dismiss" onPress={() => dismiss($, view)} />}
@@ -458,13 +724,28 @@ export const register: Register = on => {
       </Box>
     )
 
+    const yourChanges = view.changes.length > 0 && (
+      <Box flexDirection="column" borderStyle="round" borderColor="claude" paddingX={1}>
+        <Text bold>Your changes · {view.changes.length} waiting</Text>
+        {view.changes.map(change => (
+          <Box key={`change-${change.name}`} flexDirection="row" justifyContent="space-between" gap={1}>
+            <Box flexGrow={1} flexShrink={1}>
+              <Text>{change.line}</Text>
+            </Box>
+            <Button key={`undo-${change.name}`} label="Undo" onPress={() => undoChange($, change)} />
+          </Box>
+        ))}
+        <Text dimColor>{canStop(snapshot) ? 'Applied before the next task starts.' : 'Applied when the loop runs next.'}</Text>
+      </Box>
+    )
+
     const stale = snapshot.stale && (
       <Box flexDirection="column" borderStyle="round" borderColor="warning" paddingX={1}>
         <Text color="warning" bold>
           ⚠ The loop driver is not running
         </Text>
         <Text dimColor>
-          Its process has exited, so nothing is working on {runningIds || 'any item'}. Run loop.sh again to resume; attempt counts are kept.
+          Its process has exited, so nothing is working on {runningTasks || 'any task'}. Run loop.sh again to resume; attempt counts are kept.
         </Text>
         {resume !== null && <Text dimColor>{resume}</Text>}
         {resume !== null && (
@@ -482,100 +763,259 @@ export const register: Register = on => {
       </Box>
     )
 
-    const now = snapshot.runningRows.length > 0 && (
-      <Box flexDirection="column">
-        <Text bold>Now</Text>
-        {snapshot.runningRows.map(row => {
-          const lines = view.logs[row.item] ?? []
-          return (
-            <Box key={`now-${row.item}`} flexDirection="column" borderStyle="round" borderColor={snapshot.stale ? 'warning' : 'subtle'} paddingX={1}>
+    const openAreas = await read($, openAreasAtom)
+    const openTask = await read($, openTaskAtom)
+    const showTechnical = await read($, technicalAtom)
+    const draft = await read($, editDraftAtom)
+    const reviewDraft = await read($, reviewDraftAtom)
+    const plainOf = new Map(snapshot.items.map(row => [row.id, row.plain]))
+    // At runtime every table hands out Image and Svg; only the terminal draws Image, and every other surface Svg.
+    const Image = e.surface === 'terminal' && 'Image' in elements ? elements.Image : undefined
+    const Svg = e.surface !== 'terminal' && 'Svg' in elements ? elements.Svg : undefined
+    const openRow = snapshot.items.find(row => openTask === `${view.path}\n${row.id}`)
+    const shots = await Promise.all(
+      (openRow?.screenshots ?? []).map(async shot => {
+        const path = `${view.path}/${shot}`
+        const source = Svg !== undefined || Image !== undefined ? await thumbnail($, path, Svg !== undefined ? 'jpeg' : 'png') : null
+        return { path, name: baseName(shot), source }
+      }),
+    )
+    const screenshots = (row: ItemRow) => {
+      const taskKey = `${view.path}\n${row.id}`
+      const reviewing = Input !== undefined && reviewDraft?.key === taskKey ? reviewDraft : null
+      const waiting = view.changes.some(change => change.reviewFor === row.id)
+      const sendReview = async () => {
+        if (reviewing === null) return
+        const note = typed(reviewing.note, TEXT_MAX)
+        if (note === '') {
+          $.ui.toast('Say what needs to change before sending it')
+          return
+        }
+        if (await sendChange($, view, { op: 'review', id: row.id, verdict: 'changes', note }, `Sent your notes on '${row.plain}'`)) {
+          await update($, reviewDraftAtom, () => null)
+        }
+      }
+      return (
+        <Box flexDirection="column">
+          {shots.map((shot, index) => (
+            <Box key={`shot-${row.id}-${index}`} flexDirection="column">
+              {Svg !== undefined && shot.source !== null && <Svg source={shot.source} alt={`Screenshot ${shot.name}`} />}
+              {Image !== undefined && shot.source !== null && <Image source={{ png: shot.source }} columns={40} rows={15} alt={`Screenshot ${shot.name}`} />}
               <Box flexDirection="row" gap={1}>
-                <Text bold color={snapshot.stale ? 'warning' : 'claude'}>
-                  {row.item}
-                </Text>
-                <Box flexGrow={1} flexShrink={1}>
-                  <Text wrap="truncate-end">{shortTitle(row.title)}</Text>
-                </Box>
-                <Text dimColor>
-                  {[row.worker > 0 ? `w${row.worker}` : '', formatDuration(row.seconds), row.attempt > 1 ? `attempt ${row.attempt}` : ''].filter(Boolean).join(' · ')}
-                </Text>
+                <Text dimColor>{shot.name}</Text>
+                <Button key={`open-${row.id}-${index}`} label="Open full size" onPress={() => openFile($, shot.path)} />
               </Box>
-              {lines.length > 0 && (
-                <Box flexDirection="row" flexWrap="wrap" gap={1}>
-                  {stepStrip(lines).map(step => (
-                    <Text
-                      key={`step-${row.item}-${step.name}`}
-                      color={step.state === 'now' ? 'claude' : step.state === 'done' ? 'success' : 'subtle'}
-                      bold={step.state === 'now'}
-                    >
-                      {step.state === 'done' ? '✓ ' : step.state === 'now' ? '› ' : ''}
-                      {step.name}
-                    </Text>
-                  ))}
-                </Box>
+            </Box>
+          ))}
+          {row.review === 'approved' ? (
+            <Text color="success">You approved these</Text>
+          ) : row.review === 'changes' ? (
+            <Text color="warning">You asked for changes</Text>
+          ) : waiting ? (
+            <Text dimColor>Your review is waiting for the loop</Text>
+          ) : reviewing !== null && Input !== undefined ? (
+            <Box flexDirection="column">
+              <Input
+                key={`review-note-${row.id}`}
+                label="What needs to change?"
+                rows={3}
+                value={reviewing.note}
+                onInput={(note: string) => update($, reviewDraftAtom, current => current && { ...current, note: editable(note) })}
+                onSubmit={(note: string) => update($, reviewDraftAtom, current => current && { ...current, note: editable(note) })}
+              />
+              <Box flexDirection="row" gap={1}>
+                <Button key={`review-send-${row.id}`} label="Send to the loop" onPress={sendReview} />
+                <Button key={`review-cancel-${row.id}`} label="Cancel" onPress={() => update($, reviewDraftAtom, () => null)} />
+              </Box>
+            </Box>
+          ) : (
+            <Box flexDirection="row" gap={1}>
+              <Button
+                key={`approve-${row.id}`}
+                label="Looks right"
+                onPress={() => sendChange($, view, { op: 'review', id: row.id, verdict: 'approved' }, `Approved the screenshots of '${row.plain}'`)}
+              />
+              {Input !== undefined && (
+                <Button key={`changes-${row.id}`} label="Needs changes" onPress={() => update($, reviewDraftAtom, () => ({ key: taskKey, note: '' }))} />
               )}
-              {lines.slice(-LOG_ROWS).map((entry, index) => (
-                <Box key={`log-${row.item}-${index}`} flexDirection="row" gap={1}>
-                  <Text dimColor>{entry.time}</Text>
-                  <Box width={6} flexShrink={0}>
-                    <Text color={KIND_COLOR[entry.kind] ?? 'subtle'}>{entry.kind}</Text>
-                  </Box>
-                  <Box flexGrow={1} flexShrink={1}>
-                    <Text wrap="truncate-end">{entry.text}</Text>
-                  </Box>
+            </Box>
+          )}
+        </Box>
+      )
+    }
+    const taskBox = (row: ItemRow) => {
+      const run = snapshot.runningRows.find(running => running.item === row.id)
+      const lines = (view.logs[row.id] ?? []).slice(-LOG_ROWS)
+      const taskKey = `${view.path}\n${row.id}`
+      const pending = row.state !== 'done' && row.state !== 'running'
+      const editing = pending && Input !== undefined && draft?.key === taskKey ? draft : null
+      const setDraft = (field: 'plain' | 'doneWhen') => (value: string) => update($, editDraftAtom, current => current && { ...current, [field]: editable(value) })
+      const saveEdit = async () => {
+        if (editing === null) return
+        const plain = typed(editing.plain, TEXT_MAX)
+        if (plain === '') {
+          $.ui.toast('Say what the task should do before saving')
+          return
+        }
+        if (await sendChange($, view, { op: 'edit', id: row.id, plain, done_when: typed(editing.doneWhen, TEXT_MAX) },`Saved your edit of '${row.plain}'`)) {
+          await update($, editDraftAtom, () => null)
+        }
+      }
+      return (
+        <Box key={`task-box-${row.id}`} flexDirection="column" borderStyle="round" borderColor="subtle" paddingX={1}>
+          {run !== undefined && (
+            <Text color="claude">
+              {row.phase ?? 'Working on it'} · running for {formatDuration(run.seconds)}
+            </Text>
+          )}
+          {editing === null && row.doneWhen !== '' && <Text>Done when: {row.doneWhen}</Text>}
+          {row.metrics.length > 0 && <Markdown key={`metrics-${row.id}`} text={metricsTable(row.metrics)} />}
+          {(row.dataset !== '' || row.command !== '') && (
+            <Text dimColor>{[row.dataset !== '' && `Dataset: ${row.dataset}`, row.command !== '' && `Command: ${row.command}`].filter(Boolean).join(' · ')}</Text>
+          )}
+          {row.metrics.filter(missed).map(metric => (
+            <Box key={`missed-${row.id}-${metric.name}`} flexDirection="column">
+              <Text color="warning">
+                ⚠ {metric.name} is {metric.value?.toFixed(2)}, below its target of {metric.target?.toFixed(2)}
+              </Text>
+              <Box flexDirection="row">
+                <Button
+                  key={`reach-${row.id}-${metric.name}`}
+                  label="Add a task to reach it"
+                  onPress={() =>
+                    sendChange(
+                      $,
+                      view,
+                      {
+                        op: 'add',
+                        plain: typed(`Raise ${metric.name} to at least ${metric.target}`, TEXT_MAX),
+                        kind: 'eval',
+                        area: typed(row.area, NAME_MAX),
+                        metrics: [{ name: typed(metric.name, NAME_MAX), target: metric.target }],
+                      },
+                      `Added 'Raise ${metric.name} to at least ${metric.target}'`,
+                    )
+                  }
+                />
+              </Box>
+            </Box>
+          ))}
+          {row.screenshots.length > 0 && screenshots(row)}
+          {editing !== null && Input !== undefined && (
+            <Box flexDirection="column">
+              <Input
+                key={`edit-plain-${row.id}`}
+                label="What it should do"
+                rows={2}
+                value={editing.plain}
+                onInput={setDraft('plain')}
+                onSubmit={setDraft('plain')}
+              />
+              <Input
+                key={`edit-done-${row.id}`}
+                label="Done when"
+                rows={2}
+                value={editing.doneWhen}
+                onInput={setDraft('doneWhen')}
+                onSubmit={setDraft('doneWhen')}
+              />
+              <Box flexDirection="row" gap={1}>
+                <Button key={`edit-save-${row.id}`} label="Save" onPress={saveEdit} />
+                <Button key={`edit-cancel-${row.id}`} label="Cancel" onPress={() => update($, editDraftAtom, () => null)} />
+              </Box>
+            </Box>
+          )}
+          {pending && editing === null && (
+            <Box flexDirection="row" gap={1}>
+              {Input !== undefined && (
+                <Button
+                  key={`edit-${row.id}`}
+                  label="Edit"
+                  onPress={() => update($, editDraftAtom, () => ({ key: taskKey, plain: row.plain, doneWhen: row.doneWhen }))}
+                />
+              )}
+              <Button key={`first-${row.id}`} label="Do it next" onPress={() => sendChange($, view, { op: 'first', id: row.id }, `'${row.plain}' runs next`)} />
+              <Button key={`skip-${row.id}`} label="Skip it" onPress={() => sendChange($, view, { op: 'skip', id: row.id }, `'${row.plain}' will be skipped`)} />
+            </Box>
+          )}
+          <Box flexDirection="row">
+            <Button
+              key={`tech-${row.id}`}
+              plain
+              dimColor
+              label={showTechnical ? 'Hide technical details' : 'Technical details'}
+              onPress={() => update($, technicalAtom, shown => !shown)}
+            />
+          </Box>
+          {showTechnical && <Text dimColor>Id: {row.id}</Text>}
+          {showTechnical && row.description !== '' && <Text dimColor>{row.description}</Text>}
+          {showTechnical && row.verify !== '' && <Text dimColor>Verify: {row.verify}</Text>}
+          {showTechnical &&
+            lines.map((entry, index) => (
+              <Text key={`log-${row.id}-${index}`} dimColor wrap="truncate-end">
+                {entry.time} {entry.kind} {entry.text}
+              </Text>
+            ))}
+        </Box>
+      )
+    }
+    const areaList = (
+      <Box flexDirection="column" gap={1}>
+        {loopAreas.map(area => {
+          const key = `${view.path}\n${area.name}`
+          const isOpen = Object.hasOwn(openAreas, key) ? openAreas[key] === true : area.items.some(row => row.state === 'running' || row.state === 'failing')
+          const status = areaStatus(area)
+          return (
+            <Box key={`area-box-${area.name}`} flexDirection="column" borderStyle="round" borderColor={isOpen ? 'text' : 'subtle'} paddingX={1}>
+              <Box flexDirection="row" justifyContent="space-between" gap={1}>
+                <Button
+                  key={`area-${area.name}`}
+                  plain
+                  label={`${isOpen ? '▾' : '▸'} ${area.name}`}
+                  onPress={() => update($, openAreasAtom, open => ({ ...open, [key]: !isOpen }))}
+                />
+                <Box flexDirection="row" gap={2} flexShrink={0}>
+                  <Text>
+                    {progressBar(area.done, area.total, 12)} {area.done}/{area.total}
+                  </Text>
+                  <Text color={status.color}>{status.text}</Text>
                 </Box>
-              ))}
-              {lines.length === 0 && <Text dimColor>No session log yet; it appears once this loop runs on the latest bussin-autoloop.</Text>}
+              </Box>
+              {isOpen &&
+                [...area.items]
+                  .sort((a, b) => TASK_ORDER[a.state] - TASK_ORDER[b.state])
+                  .map(row => {
+                    const taskKey = `${view.path}\n${row.id}`
+                    return (
+                      <Box key={`task-row-${row.id}`} flexDirection="column">
+                        <Box flexDirection="row" gap={1}>
+                          <Box flexGrow={1} flexShrink={1}>
+                            <Button
+                              key={`task-${row.id}`}
+                              plain
+                              label={row.plain}
+                              onPress={async () => {
+                                await update($, technicalAtom, () => false)
+                                await update($, editDraftAtom, () => null)
+                                await update($, reviewDraftAtom, () => null)
+                                await update($, openTaskAtom, open => (open === taskKey ? null : taskKey))
+                              }}
+                            >
+                              <Text color={TASK_MARK[row.state].color}>{TASK_MARK[row.state].icon}</Text>{' '}
+                              <Text dimColor={row.state === 'done'}>{row.plain}</Text>
+                            </Button>
+                          </Box>
+                          <Box flexShrink={0}>
+                            <Text color={row.state === 'running' ? 'claude' : 'subtle'}>{taskNote(row, plainOf)}</Text>
+                          </Box>
+                        </Box>
+                        {openTask === taskKey && taskBox(row)}
+                      </Box>
+                    )
+                  })}
             </Box>
           )
         })}
-      </Box>
-    )
-
-    const next = (nextShown.length > 0 || snapshot.blockedGroups.length > 0) && (
-      <Box flexDirection="column">
-        {nextShown.map((row, index) => line(`next-${row.id}`, index === 0 ? 'Up next' : '', row.id, shortTitle(row.title), row.note, STATE_COLOR[row.state]))}
-        {open.length > nextShown.length && (
-          <Box key="next-more" flexDirection="row">
-            {label('')}
-            <Text dimColor>… {open.length - nextShown.length} more ready</Text>
-          </Box>
-        )}
-        {snapshot.blockedGroups.map((group, index) => (
-          <Box key={`blocked-${group.waitingFor}`} flexDirection="row">
-            {label(index === 0 && nextShown.length === 0 ? 'Up next' : '')}
-            <Box flexGrow={1} flexShrink={1}>
-              <Text dimColor wrap="truncate-end">
-                {group.items.length} wait for {group.waitingFor}: {group.items.slice(0, 6).join(' ')}
-                {group.items.length > 6 ? ' …' : ''}
-              </Text>
-            </Box>
-          </Box>
-        ))}
-      </Box>
-    )
-
-    const recent = snapshot.recent.length > 0 && (
-      <Box flexDirection="column">
-        {snapshot.recent.map((session, index) => (
-          <Box key={`recent-${index}`} flexDirection="row">
-            {label(index === 0 ? 'Recent' : '')}
-            <Box width={2}>
-              <Text color={session.ok === true ? 'success' : session.ok === false ? 'error' : 'subtle'}>{session.ok === true ? '✓' : session.ok === false ? '✗' : '·'}</Text>
-            </Box>
-            <Box flexGrow={1} flexShrink={1}>
-              <Text wrap="truncate-end">
-                {session.item} {session.outcome}
-              </Text>
-            </Box>
-            <Text dimColor>
-              {' '}
-              {[session.seconds > 0 ? formatDuration(session.seconds) : '', session.costUsd === null ? '' : formatCost(session.costUsd), session.endedAt === null ? '' : formatClock(session.endedAt)]
-                .filter(Boolean)
-                .join(' · ')}
-            </Text>
-          </Box>
-        ))}
       </Box>
     )
 
@@ -611,10 +1051,10 @@ export const register: Register = on => {
           {cards}
           <Box flexDirection="column" flexGrow={1} flexShrink={1} gap={1}>
             {header}
+            {yourChanges}
+            {addForm}
             {stale}
-            {now}
-            {next}
-            {recent}
+            {areaList}
             {spend}
           </Box>
         </Box>

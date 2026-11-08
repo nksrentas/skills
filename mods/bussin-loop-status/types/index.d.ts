@@ -1,12 +1,29 @@
 export type ItemState = 'done' | 'running' | 'waiting' | 'failing' | 'ready'
 
-export type ItemRow = { id: string; title: string; state: ItemState; note: string; waitingFor?: string[] }
+export type Metric = { name: string; value: number | null; target: number | null }
 
-export type BlockedGroup = { waitingFor: string; items: string[] }
+export type ItemRow = {
+  id: string
+  state: ItemState
+  waitingFor?: string[]
+  area: string
+  plain: string
+  doneWhen: string
+  kind: 'build' | 'eval' | 'design'
+  description: string
+  verify: string
+  metrics: Metric[]
+  dataset: string
+  command: string
+  screenshots: string[]
+  review: 'approved' | 'changes' | null
+  finishedAt: number | null
+  phase: string | null
+}
 
-export type SessionRow = { item: string; outcome: string; ok: boolean | null; seconds: number; costUsd: number | null; endedAt: number | null }
+export type Area = { name: string; done: number; total: number; items: ItemRow[] }
 
-export type RunningRow = { item: string; title: string; worker: number; seconds: number; attempt: number }
+export type RunningRow = { item: string; worker: number; seconds: number; attempt: number }
 
 export type ModelRow = { name: string; costUsd: number; priced: boolean; inputTokens: number; outputTokens: number }
 
@@ -37,17 +54,21 @@ export type LoopSnapshot = {
   models: ModelRow[]
   runningRows: RunningRow[]
   items: ItemRow[]
-  blockedGroups: BlockedGroup[]
-  recent: SessionRow[]
   machine: { sessions: number; inUse: number } | null
 }
 
 export type LogLine = { time: string; step: string; kind: string; text: string }
 
-export type LoopView = { name: string; label: string; task: string; path: string; snapshot: LoopSnapshot; logs: Record<string, LogLine[]> }
+// A change file waiting in .loop/inbox, as one plain line; reviewFor is the item a review change answers.
+export type InboxChange = { name: string; path: string; line: string; reviewFor: string | null }
+
+export type LoopView = { name: string; label: string; task: string; path: string; snapshot: LoopSnapshot; logs: Record<string, LogLine[]>; changes: InboxChange[] }
+
+// The '+ Add a task' form of the loop at `path`, as typed so far.
+export type AddDraft = { path: string; plain: string; doneWhen: string; area: string; kind: 'build' | 'eval' | 'design'; first: boolean; metrics: string }
 
 declare module 'claude-code' {
   interface PluginState {
-    'bussin-loop-status': { loops: LoopView[]; selected: string | null; renaming: string | null; showTokens: boolean }
+    'bussin-loop-status': { loops: LoopView[]; selected: string | null; renaming: string | null; showTokens: boolean; openAreas: Record<string, boolean>; openTask: string | null; technical: boolean; editDraft: { key: string; plain: string; doneWhen: string } | null; addDraft: AddDraft | null; reviewDraft: { key: string; note: string } | null }
   }
 }

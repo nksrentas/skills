@@ -2,8 +2,8 @@ import type { On } from 'claude-code'
 import { expect, test } from 'claude-code/testing'
 
 import { PANE } from './register'
-import { commonDirFromGitFile, compactLine, compute, distinctLabels, isDriverCommand, loopLabel, resumeCommand, formatDuration, formatTokens, shortModel, shortName, shortTitle, statusLine } from './snapshot'
-import { currentStep, parseLog, stepStrip } from './session-log'
+import { areas, commonDirFromGitFile, compactLine, compute, distinctLabels, isDriverCommand, loopLabel, phaseOf, resumeCommand, formatDuration, formatTokens, shortModel, shortName, shortTitle, statusLine } from './snapshot'
+import { currentStep, parseLog } from './session-log'
 
 const NOW = 4000
 
@@ -66,7 +66,6 @@ test('sums tokens and cost and breaks them down by model', async () => {
   expect(snapshot?.outputTokens).toBe(250)
   expect(snapshot?.cacheReadTokens).toBe(5000)
   expect(snapshot?.models.map(model => model.name)).toEqual(['claude-opus-5-5', 'claude-haiku-4-5'])
-  expect(snapshot?.recent.map(row => `${row.item}:${row.outcome}:${row.ok}:${row.seconds}:${row.costUsd}`)).toEqual(['R1:failed:false:300:0.5', 'F1:merged:true:600:1.5'])
 })
 
 test('has no estimate before the first item passes, and none once finished', async () => {
@@ -95,9 +94,8 @@ test('strips terminal control characters from everything read out of the repo', 
   expect(/[\u0000-\u001f\u007f-\u009f]/.test(shown.replace(/\\u00[0-9a-f]{2}/g, ''))).toBe(false)
   expect(shown).not.toContain('\\u001b')
   expect(snapshot?.items[0]?.id).toBe('F[2J1')
-  expect(snapshot?.items[0]?.note).toBe('waiting for X')
+  expect(snapshot?.items[0]?.waitingFor).toEqual(['X'])
   expect(snapshot?.models[0]?.name).toBe('evil[31m')
-  expect(snapshot?.recent[0]?.item).toBe('F1')
 })
 
 test('ignores numbers that are not numbers in the loop files', async () => {
@@ -127,13 +125,7 @@ test('sessions whose agent reports no cost show tokens and time and mark cost un
   expect(snapshot?.costUsd).toBe(0)
   expect(snapshot?.outputTokens).toBe(3000)
   expect(snapshot?.elapsedSec).toBe(1500)
-  expect(snapshot?.items[0]?.note).toBe('cost unknown · 14m')
   expect(snapshot && statusLine(snapshot)).toBe('autoloop 2/3 done · not running')
-})
-
-test('a done item with no recorded sessions just says done', async () => {
-  const features = JSON.stringify({ features: [{ id: 'A', description: 'Old work', passes: true }] })
-  expect(compute({ features, now: NOW })?.items[0]?.note).toBe('done')
 })
 
 test('formats durations, tokens and the status line', async () => {
@@ -201,17 +193,16 @@ test('/autoloop-status reads the loop files, sets the status line and fills the 
     expect(await ui.find({ type: 'Text', text: /^ETA ~22m \(around \d\d:\d\d\) · elapsed 50m · \$2\.00 so far$/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /^\$2\.00 · 2 priced sessions · \$1\.00 each · opus-5-5 \$1\.50 · haiku-4-5 \$0\.50$/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /^out 250/ })).toBeUndefined()
-    expect(await ui.find({ type: 'Text', text: /^Now$/ })).toBeDefined()
+    expect(await ui.find({ key: 'area-Other', text: '▾ Other' })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^[█░]{12} 1\/4$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^◆ building 1$/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /^CSV download$/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /w1 · 5m/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^Reading the plan$/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /^Filters unchanged$/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /1 attempt · \$0\.50 · 5m/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /^1 wait for F2: E1$/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /^No session log yet/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /^Recent$/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /^R1 failed$/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /^F1 merged$/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /10m · \$1\.50 · \d\d:\d\d/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^trying again$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^after CSV download$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^Export button$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^\d\d:\d\d$/ })).toBeDefined()
     expect(await ui.findAll({ type: 'Text', text: /^CSV download$/ })).toHaveLength(1)
     await ui.press({ key: 'show-tokens' })
     expect(await ui.find({ type: 'Text', text: /^out 250 · in 1\.4k · cache read 5\.0k · cache write 100$/ })).toBeDefined()
@@ -388,7 +379,7 @@ test('the band above the prompt shows every running loop, and Details opens it i
   expect(statuses.at(-1)).toBeUndefined()
   for (const surface of ['terminal', 'desktop'] as const) {
     const band = await $.ui.mount({ ...BAND_TARGET, surface })
-    expect(await band.find({ type: 'Text', text: /^● wt-a [█░]{10} 1\/4 · F2 · ETA 22m · \$2\.00$/ })).toBeDefined()
+    expect(await band.find({ type: 'Text', text: /^● wt-a [█░]{10} 1\/4 · CSV download · Reading the plan · ETA 22m · \$2\.00$/ })).toBeDefined()
     expect(await band.find({ type: 'Text', text: /^● wt-c [█░]{10} 1\/4/ })).toBeDefined()
     expect(await band.find({ type: 'Text', text: /repo/ })).toBeUndefined()
     await band.press({ key: 'details-wt-c' })
@@ -492,7 +483,7 @@ test('Stop in the band and in the pane writes the stop file, and the loop then s
   await band.press({ key: 'stop-wt-a' })
   expect(written).toEqual(['/elsewhere/wt-a/.loop/stop'])
   expect(toasts).toEqual(['wt-a stops after its running items finish'])
-  expect(await band.find({ type: 'Text', text: /^◌ wt-a stopping [█░]{10} 1\/4 · F2 · \$2\.00$/ })).toBeDefined()
+  expect(await band.find({ type: 'Text', text: /^◌ wt-a stopping [█░]{10} 1\/4 · CSV download · Reading the plan · \$2\.00$/ })).toBeDefined()
   expect(await band.find({ key: 'stop-wt-a' })).toBeUndefined()
   expect(await band.find({ key: 'stop-wt-c' })).toBeDefined()
   await band.press({ key: 'details-wt-c' })
@@ -564,8 +555,7 @@ test('a running loop whose driver process is gone shows a warning, no Stop, and 
     expect(await pane.find({ type: 'Text', text: /^⚠ project$/ })).toBeDefined()
     expect(await pane.find({ type: 'Text', text: /^driver not running · parallel × 2 · codex$/ })).toBeDefined()
     expect(await pane.find({ type: 'Text', text: /The loop driver is not running/ })).toBeDefined()
-    expect(await pane.find({ type: 'Text', text: /nothing is working on F2/ })).toBeDefined()
-    expect(await pane.find({ type: 'Text', text: /^w1 · 5m · attempt 3$/ })).toBeDefined()
+    expect(await pane.find({ type: 'Text', text: /nothing is working on CSV download\./ })).toBeDefined()
     expect(await pane.find({ type: 'Text', text: /ETA/ })).toBeUndefined()
     expect(await pane.find({ key: 'pane-stop' })).toBeUndefined()
     await pane.unmount()
@@ -577,7 +567,7 @@ test('a running loop whose driver process is gone shows a warning, no Stop, and 
   expect(toasts).toEqual(['Resume command copied'])
   await pane.unmount()
   const band = await $.ui.mount({ ...BAND_TARGET, surface: 'terminal' })
-  expect(await band.find({ type: 'Text', text: /^⚠ project driver not running [█░]{10} 1\/4 · F2 · \$2\.00$/ })).toBeDefined()
+  expect(await band.find({ type: 'Text', text: /^⚠ project driver not running [█░]{10} 1\/4 · CSV download · Reading the plan · \$2\.00$/ })).toBeDefined()
   expect(await band.find({ key: 'stop-project' })).toBeUndefined()
   await band.unmount()
 })
@@ -592,22 +582,11 @@ test('a loop whose driver process is alive stays running', async ($, on) => {
   await pane.unmount()
 })
 
-test('a reused pid that is not loop.sh counts as gone, and blocked items group by what they wait for', async () => {
+test('a reused pid that is not loop.sh counts as gone', async () => {
   expect(isDriverCommand('bash /skills/bussin-autoloop/scripts/loop.sh')).toBe(true)
   expect(isDriverCommand('bash loop.sh')).toBe(true)
   expect(isDriverCommand('/usr/bin/vim notes.txt')).toBe(false)
   expect(isDriverCommand('bash myloop.sh')).toBe(false)
-  const features = JSON.stringify({
-    features: [
-      { id: 'R0', passes: false },
-      ...['A', 'B', 'C'].map(id => ({ id, passes: false, depends_on: ['R0'] })),
-      { id: 'D', passes: false, depends_on: ['A', 'R0'] },
-    ],
-  })
-  expect(compute({ features, now: NOW })?.blockedGroups).toEqual([
-    { waitingFor: 'R0', items: ['A', 'B', 'C'] },
-    { waitingFor: 'A, R0', items: ['D'] },
-  ])
 })
 
 test('the resume command only runs a bussin-autoloop loop.sh outside the project, with a known agent', async () => {
@@ -662,14 +641,12 @@ test('a running row without a start time counts from now', () => {
 
 const LOG = ['10:00:01\t-\tRead\tsrc/export.ts', '10:00:02\timplement\tEdit\tsrc/export.ts', '10:00:03\tgate\tBash\tbash .loop/verify.sh', '10:00:04\t-\tSay\tgate \u001b[31mis running'].join('\n')
 
-test('a session log becomes lines, a current step and a step strip', () => {
+test('a session log becomes lines and a current step', () => {
   const lines = parseLog(LOG)
   expect(lines).toHaveLength(4)
   expect(lines[3]).toEqual({ time: '10:00:04', step: '-', kind: 'Say', text: 'gate [31mis running' })
   expect(currentStep(lines)).toBe('gate')
-  expect(stepStrip(lines).map(step => `${step.name}:${step.state}`).join(' ')).toBe('Orient:done Implement:done Gate:now Review:todo Browser:todo Commit:todo')
   expect(currentStep([])).toBe('orient')
-  expect(stepStrip([]).find(step => step.state === 'now')?.name).toBe('Orient')
   expect(parseLog(Array.from({ length: 60 }, (_, i) => `t${i}\t-\tBash\tx`).join('\n'))).toHaveLength(40)
 })
 
@@ -687,13 +664,14 @@ test('a queued loop waits for a free session on this Mac', () => {
   expect(snapshot && compactLine('wt-a', snapshot)).toBe('◌ wt-a 1/4 queued · $2.00')
 })
 
-function answerLogged(on: On, files: Record<string, string>, reads: string[], written: Record<string, string>) {
+function answerLogged(on: On, files: Record<string, string>, reads: string[], written: Record<string, string>, toasts: string[] = []) {
   on('session.root', async () => ({ value: '/project' }))
   on('clock.now', async () => ({ value: NOW * 1000 }))
   on('fs.read', async (_, e) => {
     reads.push(e.path)
     const text = files[e.path]
-    return text === undefined ? { deny: `ENOENT: ${e.path}` } : { value: text }
+    if (text === undefined) return { deny: `ENOENT: ${e.path}` }
+    return { value: e.as === 'bytes' ? { base64: text } : text }
   })
   on('fs.write', async (_, e) => {
     written[e.path] = e.text
@@ -706,10 +684,13 @@ function answerLogged(on: On, files: Record<string, string>, reads: string[], wr
   })
   on('ui.status', async () => ({ value: undefined }))
   on('ui.open', async () => ({ value: { isPlaced: true } }))
-  on('ui.toast', async () => ({ value: undefined }))
+  on('ui.toast', async (_, e) => {
+    toasts.push(e.text)
+    return { value: undefined }
+  })
 }
 
-test('the pane shows each running item with its step strip and live log, the band its step, and this Mac', async ($, on) => {
+test('the pane shows each running task with its phase from the session log, the band its plain title and phase, and this Mac', async ($, on) => {
   const live = JSON.stringify({ ...JSON.parse(LIVE), machine: { sessions: 5, in_use: 3 } })
   const files: Record<string, string> = {
     ...LOOP_FILES,
@@ -723,15 +704,13 @@ test('the pane shows each running item with its step strip and live log, the ban
     const pane = await $.ui.mount({ ...PANE_TARGET, surface })
     expect(await pane.find({ type: 'Text', text: /^● Export invoices to CSV$/ })).toBeDefined()
     expect(await pane.find({ type: 'Text', text: /^Export invoices to CSV\. Paid ones only\.$/ })).toBeDefined()
-    expect(await pane.find({ type: 'Text', text: /^✓ Implement$/ })).toBeDefined()
-    expect(await pane.find({ type: 'Text', text: /^› Gate$/ })).toBeDefined()
-    expect(await pane.find({ type: 'Text', text: /^bash \.loop\/verify\.sh$/ })).toBeDefined()
-    expect(await pane.find({ type: 'Text', text: /^gate \[31mis running$/ })).toBeDefined()
+    expect(await pane.find({ type: 'Text', text: /^Running the tests$/ })).toBeDefined()
+    expect(await pane.find({ type: 'Text', text: /verify\.sh|is running/ })).toBeUndefined()
     expect(await pane.find({ type: 'Text', text: /^This Mac: 3 of 5 loop sessions in use · room for 2 more$/ })).toBeDefined()
     await pane.unmount()
   }
   const band = await $.ui.mount({ ...BAND_TARGET, surface: 'terminal' })
-  expect(await band.find({ type: 'Text', text: /^● Export invoices to CSV [█░]{10} 1\/4 · F2 gate · ETA 22m · \$2\.00$/ })).toBeDefined()
+  expect(await band.find({ type: 'Text', text: /^● Export invoices to CSV [█░]{10} 1\/4 · CSV download · Running the tests · ETA 22m · \$2\.00$/ })).toBeDefined()
   await band.unmount()
 })
 
@@ -788,6 +767,573 @@ test('a large session log is read through tail, not whole', async ($, on) => {
   expect(reads).not.toContain('/project/.loop/logs/F2.log')
   expect(runs).toContainEqual(['tail', '-n', '40', '/project/.loop/logs/F2.log'])
   const pane = await $.ui.mount({ ...PANE_TARGET, surface: 'terminal' })
-  expect(await pane.find({ type: 'Text', text: /^› Commit$/ })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: /^Saving the work$/ })).toBeDefined()
   await pane.unmount()
+})
+
+const STEERABLE = JSON.stringify({
+  features: [
+    {
+      id: 'F1', category: 'functional', area: 'Search', plain: 'Search finds products by name', done_when: 'Typing a name lists matches.',
+      kind: 'eval', description: 'Search: index products', verify: 'Run the eval', passes: true, review: 'approved',
+      metrics: [{ name: 'precision@5', target: 0.75 }, { name: 'recall@10' }],
+      evidence: { commit: 'abc', metrics: { 'precision@5': 0.8, mrr: 0.5, '  ': 1 }, screenshots: ['.loop/evidence/F1/1-home.png', '.loop/evidence/F1/../F2/x.png', '.loop/evidence/F2/1-home.png', '/etc/passwd', 7] },
+    },
+    { id: 'F2', category: 'functional', area: 'Checkout', plain: 'Pay by card', done_when: 'A test card pays.', kind: 'design', passes: false, review: 'changes' },
+    { id: 'F3', category: 'edge', area: 'Search', plain: 'Empty search says so', done_when: 'An empty query shows a hint.', kind: 'odd', passes: false },
+  ],
+})
+
+test('each task carries its area, plain sentence, done-when line, kind, metrics, screenshots, review and finish time', () => {
+  const usage = [
+    { item: 'F1', outcome: 'failed', started_at: 1000, ended_at: 1200 },
+    { item: 'F1', outcome: 'merged', started_at: 1300, ended_at: 1500 },
+  ].map(row => JSON.stringify(row)).join('\n')
+  const live = JSON.stringify({ state: 'running', started_at: 1000, updated_at: 3990, running: [{ item: 'F2', worker: 0, started_at: 3700 }] })
+  const snapshot = compute({ features: STEERABLE, usage, live, now: NOW })
+  const [search, pay, empty] = snapshot?.items ?? []
+  expect(search).toMatchObject({
+    area: 'Search', plain: 'Search finds products by name', doneWhen: 'Typing a name lists matches.', kind: 'eval',
+    description: 'Search: index products', verify: 'Run the eval', review: 'approved', finishedAt: 1500, phase: null,
+    screenshots: ['.loop/evidence/F1/1-home.png'],
+  })
+  expect(search?.metrics).toEqual([
+    { name: 'precision@5', value: 0.8, target: 0.75 },
+    { name: 'recall@10', value: null, target: null },
+    { name: 'mrr', value: 0.5, target: null },
+  ])
+  expect(pay).toMatchObject({ kind: 'design', review: 'changes', phase: 'Reading the plan', finishedAt: null, metrics: [], screenshots: [] })
+  expect(empty).toMatchObject({ kind: 'build', review: null, phase: null })
+})
+
+test('every session step has a plain phase, and anything else reads the plan', () => {
+  expect(['orient', 'implement', 'gate', 'review', 'browser', 'commit', 'constructor', '-'].map(phaseOf)).toEqual([
+    'Reading the plan', 'Writing the code', 'Running the tests', 'Reviewing its own work', 'Checking it in a browser', 'Saving the work',
+    'Reading the plan', 'Reading the plan',
+  ])
+})
+
+test('tasks from older loops fall back to their category, description and verify steps', () => {
+  const features = JSON.stringify({
+    features: [
+      { id: 'A', category: 'functional', description: 'CSV export: download paid invoices as CSV', verify: 'Click export', passes: true },
+      { id: 'B', category: 'edge', description: 'Empty export', passes: false },
+      { id: 'C', category: 'regression', description: 'Filters unchanged', passes: false },
+      { id: 'D', description: 'No category', passes: false, evidence: { metrics: 'x', screenshots: 'y' } },
+    ],
+  })
+  const items = compute({ features, now: NOW })?.items ?? []
+  expect(items.map(row => row.area)).toEqual(['Features', 'Edge cases', 'Safety checks', 'Other'])
+  expect(items[0]).toMatchObject({ plain: 'CSV export', doneWhen: 'Click export', kind: 'build', review: null, finishedAt: null, metrics: [], screenshots: [] })
+  expect(items[3]).toMatchObject({ plain: 'No category', doneWhen: '', metrics: [], screenshots: [] })
+})
+
+test('the new task fields are stripped of control characters', () => {
+  const features = JSON.stringify({ features: [{ id: 'A', area: 'Se\u001b[2Jarch', plain: 'P\u0007lain', done_when: 'D\u001bone', metrics: [{ name: 'm\u001b1', target: 1 }], passes: false }] })
+  const shown = JSON.stringify(compute({ features, now: NOW })?.items[0])
+  expect(shown).not.toContain('\\u001b')
+  expect(shown).not.toContain('\\u0007')
+})
+
+test('areas keep first-seen order with done and total counts', () => {
+  const groups = areas(compute({ features: STEERABLE, now: NOW })?.items ?? [])
+  expect(groups.map(group => `${group.name} ${group.done}/${group.total} ${group.items.map(row => row.id).join(',')}`)).toEqual(['Search 1/2 F1,F3', 'Checkout 0/1 F2'])
+})
+
+const AREA_FEATURES = JSON.stringify({
+  features: [
+    { id: 'A1', area: 'Search', plain: 'Search finds products by name', passes: true },
+    { id: 'A2', area: 'Search', plain: 'Empty search says so', passes: false, depends_on: ['A3'] },
+    { id: 'A4', area: 'Checkout', plain: 'Refunds work', passes: false },
+    { id: 'A3', area: 'Checkout', plain: 'Pay by card', passes: false },
+    { id: 'A5', area: 'Account', plain: 'Change your password', passes: false },
+    { id: 'A6', area: 'Docs', plain: 'Readme explains it', passes: true },
+  ],
+})
+
+test('the pane lists areas with counts and status, opens and closes them, and never shows an item id', async ($, on) => {
+  const files: Record<string, string> = {
+    '/project/.loop/feature_list.json': AREA_FEATURES,
+    '/project/.loop/usage.jsonl': JSON.stringify({ item: 'A5', outcome: 'failed', started_at: 1000, ended_at: 1200 }),
+    '/project/.loop/live.json': JSON.stringify({ state: 'running', started_at: 1000, updated_at: 3990, running: [{ item: 'A3', worker: 0, started_at: 3700 }] }),
+  }
+  answerLogged(on, files, [], {})
+  await $.command.run(RUN_COMMAND)
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const pane = await $.ui.mount({ ...PANE_TARGET, surface })
+    expect((await pane.findAll({ type: 'Button', text: /^[▾▸] / })).map(button => button.text)).toEqual(['▸ Search', '▾ Checkout', '▾ Account', '▸ Docs'])
+    expect((await pane.findAll({ type: 'Text', text: /^[█░]{12} \d\/\d$/ })).map(text => text.text.slice(13))).toEqual(['1/2', '0/2', '0/1', '1/1'])
+    for (const status of ['waiting its turn', '◆ building 1', '1 needs a look', '✓ all work']) expect(await pane.find({ type: 'Text', text: status })).toBeDefined()
+    expect((await pane.findAll({ type: 'Text', text: /^(Pay by card|Refunds work|Change your password)$/ })).map(text => text.text)).toEqual(['Pay by card', 'Refunds work', 'Change your password'])
+    expect(await pane.find({ type: 'Text', text: /^not started$/ })).toBeDefined()
+    expect(await pane.find({ type: 'Text', text: /^Empty search says so$/ })).toBeUndefined()
+    await pane.press({ key: 'area-Search' })
+    expect(await pane.find({ key: 'area-Search', text: '▾ Search' })).toBeDefined()
+    expect((await pane.findAll({ type: 'Text', text: /^(Empty search says so|Search finds products by name)$/ })).map(text => text.text)).toEqual(['Empty search says so', 'Search finds products by name'])
+    expect(await pane.find({ type: 'Text', text: /^after Pay by card$/ })).toBeDefined()
+    await pane.press({ key: 'area-Checkout' })
+    expect(await pane.find({ type: 'Text', text: /^Pay by card$/ })).toBeUndefined()
+    const shown = [...(await pane.findAll({ type: 'Text' })), ...(await pane.findAll({ type: 'Button' }))].map(element => element.text)
+    expect(shown.filter(text => /\bA[1-6]\b/.test(text))).toEqual([])
+    expect(shown.filter(text => /^(Now|Up next|Recent)$/.test(text))).toEqual([])
+    await pane.press({ key: 'area-Search' })
+    await pane.press({ key: 'area-Checkout' })
+    await pane.unmount()
+  }
+})
+
+test('the pane shows a loop from before areas with areas from its categories and plain titles from its descriptions', async ($, on) => {
+  const files: Record<string, string> = {
+    '/project/.loop/feature_list.json': JSON.stringify({
+      features: [
+        { id: 'A', category: 'functional', description: 'CSV export: download paid invoices as CSV', passes: true },
+        { id: 'B', category: 'edge', description: 'Empty export', passes: false },
+        { id: 'C', description: 'Filters unchanged', passes: false },
+      ],
+    }),
+  }
+  answerLogged(on, files, [], {})
+  await $.command.run(RUN_COMMAND)
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const pane = await $.ui.mount({ ...PANE_TARGET, surface })
+    expect((await pane.findAll({ type: 'Button', text: /^[▾▸] / })).map(button => button.text)).toEqual(['▸ Features', '▸ Edge cases', '▸ Other'])
+    for (const area of ['Features', 'Edge cases', 'Other']) await pane.press({ key: `area-${area}` })
+    expect((await pane.findAll({ type: 'Text', text: /^(CSV export|Empty export|Filters unchanged)$/ })).map(text => text.text)).toEqual(['CSV export', 'Empty export', 'Filters unchanged'])
+    for (const area of ['Features', 'Edge cases', 'Other']) await pane.press({ key: `area-${area}` })
+    await pane.unmount()
+  }
+})
+
+const OPEN_FEATURES = JSON.stringify({
+  features: [
+    { id: 'A1', area: 'Search', plain: 'Search finds products by name', done_when: 'Typing a name lists matches.', description: 'Search index over product names', verify: 'Type mug, see two rows', passes: false },
+    { id: 'A2', area: 'Search', plain: 'Empty search says so', done_when: 'An empty query shows a hint.', description: 'Empty query hint', verify: 'Clear the box', passes: false },
+  ],
+})
+
+test('pressing a task opens it in place with its done-when line, technical details on request, and one open at a time', async ($, on) => {
+  const log = Array.from({ length: 8 }, (_, i) => `10:00:0${i}\t${i < 7 ? 'implement' : 'gate'}\tBash\tstep ${i}`).join('\n')
+  const files: Record<string, string> = {
+    '/project/.loop/feature_list.json': OPEN_FEATURES,
+    '/project/.loop/live.json': JSON.stringify({ state: 'running', started_at: 1000, updated_at: 3990, running: [{ item: 'A1', worker: 1, started_at: 3700 }] }),
+    '/project/.loop/logs/A1.log': log,
+  }
+  answerLogged(on, files, [], {})
+  await $.command.run(RUN_COMMAND)
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const pane = await $.ui.mount({ ...PANE_TARGET, surface })
+    expect(await pane.find({ type: 'Text', text: /^Done when/ })).toBeUndefined()
+    await pane.press({ key: 'task-A2' })
+    expect(await pane.find({ type: 'Text', text: /^Done when: An empty query shows a hint\.$/ })).toBeDefined()
+    const shown = [...(await pane.findAll({ type: 'Text' })), ...(await pane.findAll({ type: 'Button' }))].map(element => element.text)
+    expect(shown.filter(text => /\bA[12]\b/.test(text))).toEqual([])
+    await pane.press({ key: 'tech-A2' })
+    for (const text of [/^Id: A2$/, /^Empty query hint$/, /^Verify: Clear the box$/]) expect(await pane.find({ type: 'Text', text })).toBeDefined()
+    await pane.press({ key: 'tech-A2' })
+    expect(await pane.find({ type: 'Text', text: /^Id: A2$/ })).toBeUndefined()
+    await pane.press({ key: 'tech-A2' })
+    await pane.press({ key: 'task-A1' })
+    expect(await pane.find({ type: 'Text', text: /^Done when: An empty query shows a hint\.$/ })).toBeUndefined()
+    expect(await pane.find({ type: 'Text', text: /^Id: A2$/ })).toBeUndefined()
+    expect(await pane.find({ type: 'Text', text: /^Done when: Typing a name lists matches\.$/ })).toBeDefined()
+    expect(await pane.find({ type: 'Text', text: /^Running the tests · running for 5m$/ })).toBeDefined()
+    expect(await pane.find({ type: 'Text', text: /step [0-7]/ })).toBeUndefined()
+    await pane.press({ key: 'tech-A1' })
+    expect(await pane.find({ type: 'Text', text: /^Id: A1$/ })).toBeDefined()
+    expect((await pane.findAll({ type: 'Text', text: /step \d$/ })).map(text => text.text)).toEqual([2, 3, 4, 5, 6, 7].map(i => `10:00:0${i} Bash step ${i}`))
+    await pane.press({ key: 'task-A1' })
+    expect(await pane.find({ type: 'Text', text: /^Done when/ })).toBeUndefined()
+    await pane.press({ key: 'task-A1' })
+    expect(await pane.find({ type: 'Text', text: /^Id: A1$/ })).toBeUndefined()
+    await pane.press({ key: 'task-A1' })
+    await pane.unmount()
+  }
+})
+
+const STEER_FEATURES = JSON.stringify({
+  features: [
+    { id: 'A1', area: 'Search', plain: 'Search finds products by name', passes: false },
+    { id: 'A2', area: 'Search', plain: 'Empty search says so', done_when: 'An empty query shows a hint.', passes: false },
+    { id: 'A3', area: 'Search', plain: 'Search is fast', passes: true },
+  ],
+})
+const INBOX_FILE = /^\/project\/\.loop\/inbox\/4000000-[A-Za-z0-9]+\.json$/
+
+test('an eval task shows its metrics as a table with targets, and a missed target offers a task to reach it', async ($, on) => {
+  const files: Record<string, string> = {
+    '/project/.loop/feature_list.json': JSON.stringify({
+      features: [
+        {
+          id: 'Q1', area: 'Quality', plain: 'Measure search quality', kind: 'eval', passes: true,
+          metrics: [{ name: 'precision@5', target: 0.75 }, { name: 'recall@10', target: 0.6 }],
+          evidence: { commit: 'abc', metrics: { 'precision@5': 0.812, 'recall@10': 0.5, mrr: 0.4 }, dataset: 'queries-200.jsonl', command: 'npm run eval' },
+        },
+      ],
+    }),
+    '/project/.loop/live.json': JSON.stringify({ state: 'stopped', started_at: 1000, updated_at: 3990, running: [] }),
+  }
+  const written: Record<string, string> = {}
+  const toasts: string[] = []
+  answerLogged(on, files, [], written, toasts)
+  await $.command.run(RUN_COMMAND)
+  for (const surface of ['terminal', 'desktop'] as const) {
+    for (const path of Object.keys(written)) delete written[path]
+    toasts.length = 0
+    const pane = await $.ui.mount({ ...PANE_TARGET, surface })
+    await pane.press({ key: 'area-Quality' })
+    await pane.press({ key: 'task-Q1' })
+    expect((await pane.find({ key: 'metrics-Q1' }))?.text).toBe(
+      [
+        '| Metric | Value | Target | |',
+        '| --- | ---: | ---: | --- |',
+        '| precision@5 | 0.81 | 0.75 | ✓ met |',
+        '| recall@10 | 0.50 | 0.60 | ✗ below |',
+        '| mrr | 0.40 | — | — |',
+      ].join('\n'),
+    )
+    expect(await pane.find({ type: 'Text', text: /^Dataset: queries-200\.jsonl · Command: npm run eval$/ })).toBeDefined()
+    expect(await pane.find({ type: 'Text', text: /^⚠ recall@10 is 0\.50, below its target of 0\.60$/ })).toBeDefined()
+    expect(await pane.find({ key: 'reach-Q1-precision@5' })).toBeUndefined()
+    await pane.press({ key: 'reach-Q1-recall@10' })
+    const found = Object.entries(written).filter(([path]) => path.includes('/inbox/'))
+    expect(found.every(([path]) => INBOX_FILE.test(path))).toBe(true)
+    expect(found.map(([, text]) => JSON.parse(text))).toEqual([
+      { op: 'add', plain: 'Raise recall@10 to at least 0.6', kind: 'eval', area: 'Quality', metrics: [{ name: 'recall@10', target: 0.6 }] },
+    ])
+    expect(toasts).toEqual(["Added 'Raise recall@10 to at least 0.6'. Applied when the loop runs next."])
+    // Close what this mount opened, since the open task and areas outlive it.
+    await pane.press({ key: 'task-Q1' })
+    await pane.press({ key: 'area-Quality' })
+    await pane.unmount()
+  }
+})
+
+test('a task that has not started offers Edit, Do it next and Skip it, each writing one inbox change', async ($, on) => {
+  const files: Record<string, string> = {
+    '/project/.loop/feature_list.json': STEER_FEATURES,
+    '/project/.loop/live.json': JSON.stringify({ state: 'running', started_at: 1000, updated_at: 3990, running: [{ item: 'A1', worker: 1, started_at: 3700 }] }),
+  }
+  const written: Record<string, string> = {}
+  const toasts: string[] = []
+  answerLogged(on, files, [], written, toasts)
+  await $.command.run(RUN_COMMAND)
+  const changes = () => Object.entries(written).filter(([path]) => path.includes('/inbox/'))
+  for (const surface of ['terminal', 'desktop'] as const) {
+    for (const path of Object.keys(written)) delete written[path]
+    toasts.length = 0
+    const pane = await $.ui.mount({ ...PANE_TARGET, surface })
+    await pane.press({ key: 'task-A1' })
+    for (const key of ['edit-A1', 'first-A1', 'skip-A1']) expect(await pane.find({ key })).toBeUndefined()
+    await pane.press({ key: 'task-A3' })
+    for (const key of ['edit-A3', 'first-A3', 'skip-A3']) expect(await pane.find({ key })).toBeUndefined()
+    await pane.press({ key: 'task-A2' })
+    await pane.press({ key: 'first-A2' })
+    await pane.press({ key: 'skip-A2' })
+    await pane.press({ key: 'edit-A2' })
+    expect(await pane.find({ key: 'edit-plain-A2' })).toBeDefined()
+    await pane.input({ key: 'edit-plain-A2', text: '  An empty search explains what to type  ', kind: 'change' })
+    await pane.input({ key: 'edit-done-A2', text: 'A hint shows under the box.', kind: 'change' })
+    await pane.press({ key: 'edit-save-A2' })
+    expect(await pane.find({ key: 'edit-plain-A2' })).toBeUndefined()
+    const found = changes()
+    expect(found.every(([path]) => INBOX_FILE.test(path))).toBe(true)
+    expect(new Set(found.map(([path]) => path)).size).toBe(3)
+    expect(found.map(([, text]) => JSON.parse(text))).toEqual([
+      { op: 'first', id: 'A2' },
+      { op: 'skip', id: 'A2' },
+      { op: 'edit', id: 'A2', plain: 'An empty search explains what to type', done_when: 'A hint shows under the box.' },
+    ])
+    await pane.press({ key: 'edit-A2' })
+    await pane.input({ key: 'edit-plain-A2', text: '   ', kind: 'change' })
+    await pane.press({ key: 'edit-save-A2' })
+    expect(changes()).toHaveLength(3)
+    await pane.press({ key: 'edit-cancel-A2' })
+    expect(await pane.find({ key: 'edit-plain-A2' })).toBeUndefined()
+    expect(changes()).toHaveLength(3)
+    await pane.press({ key: 'edit-A2' })
+    await pane.press({ key: 'task-A2' })
+    await pane.press({ key: 'task-A2' })
+    expect(await pane.find({ key: 'edit-plain-A2' })).toBeUndefined()
+    expect(toasts).toEqual([
+      "'Empty search says so' runs next. Applied before the next task starts.",
+      "'Empty search says so' will be skipped. Applied before the next task starts.",
+      "Saved your edit of 'Empty search says so'. Applied before the next task starts.",
+      'Say what the task should do before saving',
+    ])
+    await pane.press({ key: 'task-A2' })
+    await pane.unmount()
+  }
+  const mobile = await $.ui.mount({ ...PANE_TARGET, surface: 'mobile' })
+  await mobile.press({ key: 'task-A2' })
+  expect(await mobile.find({ key: 'first-A2' })).toBeDefined()
+  expect(await mobile.find({ key: 'edit-A2' })).toBeUndefined()
+  await mobile.unmount()
+})
+
+test("'+ Add a task' opens a form whose Add to the loop writes one add change", async ($, on) => {
+  const files: Record<string, string> = {
+    '/project/.loop/feature_list.json': STEER_FEATURES,
+    '/project/.loop/live.json': JSON.stringify({ state: 'running', started_at: 1000, updated_at: 3990, running: [{ item: 'A1', worker: 1, started_at: 3700 }] }),
+  }
+  const written: Record<string, string> = {}
+  const toasts: string[] = []
+  answerLogged(on, files, [], written, toasts)
+  await $.command.run(RUN_COMMAND)
+  const changes = () => Object.entries(written).filter(([path]) => path.includes('/inbox/'))
+  for (const surface of ['terminal', 'desktop'] as const) {
+    for (const path of Object.keys(written)) delete written[path]
+    toasts.length = 0
+    const pane = await $.ui.mount({ ...PANE_TARGET, surface })
+    expect(await pane.find({ key: 'add-plain' })).toBeUndefined()
+    await pane.press({ key: 'pane-add' })
+    await pane.press({ key: 'add-submit' })
+    expect(changes()).toHaveLength(0)
+    await pane.input({ key: 'add-plain', text: '  Search suggests products as you type  ', kind: 'change' })
+    await pane.input({ key: 'add-done', text: 'Typing three letters shows suggestions.', kind: 'change' })
+    expect(await pane.find({ key: 'add-metrics' })).toBeUndefined()
+    await pane.press({ key: 'add-submit' })
+    expect(await pane.find({ key: 'add-plain' })).toBeUndefined()
+    await pane.press({ key: 'pane-add' })
+    await pane.input({ key: 'add-plain', text: 'Measure search quality', kind: 'change' })
+    await pane.select({ key: 'add-area', value: 'Search' })
+    await pane.select({ key: 'add-kind', value: 'eval' })
+    await pane.select({ key: 'add-when', value: 'next' })
+    await pane.input({ key: 'add-metrics', text: 'precision@5>=0.75, recall@10 ,', kind: 'change' })
+    await pane.press({ key: 'add-submit' })
+    await pane.press({ key: 'pane-add' })
+    await pane.input({ key: 'add-plain', text: 'Something', kind: 'change' })
+    await pane.press({ key: 'add-cancel' })
+    expect(await pane.find({ key: 'add-plain' })).toBeUndefined()
+    const found = changes()
+    expect(found.every(([path]) => INBOX_FILE.test(path))).toBe(true)
+    expect(found.map(([, text]) => JSON.parse(text))).toEqual([
+      { op: 'add', plain: 'Search suggests products as you type', done_when: 'Typing three letters shows suggestions.', area: 'Added by you', kind: 'build' },
+      { op: 'add', plain: 'Measure search quality', done_when: '', area: 'Search', kind: 'eval', metrics: [{ name: 'precision@5', target: 0.75 }, { name: 'recall@10' }], first: true },
+    ])
+    expect(toasts).toEqual([
+      'Say what the new task should do before adding it',
+      "Added 'Search suggests products as you type'. Applied before the next task starts.",
+      "Added 'Measure search quality'. Applied before the next task starts.",
+    ])
+    await pane.unmount()
+  }
+  const mobile = await $.ui.mount({ ...PANE_TARGET, surface: 'mobile' })
+  expect(await mobile.find({ key: 'pane-add' })).toBeUndefined()
+  await mobile.unmount()
+})
+
+test('typed text is stripped of control characters and capped before it reaches the inbox', async ($, on) => {
+  const longArea = `Area ${'z'.repeat(60)}`
+  const { features } = JSON.parse(STEER_FEATURES)
+  const files: Record<string, string> = {
+    '/project/.loop/feature_list.json': JSON.stringify({ features: [...features, { id: 'A4', area: longArea, plain: 'Lives in a long area', passes: false }] }),
+    '/project/.loop/live.json': JSON.stringify({ state: 'running', started_at: 1000, updated_at: 3990, running: [{ item: 'A1', worker: 1, started_at: 3700 }] }),
+  }
+  const written: Record<string, string> = {}
+  answerLogged(on, files, [], written, [])
+  await $.command.run(RUN_COMMAND)
+  const pane = await $.ui.mount({ ...PANE_TARGET, surface: 'desktop' })
+  await pane.press({ key: 'pane-add' })
+  await pane.input({ key: 'add-plain', text: `  Line one\nline\ttwo\u0007 ${'x'.repeat(600)}`, kind: 'change' })
+  await pane.input({ key: 'add-done', text: `\u0001\u001b${'d'.repeat(600)}`, kind: 'change' })
+  await pane.select({ key: 'add-area', value: longArea })
+  await pane.select({ key: 'add-kind', value: 'eval' })
+  const metrics =Array.from({ length: 12 }, (_, n) => `m${n}${'y'.repeat(50)}>=0.5`)
+  await pane.input({ key: 'add-metrics', text: metrics.join(','), kind: 'change' })
+  await pane.press({ key: 'add-submit' })
+  await pane.press({ key: 'task-A2' })
+  await pane.press({ key: 'edit-A2' })
+  await pane.input({ key: 'edit-plain-A2', text: '\u0000\u0007 \n', kind: 'change' })
+  await pane.press({ key: 'edit-save-A2' })
+  await pane.input({ key: 'edit-plain-A2', text: 'Quote " and émoji 🎉\r\n ok', kind: 'change' })
+  await pane.input({ key: 'edit-done-A2', text: `${'🎉'.repeat(499)}éé`, kind: 'change' })
+  await pane.press({ key: 'edit-save-A2' })
+  await pane.unmount()
+  const found = Object.entries(written).filter(([path]) => path.includes('/inbox/'))
+  expect(found.every(([path]) => INBOX_FILE.test(path))).toBe(true)
+  const [add, edit] = found.map(([, text]) => JSON.parse(text))
+  expect(found).toHaveLength(2)
+  expect(add.plain).toBe(`Line one line two ${'x'.repeat(600)}`.slice(0, 500))
+  expect(add.done_when).toBe('d'.repeat(500))
+  expect(add.area).toBe(longArea.slice(0, 40))
+  expect(add.metrics).toHaveLength(10)
+  expect(add.metrics[0]).toEqual({ name: `m0${'y'.repeat(38)}`, target: 0.5 })
+  expect(edit).toEqual({ op: 'edit', id: 'A2', plain: 'Quote " and émoji 🎉 ok', done_when: `${'🎉'.repeat(499)}é` })
+})
+
+test("waiting changes show as plain lines in 'Your changes', with when they apply and an Undo that removes the file", async ($, on) => {
+  const inbox: Record<string, unknown> = {
+    '3999001-a1.json': { op: 'add', plain: 'Search: suggests products as you type', area: 'Search' },
+    '3999002-b2.json': { op: 'edit', id: 'A2', plain: 'An empty search explains what to type' },
+    '3999003-c3.json': { op: 'skip', id: 'A2' },
+    '3999004-d4.json': { op: 'first', id: 'A2' },
+    '3999005-e5.json': { op: 'review', id: 'A3', verdict: 'approved' },
+    '3999006-f6.json': { op: 'review', id: 'A3', verdict: 'changes', note: 'The button is too small' },
+    'notes.json': { op: 'skip', id: 'A2' },
+    '3999007-g7.json.tmp': { op: 'skip', id: 'A2' },
+    '3999008-h_8.json': { op: 'skip', id: 'A2' },
+  }
+  const files: Record<string, string> = {
+    '/project/.loop/feature_list.json': STEER_FEATURES,
+    '/project/.loop/live.json': JSON.stringify({ state: 'running', started_at: 1000, updated_at: 3990, running: [{ item: 'A1', worker: 1, started_at: 3700 }] }),
+  }
+  for (const [name, change] of Object.entries(inbox)) files[`/project/.loop/inbox/${name}`] = JSON.stringify(change)
+  const removed: string[][] = []
+  const toasts: string[] = []
+  answerLogged(on, files, [], {}, toasts)
+  on('fs.list', async (_, e) =>
+    e.path === '/project/.loop/inbox'
+      ? { value: Object.keys(files).flatMap(path => (path.startsWith('/project/.loop/inbox/') ? [{ ...ENTRY, kind: 'file' as const, name: path.slice(21) }] : [])) }
+      : { deny: `ENOENT: ${e.path}` },
+  )
+  on('process.run', async (_, e) => {
+    removed.push(e.argv)
+    delete files[e.argv[2] ?? '']
+    return { value: { exitCode: 0, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+  })
+  await $.command.run(RUN_COMMAND)
+  const lines = [
+    "Add 'Search: suggests products as you type'",
+    "Reword 'Empty search says so'",
+    "Skip 'Empty search says so'",
+    "Run 'Empty search says so' next",
+    "Approve screenshots of 'Search is fast'",
+    "Fix after review: 'The button is too small'",
+  ]
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const pane = await $.ui.mount({ ...PANE_TARGET, surface })
+    expect(await pane.find({ type: 'Text', text: /^Your changes · 6 waiting$/ })).toBeDefined()
+    expect((await pane.findAll({ type: 'Text', text: /^(Add|Reword|Skip|Run|Approve|Fix after) / })).map(text => text.text)).toEqual(lines)
+    expect(await pane.find({ type: 'Text', text: /^Applied before the next task starts\.$/ })).toBeDefined()
+    expect(await pane.find({ key: 'undo-notes.json' })).toBeUndefined()
+    await pane.unmount()
+  }
+  const pane = await $.ui.mount({ ...PANE_TARGET, surface: 'terminal' })
+  await pane.press({ key: 'undo-3999003-c3.json' })
+  expect(removed).toEqual([['rm', '--', '/project/.loop/inbox/3999003-c3.json']])
+  expect(await pane.find({ type: 'Text', text: /^Your changes · 5 waiting$/ })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: /^Skip 'Empty search says so'$/ })).toBeUndefined()
+  await pane.press({ key: 'task-A2' })
+  await pane.press({ key: 'skip-A2' })
+  expect(await pane.find({ type: 'Text', text: /^Your changes · 6 waiting$/ })).toBeDefined()
+  await pane.unmount()
+
+  files['/project/.loop/live.json'] = JSON.stringify({ state: 'stopped', started_at: 1000, updated_at: 3990, running: [] })
+  await $.command.run(RUN_COMMAND)
+  const stopped = await $.ui.mount({ ...PANE_TARGET, surface: 'desktop' })
+  expect(await stopped.find({ type: 'Text', text: /^Applied when the loop runs next\.$/ })).toBeDefined()
+  // A2 is still the open task from the terminal pane; its area no longer opens by itself once nothing runs.
+  await stopped.press({ key: 'area-Search' })
+  await stopped.press({ key: 'first-A2' })
+  expect(toasts.at(-1)).toBe("'Empty search says so' runs next. Applied when the loop runs next.")
+  await stopped.unmount()
+
+  for (const path of Object.keys(files)) if (path.startsWith('/project/.loop/inbox/')) delete files[path]
+  await $.command.run(RUN_COMMAND)
+  const empty = await $.ui.mount({ ...PANE_TARGET, surface: 'desktop' })
+  expect(await empty.find({ type: 'Text', text: /^Your changes/ })).toBeUndefined()
+  await empty.unmount()
+})
+
+test('a design task shows its screenshots as thumbnails to open full size, then Looks right or Needs changes', async ($, on) => {
+  const shot = (id: string, name: string) => `.loop/evidence/${id}/${name}`
+  // A 1×1 PNG: the terminal's Image refuses bytes that are not a real PNG.
+  const PNG_HEAD = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='
+  const files: Record<string, string> = {
+    '/project/.loop/feature_list.json': JSON.stringify({
+      features: [
+        { id: 'D1', area: 'Design', plain: 'The pricing page looks like the sketch', kind: 'design', passes: true, evidence: { commit: 'abc', screenshots: [shot('D1', '1-home.png'), shot('D1', '2-pricing.png')] } },
+        { id: 'D2', area: 'Design', plain: 'The footer looks right', kind: 'design', passes: true, review: 'approved', evidence: { commit: 'def', screenshots: [shot('D2', '1-footer.png')] } },
+        { id: 'D3', area: 'Design', plain: 'The header looks right', kind: 'design', passes: true, evidence: { commit: 'ghi', screenshots: [shot('D3', '1-header.png')] } },
+        { id: 'D4', area: 'Design', plain: 'The menu looks right', kind: 'design', passes: true, review: 'changes', evidence: { commit: 'jkl', screenshots: [shot('D4', '1-menu.png')] } },
+        { id: 'D5', area: 'Design', plain: 'The poster looks right', kind: 'design', passes: true, evidence: { commit: 'mno', screenshots: [shot('D5', '1-huge.png')] } },
+      ],
+    }),
+    '/project/.loop/live.json': JSON.stringify({ state: 'stopped', started_at: 1000, updated_at: 3990, running: [] }),
+  }
+  for (const name of ['D1/1-home', 'D1/2-pricing', 'D2/1-footer', 'D3/1-header', 'D4/1-menu', 'D5/1-huge']) files[`/project/.loop/evidence/${name}.png`] = 'png'
+  const written: Record<string, string> = {}
+  const toasts: string[] = []
+  const runs: string[][] = []
+  answerLogged(on, files, [], written, toasts)
+  on('fs.list', async (_, e) =>
+    e.path === '/project/.loop/inbox'
+      ? { value: Object.keys(files).flatMap(path => (path.startsWith('/project/.loop/inbox/') ? [{ ...ENTRY, kind: 'file' as const, name: path.slice(21) }] : [])) }
+      : { deny: `ENOENT: ${e.path}` },
+  )
+  on('process.run', async (_, e) => {
+    runs.push(e.argv)
+    const out = e.argv.at(-1) ?? ''
+    // Each JPEG's bytes name its screenshot, so two thumbnails drawn at once cannot swap; the poster is too big for an Svg.
+    const input = e.argv.at(-3) ?? ''
+    if (e.argv[0] === 'sips') files[out] = out.endsWith('.png') ? PNG_HEAD : input.includes('huge') ? 'A'.repeat(140000) : btoa(input)
+    const stdout = e.argv[0] === 'mktemp' ? '/tmp/thumbs\n' : ''
+    return { value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+  })
+  await $.command.run(RUN_COMMAND)
+  const changes = () => Object.entries(written).filter(([path]) => path.includes('/inbox/'))
+
+  const desktop = await $.ui.mount({ ...PANE_TARGET, surface: 'desktop' })
+  await desktop.press({ key: 'area-Design' })
+  await desktop.press({ key: 'task-D1' })
+  const svgs = await desktop.findAll({ type: 'Svg' })
+  expect(svgs.map(svg => /base64,([^"]+)"/.exec(String(svg.props.source))?.[1])).toEqual([btoa('/project/.loop/evidence/D1/1-home.png'), btoa('/project/.loop/evidence/D1/2-pricing.png')])
+  expect(svgs.every(svg => String(svg.props.source).startsWith('<svg ') && svg.props.isInteractive === undefined)).toBe(true)
+  expect(await desktop.find({ type: 'Image' })).toBeUndefined()
+  expect((await desktop.findAll({ type: 'Text', text: /^\d-\w+\.png$/ })).map(text => text.text)).toEqual(['1-home.png', '2-pricing.png'])
+  await desktop.press({ key: 'open-D1-1' })
+  expect(runs.filter(argv => argv[0] === 'open')).toEqual([['open', '/project/.loop/evidence/D1/2-pricing.png']])
+  await desktop.press({ key: 'approve-D1' })
+  expect(await desktop.find({ type: 'Text', text: /^Your review is waiting for the loop$/ })).toBeDefined()
+  expect(await desktop.find({ key: 'approve-D1' })).toBeUndefined()
+  await desktop.press({ key: 'task-D3' })
+  await desktop.press({ key: 'changes-D3' })
+  await desktop.press({ key: 'review-send-D3' })
+  await desktop.input({ key: 'review-note-D3', text: '  The logo is cut off on mobile  ', kind: 'change' })
+  await desktop.press({ key: 'review-send-D3' })
+  expect(await desktop.find({ key: 'review-note-D3' })).toBeUndefined()
+  expect(await desktop.find({ type: 'Text', text: /^Your review is waiting for the loop$/ })).toBeDefined()
+  expect(changes().map(([, text]) => JSON.parse(text))).toEqual([
+    { op: 'review', id: 'D1', verdict: 'approved' },
+    { op: 'review', id: 'D3', verdict: 'changes', note: 'The logo is cut off on mobile' },
+  ])
+  expect(changes().every(([path]) => INBOX_FILE.test(path))).toBe(true)
+  expect(toasts).toEqual([
+    "Approved the screenshots of 'The pricing page looks like the sketch'. Applied when the loop runs next.",
+    'Say what needs to change before sending it',
+    "Sent your notes on 'The header looks right'. Applied when the loop runs next.",
+  ])
+  await desktop.press({ key: 'task-D2' })
+  expect(await desktop.find({ type: 'Text', text: /^You approved these$/ })).toBeDefined()
+  expect(await desktop.find({ key: 'approve-D2' })).toBeUndefined()
+  expect(await desktop.findAll({ type: 'Svg' })).toHaveLength(1)
+  await desktop.press({ key: 'task-D4' })
+  expect(await desktop.find({ type: 'Text', text: /^You asked for changes$/ })).toBeDefined()
+  expect(await desktop.find({ key: 'approve-D4' })).toBeUndefined()
+  await desktop.press({ key: 'task-D5' })
+  expect(await desktop.find({ type: 'Svg' })).toBeUndefined()
+  expect(await desktop.find({ type: 'Text', text: /^1-huge\.png$/ })).toBeDefined()
+  expect(await desktop.find({ key: 'open-D5-0' })).toBeDefined()
+  await desktop.unmount()
+
+  const terminal = await $.ui.mount({ ...PANE_TARGET, surface: 'terminal' })
+  await terminal.press({ key: 'task-D1' })
+  const images = await terminal.findAll({ type: 'Image' })
+  expect(images.map(image => image.props.source)).toEqual([{ png: PNG_HEAD }, { png: PNG_HEAD }])
+  expect(images.every(image => image.props.columns === 40)).toBe(true)
+  await terminal.unmount()
+  // Redraws reuse thumbnails: one sips run per screenshot and format, each to its own file in one temp folder.
+  const sips = runs.filter(argv => argv[0] === 'sips')
+  const made = sips.map(argv => `${argv[5]} ${argv.at(-3)}`)
+  expect(new Set(made).size).toBe(made.length)
+  expect(made).toEqual(expect.arrayContaining(['jpeg /project/.loop/evidence/D1/1-home.png', 'png /project/.loop/evidence/D1/1-home.png', 'png /project/.loop/evidence/D1/2-pricing.png']))
+  expect(new Set(sips.map(argv => argv.at(-1))).size).toBe(sips.length)
+  expect(sips.every(argv => argv.at(-1)?.startsWith('/tmp/thumbs/'))).toBe(true)
+  expect(runs.filter(argv => argv[0] === 'mktemp')).toHaveLength(1)
+
+  const mobile = await $.ui.mount({ ...PANE_TARGET, surface: 'mobile' })
+  await mobile.press({ key: 'task-D5' })
+  expect(await mobile.find({ key: 'approve-D5' })).toBeDefined()
+  expect(await mobile.find({ key: 'changes-D5' })).toBeUndefined()
+  await mobile.unmount()
 })

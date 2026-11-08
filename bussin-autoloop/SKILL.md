@@ -95,7 +95,7 @@ The loop name is the same one the status views show, so a session, its terminal 
 
 Each loop is shown by its name: `.loop/name` if you renamed it, else `name` in `.loop/config.json` (set by init, or `--name`), else the start of its task, else its folder. When two loops share a name, the folder is added in brackets. Rename a running loop at any time with `bash <skill directory>/scripts/loop-status.sh --rename "Landing page"`, or with Rename in the pane. `.loop/name` is never committed.
 
-Every session writes a live log to `.loop/logs/<item>.log`, one line per action: time, step, kind and text, separated by tabs. The step is derived from what the session does: running `verify.sh` is Gate, a review subagent is Review, a browser tool is Browser, `git commit` is Commit, and file edits are Implement. Both status views show each running item's step strip (Orient, Implement, Gate, Review, Browser, Commit) and its last few log lines; `tail -f .loop/logs/<item>.log` follows one in full. Claude sessions run with `--output-format stream-json` so the log fills while they work; Codex and Copilot already stream JSON events.
+Every session writes a live log to `.loop/logs/<item>.log`, one line per action: time, step, kind and text, separated by tabs. The step is derived from what the session does: running `verify.sh` is Gate, a review subagent is Review, a browser tool is Browser, `git commit` is Commit, and file edits are Implement. The terminal view shows each running item's step strip (Orient, Implement, Gate, Review, Browser, Commit) and its last few log lines, the pane its step in plain words ("Running the tests") and the log lines under Technical details; `tail -f .loop/logs/<item>.log` follows one in full. Claude sessions run with `--output-format stream-json` so the log fills while they work; Codex and Copilot already stream JSON events.
 
 In any terminal, whichever agent runs the loop:
 
@@ -104,18 +104,21 @@ bash <skill directory>/scripts/loop-status.sh            # every loop in this re
 bash <skill directory>/scripts/loop-status.sh --watch 5  # redraw every 5 seconds
 ```
 
-It prints the same view as the pane below: progress bar, elapsed time, ETA and its clock time, cost, then Now, Next and Done, then cost, tokens, models (and Copilot premium requests) and the latest progress notes.
+It prints progress bar, elapsed time, ETA and its clock time, cost, then Now, Next and Done, then cost, tokens, models (and Copilot premium requests) and the latest progress notes.
 
 In Claude Code, the `bussin-loop-status` mod shows a run as it happens. Install it with `claude plugin marketplace add nksrentas/skills` and `claude plugin install bussin-loop-status@bussin`.
 - **Status line:** shows a loop's outcome once nothing is running, for example `autoloop finished 59/59 · 9h 12m · $41.20`. While loops run it stays empty, because the band below already shows them.
-- **Band above the prompt:** with several loops in the repository, every running one gets its own row, for example `● Landing page ███░░ 36/59 · F31 gate · ETA 40m · $6.09`, with a Details button that opens it in the pane and a Stop button that requests a stop. A loop that is finishing its running items after a stop shows as `◌ … stopping`, one waiting for a free session on this Mac as `◌ … queued: this Mac is full`, and one whose `live.json` says running but whose driver process is gone as `⚠ … driver not running`.
+- **Band above the prompt:** with several loops in the repository, every running one gets its own row, for example `● Landing page ███░░ 36/59 · Pricing table · Running the tests · ETA 40m · $6.09`, with a Details button that opens it in the pane and a Stop button that requests a stop. A loop that is finishing its running items after a stop shows as `◌ … stopping`, one waiting for a free session on this Mac as `◌ … queued: this Mac is full`, and one whose `live.json` says running but whose driver process is gone as `⚠ … driver not running`.
 - **Pane:** `/autoloop-status` or a band row's Details button opens it.
   - **Loop cards:** with more than one loop, a column of cards on the left, one per loop with its name, progress and ETA or state; pressing a card selects that loop. Running loops come first.
   - **Header:** the loop's name with Rename and Stop buttons, its task in full, state, mode and agent, progress, ETA, elapsed time and cost so far.
+  - **Your changes:** every change waiting in `.loop/inbox/` (Add 'x', Reword 'x', Skip 'x', Run 'x' next, a review), each with Undo, and when it applies: before the next task starts while the loop runs, else when it runs next.
   - **Dead driver:** when the driver's process (the `pid` in `live.json`) has exited, a warning replaces the Stop button. It has a button that copies the command to resume.
-  - **Now:** one box per running item with its title, worker, time and attempt, its step strip and its last six log lines.
-  - **Up next:** the next ready or failing items, then one line per group of blocked items (`43 wait for R0: …`).
-  - **Recent:** the latest sessions with their outcome, time and cost.
+  - **Areas:** one box per `area` with its progress and a status word (building, need a look, all work, waiting its turn). An area with running or failing tasks starts open. It lists its tasks by their `plain` sentence: running, failing, ready, waiting, then done.
+  - **Opening a task:** pressing one shows its phase and how long it has run, `Done when`, and Technical details (id, description, verify, and the last six log lines while it runs).
+  - **Editing:** a task that is neither done nor running has Edit (reword `plain` and `done_when`), Do it next and Skip it. `+ Add a task` in the header adds a build, eval or design task to an area, queued or next. Each writes one change file to `.loop/inbox/` (see Your changes). On mobile, which has no text fields, Edit, `+ Add a task` and Needs changes are left out, and Rename shows the terminal command instead.
+  - **Metrics:** an eval task shows its metrics as a table with value, target and met or below, and an Add a task to reach it button for each missed one.
+  - **Screenshots:** thumbnails of the screenshots in its evidence, each with an Open full size button, with Looks right and Needs changes (a note sent to the loop).
   - **Spend:** cost and models on one line. A button shows tokens.
   - **This Mac:** how many loop sessions run on this machine against its limit, and whether new ones have room.
 
@@ -184,7 +187,11 @@ The guard and `verify.sh` read the loop scripts and config from the last commit,
 | `logs/<item>.log` | the driver | The latest session's live log for that item, one tab-separated line per action: time, step, kind, text |
 | `name` | you, through `--rename` or the pane | The loop's display name, overriding `name` in `config.json` |
 | `results/<id>.json` | a parallel worker | One item's outcome, merged and then folded into `feature_list.json` and `progress.md` by the driver |
+| `inbox/<epoch ms>-<random>.json` | the status pane | One change to the list (add, edit, skip, first, review), applied by the driver between sessions and then deleted. Never committed |
+| `evidence/<id>/` | run | Screenshots a UI or design item took in its browser step, listed in its `evidence.screenshots`. Never committed |
 | `retro.md` | run, thorough mode | Proposed environment improvements, never applied by the loop |
+
+Every item also carries three plain fields for people who never read `description`: `area`, a short product area shared by related items; `plain`, one sentence in product terms with no ids or file names; and `done_when`, one plain sentence saying when it is finished. Two optional fields set how it is judged: `kind` is `build` (the default), `eval` for an evaluation that returns metrics, or `design` for work judged by screenshots, and an eval item lists its `metrics` as `[{name, target?}]`.
 
 Items are never removed or reworded by `run`. Deleting an item to make the list green is the exact failure this harness exists to prevent, so a run that believes an item is wrong records that in `progress.md` and leaves it `false` for a human. The guard enforces this rather than trusting it.
 

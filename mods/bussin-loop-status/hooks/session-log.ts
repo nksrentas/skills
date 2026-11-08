@@ -1,9 +1,7 @@
 import type { LogLine } from '../types'
 import { clean } from './snapshot'
 
-export const STEPS = ['orient', 'implement', 'gate', 'review', 'browser', 'commit'] as const
-
-export type StepState = { name: string; state: 'done' | 'now' | 'todo' }
+const STEPS = ['orient', 'implement', 'gate', 'review', 'browser', 'commit'] as const
 
 export const SAFE_ITEM = /^[A-Za-z0-9_-][A-Za-z0-9._-]*$/
 
@@ -20,10 +18,3 @@ export const parseLog = (text: string | undefined, keep = 40): LogLine[] =>
 const isStep = (step: string) => (STEPS as readonly string[]).includes(step)
 
 export const currentStep = (lines: LogLine[]) => [...lines].reverse().find(line => isStep(line.step))?.step ?? 'orient'
-
-export const stepStrip = (lines: LogLine[]): StepState[] => {
-  const now = currentStep(lines)
-  const seen = new Set(lines.map(line => line.step).filter(isStep))
-  if (now !== 'orient') seen.add('orient')
-  return STEPS.map(name => ({ name: name[0]?.toUpperCase() + name.slice(1), state: name === now ? 'now' : seen.has(name) ? 'done' : 'todo' }))
-}

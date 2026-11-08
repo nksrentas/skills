@@ -1,6 +1,11 @@
-import type { BlockedGroup, ItemRow, LoopSnapshot, ModelRow, RunningRow, SessionRow } from '../types'
+import type { Area, ItemRow, LoopSnapshot, Metric, ModelRow, RunningRow } from '../types'
 
-type Feature = { id: string; description?: string; passes?: boolean; depends_on?: string[] }
+type Feature = {
+  id: string
+  passes?: boolean
+  depends_on?: string[]
+  details: Pick<ItemRow, 'area' | 'plain' | 'doneWhen' | 'kind' | 'description' | 'verify' | 'metrics' | 'dataset' | 'command' | 'screenshots' | 'review'>
+}
 
 type Usage = {
   item: string
@@ -100,12 +105,59 @@ const toLive = (value: unknown): Live | undefined => {
   }
 }
 
-const toFeature = (value: Record<string, unknown>): Feature => ({
-  id: clean(value.id),
-  description: clean(value.description),
-  passes: value.passes === true,
-  depends_on: (Array.isArray(value.depends_on) ? value.depends_on : []).map(clean),
-})
+const AREA_OF_CATEGORY: Record<string, string> = { functional: 'Features', edge: 'Edge cases', regression: 'Safety checks' }
+
+const KINDS = ['build', 'eval', 'design'] as const
+
+const nonEmpty = (value: unknown) => (typeof value === 'string' ? clean(value).trim() : '')
+
+// Targets from the item first, then values from its evidence; names only in the evidence come last.
+const toMetrics = (targets: unknown, values: unknown): Metric[] => {
+  const found = new Map(
+    Object.entries(isRecord(values) ? values : {})
+      .map(([name, value]) => [nonEmpty(name), optionalNum(value) ?? null] as const)
+      .filter(([name]) => name !== ''),
+  )
+  const wanted = (Array.isArray(targets) ? targets : [])
+    .filter(isRecord)
+    .map(metric => ({ name: nonEmpty(metric.name), target: optionalNum(metric.target) ?? null }))
+    .filter(metric => metric.name !== '')
+  const extra = [...found.keys()].filter(name => !wanted.some(metric => metric.name === name)).map(name => ({ name, target: null }))
+  return [...wanted, ...extra].map(metric => ({ ...metric, value: found.get(metric.name) ?? null }))
+}
+
+// Only files in the item's own evidence folder, so a hostile list cannot point the pane elsewhere.
+const toScreenshots = (id: string, paths: unknown) =>
+  (Array.isArray(paths) ? paths : [])
+    .filter((path): path is string => typeof path === 'string')
+    .map(clean)
+    .filter(path => path.startsWith(`.loop/evidence/${id}/`) && path.length > `.loop/evidence/${id}/`.length && !path.split('/').includes('..'))
+
+const toFeature = (value: Record<string, unknown>): Feature => {
+  const id = clean(value.id)
+  const description = clean(value.description)
+  const verify = clean(value.verify)
+  const evidence = isRecord(value.evidence) ? value.evidence : {}
+  const kind = KINDS.find(name => name === value.kind) ?? 'build'
+  return {
+    id,
+    passes: value.passes === true,
+    depends_on: (Array.isArray(value.depends_on) ? value.depends_on : []).map(clean),
+    details: {
+      area: nonEmpty(value.area) || (AREA_OF_CATEGORY[clean(value.category)] ?? 'Other'),
+      plain: nonEmpty(value.plain) || shortTitle(description),
+      doneWhen: nonEmpty(value.done_when) || verify,
+      kind,
+      description,
+      verify,
+      metrics: toMetrics(value.metrics, evidence.metrics),
+      dataset: nonEmpty(evidence.dataset),
+      command: nonEmpty(evidence.command),
+      screenshots: toScreenshots(id, evidence.screenshots),
+      review: value.review === 'approved' || value.review === 'changes' ? value.review : null,
+    },
+  }
+}
 
 const parseLines = (text: string | undefined): Usage[] =>
   (text ?? '')
@@ -118,7 +170,6 @@ const parseLines = (text: string | undefined): Usage[] =>
 const sum = (rows: Usage[], pick: (row: Usage) => number | undefined) =>
   rows.reduce((total, row) => total + (pick(row) ?? 0), 0)
 
-const title = (feature: Feature | undefined) => feature?.description ?? ''
 
 const loopStateOf = (live: Live | undefined, done: number, total: number, stopRequested: boolean): LoopSnapshot['loopState'] => {
   if (live?.state === 'running' && stopRequested) return 'stopping'
@@ -161,59 +212,43 @@ const modelRows = (usage: Usage[]): ModelRow[] => {
   return [...byName.values()].sort((a, b) => b.costUsd - a.costUsd)
 }
 
-const spend = (sessions: Usage[]) => {
-  const priced = sessions.filter(row => row.cost_usd !== undefined)
-  const minutes = Math.round(sum(sessions, row => row.duration_ms) / 60000)
-  return [
-    priced.length > 0 ? formatCost(sum(priced, row => row.cost_usd)) : sessions.length > 0 ? 'cost unknown' : '',
-    minutes > 0 ? `${minutes}m` : '',
-  ].filter(Boolean)
-}
+const PHASES = new Map([
+  ['orient', 'Reading the plan'],
+  ['implement', 'Writing the code'],
+  ['gate', 'Running the tests'],
+  ['review', 'Reviewing its own work'],
+  ['browser', 'Checking it in a browser'],
+  ['commit', 'Saving the work'],
+])
+
+// A running item's session-log step in plain words.
+export const phaseOf = (step: string) => PHASES.get(step) ?? 'Reading the plan'
 
 const itemRow = (feature: Feature, passed: Set<string>, running: Map<string, number>, usage: Usage[]): ItemRow => {
   const sessions = usage.filter(row => row.item === feature.id)
+  const base = { id: feature.id, ...feature.details, finishedAt: null, phase: null }
   if (feature.passes) {
-    return { id: feature.id, title: title(feature), state: 'done', note: spend(sessions).join(' · ') || 'done' }
+    const finishedAt = sessions.findLast(row => OUTCOME_OK[row.outcome] === true)?.ended_at ?? null
+    return { ...base, state: 'done', finishedAt }
   }
-  const worker = running.get(feature.id)
-  if (worker !== undefined) {
-    return { id: feature.id, title: title(feature), state: 'running', note: worker > 0 ? `worker ${worker}` : 'now' }
-  }
-  if (sessions.length > 0) {
-    const attempts = sessions.length === 1 ? '1 attempt' : `${sessions.length} attempts`
-    return { id: feature.id, title: title(feature), state: 'failing', note: [attempts, ...spend(sessions)].join(' · ') }
-  }
+  if (running.has(feature.id)) return { ...base, state: 'running', phase: phaseOf('orient') }
+  if (sessions.length > 0) return { ...base, state: 'failing' }
   const waitingFor = (feature.depends_on ?? []).filter(id => !passed.has(id))
-  if (waitingFor.length > 0) {
-    return { id: feature.id, title: title(feature), state: 'waiting', note: `waiting for ${waitingFor.join(', ')}`, waitingFor }
+  if (waitingFor.length > 0) return { ...base, state: 'waiting', waitingFor }
+  return { ...base, state: 'ready' }
+}
+
+export const areas = (items: ItemRow[]): Area[] => {
+  const byName = new Map<string, ItemRow[]>()
+  for (const row of items) {
+    const rows = byName.get(row.area)
+    if (rows) rows.push(row)
+    else byName.set(row.area, [row])
   }
-  return { id: feature.id, title: title(feature), state: 'ready', note: 'ready' }
+  return [...byName.entries()].map(([name, rows]) => ({ name, done: rows.filter(row => row.state === 'done').length, total: rows.length, items: rows }))
 }
 
 const OUTCOME_OK: Record<string, boolean> = { passed: true, merged: true, failed: false, error: false, 'not merged': false }
-
-const sessionRows = (usage: Usage[]): SessionRow[] =>
-  usage
-    .slice(-3)
-    .reverse()
-    .map(row => ({
-      item: row.item,
-      outcome: row.outcome,
-      ok: OUTCOME_OK[row.outcome] ?? null,
-      seconds: Math.round((row.duration_ms ?? 0) / 1000),
-      costUsd: row.cost_usd ?? null,
-      endedAt: row.ended_at ?? null,
-    }))
-
-const blockedGroups = (items: ItemRow[]): BlockedGroup[] => {
-  const groups = new Map<string, string[]>()
-  for (const row of items) {
-    if (row.state !== 'waiting') continue
-    const key = (row.waitingFor ?? []).join(', ')
-    groups.set(key, [...(groups.get(key) ?? []), row.id])
-  }
-  return [...groups.entries()].map(([waitingFor, ids]) => ({ waitingFor, items: ids })).sort((a, b) => b.items.length - a.items.length)
-}
 
 const attemptCounts = (text: string | undefined) => {
   const parsed = parseJson<unknown>(text)
@@ -250,7 +285,6 @@ export const compute = (files: LoopFiles): LoopSnapshot | null => {
     loopState === 'running' && !stale && doneByLoop > 0 && remaining > 0 ? Math.round((remaining * sessionSec) / doneByLoop / parallelism) : null
   const runningRows: RunningRow[] = runningList.map(row => ({
     item: row.item,
-    title: title(features.find(feature => feature.id === row.item)),
     worker: row.worker,
     seconds: Math.max(0, files.now - (row.started_at ?? files.now)),
     attempt: Math.floor(num(attempts[row.item])),
@@ -282,8 +316,6 @@ export const compute = (files: LoopFiles): LoopSnapshot | null => {
     models: modelRows(usage),
     runningRows,
     items,
-    blockedGroups: blockedGroups(items),
-    recent: sessionRows(usage),
     machine: live?.machine ?? null,
   }
 }
