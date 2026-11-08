@@ -379,7 +379,7 @@ test('the band above the prompt shows every running loop, and Details opens it i
   expect(statuses.at(-1)).toBeUndefined()
   for (const surface of ['terminal', 'desktop'] as const) {
     const band = await $.ui.mount({ ...BAND_TARGET, surface })
-    expect(await band.find({ type: 'Text', text: /^● wt-a [█░]{10} 1\/4 · F2 · ETA 22m · \$2\.00$/ })).toBeDefined()
+    expect(await band.find({ type: 'Text', text: /^● wt-a [█░]{10} 1\/4 · CSV download · Reading the plan · ETA 22m · \$2\.00$/ })).toBeDefined()
     expect(await band.find({ type: 'Text', text: /^● wt-c [█░]{10} 1\/4/ })).toBeDefined()
     expect(await band.find({ type: 'Text', text: /repo/ })).toBeUndefined()
     await band.press({ key: 'details-wt-c' })
@@ -483,7 +483,7 @@ test('Stop in the band and in the pane writes the stop file, and the loop then s
   await band.press({ key: 'stop-wt-a' })
   expect(written).toEqual(['/elsewhere/wt-a/.loop/stop'])
   expect(toasts).toEqual(['wt-a stops after its running items finish'])
-  expect(await band.find({ type: 'Text', text: /^◌ wt-a stopping [█░]{10} 1\/4 · F2 · \$2\.00$/ })).toBeDefined()
+  expect(await band.find({ type: 'Text', text: /^◌ wt-a stopping [█░]{10} 1\/4 · CSV download · Reading the plan · \$2\.00$/ })).toBeDefined()
   expect(await band.find({ key: 'stop-wt-a' })).toBeUndefined()
   expect(await band.find({ key: 'stop-wt-c' })).toBeDefined()
   await band.press({ key: 'details-wt-c' })
@@ -567,7 +567,7 @@ test('a running loop whose driver process is gone shows a warning, no Stop, and 
   expect(toasts).toEqual(['Resume command copied'])
   await pane.unmount()
   const band = await $.ui.mount({ ...BAND_TARGET, surface: 'terminal' })
-  expect(await band.find({ type: 'Text', text: /^⚠ project driver not running [█░]{10} 1\/4 · F2 · \$2\.00$/ })).toBeDefined()
+  expect(await band.find({ type: 'Text', text: /^⚠ project driver not running [█░]{10} 1\/4 · CSV download · Reading the plan · \$2\.00$/ })).toBeDefined()
   expect(await band.find({ key: 'stop-project' })).toBeUndefined()
   await band.unmount()
 })
@@ -690,7 +690,7 @@ function answerLogged(on: On, files: Record<string, string>, reads: string[], wr
   })
 }
 
-test('the pane shows each running task with its phase from the session log, the band its step, and this Mac', async ($, on) => {
+test('the pane shows each running task with its phase from the session log, the band its plain title and phase, and this Mac', async ($, on) => {
   const live = JSON.stringify({ ...JSON.parse(LIVE), machine: { sessions: 5, in_use: 3 } })
   const files: Record<string, string> = {
     ...LOOP_FILES,
@@ -710,7 +710,7 @@ test('the pane shows each running task with its phase from the session log, the 
     await pane.unmount()
   }
   const band = await $.ui.mount({ ...BAND_TARGET, surface: 'terminal' })
-  expect(await band.find({ type: 'Text', text: /^● Export invoices to CSV [█░]{10} 1\/4 · F2 gate · ETA 22m · \$2\.00$/ })).toBeDefined()
+  expect(await band.find({ type: 'Text', text: /^● Export invoices to CSV [█░]{10} 1\/4 · CSV download · Running the tests · ETA 22m · \$2\.00$/ })).toBeDefined()
   await band.unmount()
 })
 
