@@ -1,9 +1,0 @@
-{
-  "id": "F12",
-  "passes": true,
-  "evidence": {
-    "commit": "7033e43fd4aac5bb4f4cd101f488771df2191ea9",
-    "ran": "bash .loop/verify.sh (skills-structure, guard, inbox, status, install tests and claude plugin test mods/bussin-loop-status, 54 pass); two read-only review subagents checked every doc claim against register.tsx and snapshot.ts"
-  },
-  "notes": "Did: README's bussin-loop-status bullets and SKILL.md's Pane bullets now describe areas, opening a task, Edit / Do it next / Skip it, + Add a task, Your changes with Undo and when changes apply, metrics with Add a task to reach it, screenshots with Open full size, Looks right and Needs changes, and the mobile limits. The blocked-groups and Now / Up next / Recent lines are gone. SKILL.md's band example now reads '· Pricing table · Running the tests ·' (F11 changed the band), the log paragraph says the pane shows the step in plain words, and the terminal-view sentence no longer claims to be the same view as the pane. plugin.json is 0.5.0 and its description mentions steering.\nLearned: Edit, Do it next and Skip it show only on tasks that are neither done nor running (register.tsx). On mobile, Rename still shows and points to the terminal command. Log lines under Technical details exist only while a task runs. Changes wait for the next run whenever canStop() is false, which also covers stopping, finished and a dead driver.\nLesson: [this project] review found three wrong doc claims (running tasks have no buttons, Rename on mobile, when changes apply) and two stale lines outside the section the item named → check every doc sentence against the code, and grep the whole doc for the old section's terms.\nLesson: [tests] the commit guard blocked 'verify.sh && git commit' in one Bash call, because the PreToolUse hook checks before the gate runs → run the gate and the commit as separate calls."
-}
