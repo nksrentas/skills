@@ -235,8 +235,11 @@
         "mods/bussin-loop-status/hooks/register.tsx",
         "mods/bussin-loop-status/hooks/status.test.tsx"
       ],
-      "passes": false,
-      "evidence": null
+      "passes": true,
+      "evidence": {
+        "commit": "7fc6e7a",
+        "ran": "bash .loop/verify.sh (commands.test incl. claude plugin test mods/bussin-loop-status: 54 pass)"
+      }
     },
     {
       "id": "F12",
