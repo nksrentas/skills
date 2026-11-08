@@ -136,6 +136,12 @@ export const longInactive = (snapshot: LoopSnapshot, now: number) => {
   return now - snapshot.lastActivityAt > (snapshot.loopState === 'finished' ? DAY_SEC : 7 * DAY_SEC)
 }
 
+// Dismissed from the pane: hidden until the loop shows activity after the dismissal time in .loop/dismissed.
+export const dismissed = (snapshot: LoopSnapshot, at: string | undefined) => {
+  if (at === undefined || (isActive(snapshot.loopState) && !snapshot.stale)) return false
+  return snapshot.lastActivityAt === null || snapshot.lastActivityAt <= Number(at)
+}
+
 const modelRows = (usage: Usage[]): ModelRow[] => {
   const byName = new Map<string, ModelRow>()
   for (const row of usage) {
