@@ -9,6 +9,7 @@ import {
   compactLine,
   compute,
   customName,
+  dismissed,
   distinctLabels,
   formatClock,
   formatCost,
@@ -74,6 +75,10 @@ function stateWords(snapshot: LoopSnapshot) {
 
 function canStop(snapshot: LoopSnapshot) {
   return (snapshot.loopState === 'running' || snapshot.loopState === 'queued') && !snapshot.stale
+}
+
+function canDismiss(snapshot: LoopSnapshot) {
+  return !isActive(snapshot.loopState) || snapshot.stale
 }
 
 function primaryLoop(loops: LoopView[], selected: string | null) {
@@ -196,7 +201,7 @@ async function loadLoop($: EngineInterface, dir: string, repoName: string, now: 
     driverAlive: await driverAlive($, livePid(live)),
     now,
   })
-  if (snapshot === null) return null
+  if (snapshot === null || dismissed(snapshot, await readOptional($, `${dir}/.loop/dismissed`))) return null
   const name = shortName(baseName(dir), repoName)
   const config = await readOptional($, `${dir}/.loop/config.json`)
   return {
@@ -249,6 +254,17 @@ async function rename($: EngineInterface, loop: LoopView, value: string) {
     return
   }
   $.ui.toast(`Renamed to ${name}`)
+  await refresh($)
+}
+
+async function dismiss($: EngineInterface, loop: LoopView) {
+  try {
+    await $.fs.write(`${loop.path}/.loop/dismissed`, `${Math.floor((await $.clock.now()) / 1000)}\n`)
+  } catch (error) {
+    $.ui.toast(`Could not dismiss ${loop.label}: ${error instanceof Error ? error.message : String(error)}`)
+    return
+  }
+  $.ui.toast(`${loop.label} dismissed; it shows again if it runs`)
   await refresh($)
 }
 
@@ -416,6 +432,7 @@ export const register: Register = on => {
           <Box flexDirection="row" gap={1} flexShrink={0}>
             <Button key="pane-rename" label="Rename" onPress={() => update($, renamingAtom, () => view.path)} />
             {canStop(snapshot) && <Button key="pane-stop" label="Stop" onPress={() => requestStop($, view)} />}
+            {canDismiss(snapshot) && <Button key="pane-dismiss" label="Dismiss" onPress={() => dismiss($, view)} />}
           </Box>
         </Box>
         {renaming && (

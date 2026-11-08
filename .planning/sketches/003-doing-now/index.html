@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sketch 003 · What it's doing now</title>
+<link rel="stylesheet" href="../themes/pane-dark.css">
+<link rel="stylesheet" href="../shared/pane.css">
+<style>
+  .work { border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
+  .work.retry, .work.stuck { border-color: var(--color-warning); }
+  .work-top { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; flex-wrap: wrap; }
+  .work-top b { font-size: var(--text-base); }
+  .live { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--color-primary); margin-right: 8px; animation: pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .3; } }
+  @media (prefers-reduced-motion: reduce) { .live { animation: none; } }
+
+  /* A: stepper */
+  .stepper { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
+  .step { display: flex; flex-direction: column; gap: 6px; font-size: var(--text-xs); color: var(--color-text-muted); }
+  .step i { height: 4px; border-radius: 2px; background: var(--color-border-strong); }
+  .step.d i { background: var(--color-success); }
+  .step.n i { background: var(--color-primary); }
+  .step.n { color: var(--color-text); font-weight: 600; }
+  .step.d span::before { content: '✓ '; color: var(--color-success); }
+  .rightnow { padding: 10px 12px; border-radius: var(--radius-sm); background: var(--color-surface-2); font-size: var(--text-sm); }
+  .rightnow b { color: var(--color-primary); font-weight: 600; }
+  .timebar { display: flex; align-items: center; gap: 10px; font-size: var(--text-xs); color: var(--color-text-muted); }
+  .timebar .bar { flex: 1; height: 5px; }
+  .timebar.over .bar i { background: var(--color-warning); }
+
+  /* B: narration */
+  .say { font-size: 1.15rem; line-height: 1.4; font-weight: 500; }
+  .say-meta { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; font-size: var(--text-xs); color: var(--color-text-muted); }
+  .recent div { display: flex; gap: 10px; padding: 5px 0; font-size: var(--text-sm); border-top: 1px solid var(--color-border); }
+  .recent div:first-child { border-top: 0; }
+  .recent .t { color: var(--color-text-muted); font-variant-numeric: tabular-nums; width: 42px; flex-shrink: 0; }
+
+  /* C: timeline */
+  .feed { position: relative; padding-left: 22px; }
+  .feed::before { content: ''; position: absolute; left: 6px; top: 6px; bottom: 6px; width: 2px; background: var(--color-border); }
+  .ev { position: relative; padding: 6px 0 12px; }
+  .ev::before { content: ''; position: absolute; left: -21px; top: 11px; width: 10px; height: 10px; border-radius: 50%; background: var(--color-surface); border: 2px solid var(--color-border-strong); }
+  .ev.ok::before { border-color: var(--color-success); background: var(--color-success); }
+  .ev.now::before { border-color: var(--color-primary); background: var(--color-primary); }
+  .ev.warn::before { border-color: var(--color-warning); background: var(--color-warning); }
+  .ev .h { display: flex; gap: 10px; align-items: baseline; }
+  .ev .h .t { font-size: var(--text-xs); color: var(--color-text-muted); font-variant-numeric: tabular-nums; width: 40px; flex-shrink: 0; }
+  .ev .body { margin-left: 50px; font-size: var(--text-sm); color: var(--color-text-muted); }
+  .ev.now { background: var(--color-primary-soft); border-radius: var(--radius-sm); padding: 8px 10px 10px; margin: 0 0 8px -8px; }
+  .ev.now::before { left: -13px; top: 13px; }
+  @media (max-width: 760px) { .stepper { grid-template-columns: repeat(3, minmax(0, 1fr)); } .ev .body { margin-left: 0; } }
+</style>
+</head>
+<body>
+
+<div id="variant-nav">
+  <div class="row"><span class="label">Style</span><span class="tabs row"></span><a href="../002-built-so-far/index.html">← Sketch 002: what's built so far</a></div>
+  <div class="row"><span class="label">Loop state</span>
+    <button class="state-btn" data-m="run">On track</button>
+    <button class="state-btn" data-m="stuck">Something is stuck</button>
+    <button class="state-btn" data-m="done">Finished</button>
+  </div>
+</div>
+
+<p class="variant-desc" id="desc"></p>
+<div class="pane">
+  <div class="pane-title">Autoloop status <span>⤢ ✕</span></div>
+  <div class="pane-body" id="main"></div>
+</div>
+
+<div id="toast" class="toast"></div>
+<div id="sketch-tools" style="position:fixed;bottom:12px;right:12px;z-index:9999;font-family:system-ui;font-size:12px;background:rgba(0,0,0,0.75);color:white;padding:8px 12px;border-radius:8px;opacity:0.45;transition:opacity 0.2s;display:flex;gap:8px;align-items:center" onmouseenter="this.style.opacity='1'" onmouseleave="this.style.opacity='0.45'">
+  <select id="theme-switcher" style="font-size:12px"><option value="pane-dark">Pane dark</option><option value="pane-light">Pane light</option></select>
+  <button data-w="375" class="vp">Phone</button><button data-w="768" class="vp">Tablet</button><button data-w="0" class="vp">Full</button>
+</div>
+
+<script src="../shared/loop-data.js"></script>
+<script src="../shared/chrome.js"></script>
+<script>
+const A = window.area;
+const areaChip = key => `<span class="chip"><span class="dot" style="background:${A(key).color}"></span>${A(key).name}</span>`;
+const tech = i => `<div class="tech">${i.id} · ${i.spec || ''}<br><br>Raw log (last lines)<br>12:38:02 Bash  bun test e2e/password-reset.test.ts<br>12:38:40 Edit  apps/app/src/features/auth/reset-form.tsx<br>12:39:11 Gate  3/6</div>`;
+const header = (L, mode) => `<div class="head"><h2>${L.name}</h2><div class="sub">${L.plain}</div>${verdict(L, mode)}</div>`;
+const working = L => L.items.filter(i => i.state === 'now');
+const problem = L => L.items.find(i => i.state === 'retry' || i.state === 'stuck');
+const finished = L => `<div class="work"><b>✓ Nothing running. All ${L.items.length} things this loop set out to build work.</b><div class="small muted">Finished at 14:04 after ${L.elapsed}. The last check ran every test once more and they all passed.</div></div>`;
+const timeLine = i => {
+  const over = i.minutes > i.usual;
+  return `<div class="timebar ${over ? 'over' : ''}"><span>${i.minutes} min in</span><div class="bar"><i style="width:${Math.min(100, 100 * i.minutes / Math.max(i.minutes, i.usual))}%"></i></div><span>${over ? `taking longer than the usual ~${i.usual} min` : `usually ~${i.usual} min`}</span></div>`;
+};
+const problemBox = (i, style) => {
+  if (!i) return '';
+  const stuck = i.state === 'stuck';
+  const title = stuck ? `⚠ Gave up on "${i.plain}" after 3 tries` : `↻ "${i.plain}" didn't pass yet`;
+  const text = stuck ? `${i.why} The loop moved on to the rest; this one needs you to decide.` : `${i.why} It goes back in the queue and gets another try (${i.tries} of ${i.maxTries} used).`;
+  return `<div class="work ${i.state}" data-box><div class="work-top"><b style="color:var(--color-warning)">${title}</b>${areaChip(i.area)}</div><div class="small">${text}</div><div style="display:flex;gap:8px">${stuck ? '<button class="btn" data-toast="Would start a Claude session on this item">Fix it with Claude</button><button class="btn" data-toast="Would mark it as skipped">Skip it</button>' : ''}<button class="link" data-toggle>technical details</button></div>${tech(i)}</div>`;
+};
+
+// A: phase stepper
+function stepper(L, mode) {
+  if (mode === 'done') return header(L, mode) + finished(L);
+  return header(L, mode) + `<div class="sec-title">Building now</div>` + working(L).map(i => `<div class="work" data-box>
+    <div class="work-top"><b><span class="live"></span>${i.plain}</b>${areaChip(i.area)}</div>
+    <div class="stepper">${L.phases.map((p, n) => `<div class="step ${n < i.phase ? 'd' : n === i.phase ? 'n' : ''}"><i></i><span>${p}</span></div>`).join('')}</div>
+    <div class="rightnow"><b>Right now:</b> ${i.doing}</div>
+    ${timeLine(i)}
+    <div><button class="link" data-toggle>technical details</button></div>${tech(i)}
+  </div>`).join('') + problemBox(problem(L));
+}
+
+// B: narration
+function narration(L, mode) {
+  if (mode === 'done') return header(L, mode) + finished(L);
+  const recent = [
+    ['12:26', '✓', 'People can log out from the account menu: works now'],
+    ['12:17', '✓', 'Pages stay private until you log in: works now'],
+    ['12:14', '↻', "Too many wrong passwords get slowed down: didn't pass, will retry"],
+    ['12:03', '✓', 'Tests can sign in as a real user: works now'],
+  ];
+  return header(L, mode) + working(L).map(i => `<div class="work" data-box>
+    <div class="say-meta"><span class="live"></span>${areaChip(i.area)}<span>${i.plain}</span><span>· ${L.phases[i.phase].toLowerCase()} · ${i.minutes} min</span></div>
+    <div class="say">${i.doing}.</div>
+    <div><button class="link" data-toggle>technical details</button></div>${tech(i)}
+  </div>`).join('') + problemBox(problem(L)) + `<div><div class="sec-title">Just happened</div><div class="recent">${recent.map(([t, s, x]) => `<div><span class="t">${t}</span><span style="color:${s === '✓' ? 'var(--color-success)' : 'var(--color-warning)'}">${s}</span><span>${x}</span></div>`).join('')}</div></div>`;
+}
+
+// C: timeline
+function timeline(L, mode) {
+  const ev = (cls, t, h, body = '') => `<div class="ev ${cls}"><div class="h"><span class="t">${t}</span><span>${h}</span></div>${body ? `<div class="body">${body}</div>` : ''}</div>`;
+  let top = '';
+  if (mode === 'done') top = ev('ok', '14:04', '<b>✓ Finished. All 40 work.</b>', `Took ${L.elapsed} and ${L.spent}.`) + ev('ok', '14:01', 'Final check: every test passed once more');
+  else {
+    top = working(L).map(i => ev('now', 'now', `<b><span class="live"></span>${i.plain}</b>`, `${L.phases[i.phase]}: ${i.doing.toLowerCase()} · ${i.minutes} min in, usually ~${i.usual}`)).join('');
+    if (mode === 'stuck') top = ev('warn', '12:40', '<b>⚠ Gave up on "Too many wrong passwords get slowed down" after 3 tries</b>', 'The loop carries on with the rest. This one needs you. <button class="btn" data-toast="Would start a Claude session on this item">Fix it with Claude</button>') + top;
+  }
+  return header(L, mode) + `<div class="feed">${top}
+    ${ev('', '12:38', 'Password reset: code written, now running the tests')}
+    ${ev('', '12:33', 'Landing page in dark mode: tests pass, now checking it in a browser')}
+    ${ev('', '12:27', 'Started: People can reset a forgotten password')}
+    ${ev('ok', '12:26', '✓ People can log out from the account menu')}
+    ${ev('', '12:19', 'Started: The landing page works in dark mode')}
+    ${ev('ok', '12:17', '✓ Pages stay private until you log in')}
+    ${ev('warn', '12:14', '↻ Too many wrong passwords get slowed down: didn\'t pass', 'The 6th wrong password still went through. It will get another try.')}
+    ${ev('ok', '12:03', '✓ Tests can sign in as a real user')}
+    <div class="ev"><button class="link" data-toast="Would load the morning: 16 more">Earlier today: 16 more</button></div>
+  </div>`;
+}
+
+Sketch({
+  variants: [
+    { key: 'a', label: 'A: Phase stepper', desc: '<b>A: Phase stepper.</b> Each item being built shows the six steps every item goes through, in plain words, with the current one lit. One "Right now" sentence and a time bar against how long items usually take. Raw logs only behind "technical details".' },
+    { key: 'b', label: 'B: Narration', desc: '<b>B: Narration.</b> One large plain sentence per item being built, saying what it is doing at this moment, then a short "just happened" list. The least to read; the sentence has to come from the session itself.' },
+    { key: 'c', label: 'C: Timeline', desc: '<b>C: Timeline.</b> A delivery-tracker feed of the day: what is happening now at the top, then each start, finish and failed try, newest first. Good for "what happened while I was away".' },
+  ],
+  render: (v, L, mode) => loopsColumn(L, mode) + `<div class="main">${v === 'a' ? stepper(L, mode) : v === 'b' ? narration(L, mode) : timeline(L, mode)}</div>`,
+});
+</script>
+</body>
+</html>

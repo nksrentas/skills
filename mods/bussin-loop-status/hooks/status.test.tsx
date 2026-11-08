@@ -332,6 +332,32 @@ test('a loop finished over a day ago, or stopped over a week ago, drops out of t
   }
 })
 
+test('Dismiss hides a finished loop until it runs again, and running loops have no Dismiss', async ($, on) => {
+  const files = { ...REPO_FILES }
+  answerRepo(on, '/repo', [], files)
+  const written: string[] = []
+  on('fs.write', async (_, e) => {
+    written.push(`${e.path}=${e.text}`)
+    files[e.path] = e.text
+    return { value: undefined }
+  })
+  on('ui.toast', async () => ({ value: undefined }))
+  await $.command.run(RUN_COMMAND)
+  const pane = await $.ui.mount({ ...PANE_TARGET, surface: 'desktop' })
+  expect(await pane.find({ key: 'pane-dismiss' })).toBeUndefined()
+  await pane.press({ key: 'select-repo' })
+  await pane.press({ key: 'pane-dismiss' })
+  expect(written).toEqual([`/repo/.loop/dismissed=${NOW}\n`])
+  expect(await pane.find({ key: 'select-repo' })).toBeUndefined()
+  expect(await pane.find({ key: 'select-wt-a' })).toBeDefined()
+  await pane.unmount()
+  files['/repo/.loop/live.json'] = JSON.stringify({ state: 'finished', started_at: NOW, updated_at: NOW + 60, running: [] })
+  await $.command.run(RUN_COMMAND)
+  const again = await $.ui.mount({ ...PANE_TARGET, surface: 'desktop' })
+  expect(await again.find({ key: 'select-repo' })).toBeDefined()
+  await again.unmount()
+})
+
 test('finds the same loops from inside a worktree', async ($, on) => {
   const statuses: (string | undefined)[] = []
   answerRepo(on, '/elsewhere/wt-a', statuses)

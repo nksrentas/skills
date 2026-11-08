@@ -1,7 +1,7 @@
 ---
 name: bussin-autoloop
 description: Autonomous build loop for one feature or a new project. `init <task>` expands the task into `.loop/feature_list.json` with verify gates, then `run` completes ONE item per fresh session until every item passes with evidence. Use when the user wants something built autonomously, "in a loop", "until it's done", "overnight", with proof it works end-to-end, or mentions autoloop, feature_list or Ralph-style loops; modes fast, standard, thorough.
-argument-hint: "init <task> [--mode fast|standard|thorough] [--skills a,b,review:c] [--no-checkpoint] [--new] [--stack <text>] [--base <ref>] [--name <text>] | run | retro | status | telegram"
+argument-hint: "init <task> [--mode fast|standard|thorough] [--skills a,b,review:c] [--no-checkpoint] [--new] [--stack <text>] [--base <ref>] [--name <text>] [--here] | run | retro | status | telegram"
 ---
 
 # bussin-autoloop
@@ -12,7 +12,7 @@ Two prompts over one harness. `init` runs once and leaves artifacts in `.loop/`.
 
 | Invocation | Read first | Do |
 |---|---|---|
-| `/bussin-autoloop init <task> [flags]` | `references/init.md` | Research or scaffold, write `.loop/`, checkpoint with the user, commit |
+| `/bussin-autoloop init <task> [flags]` | `references/init.md` | Make the loop's own worktree, research or scaffold, write `.loop/`, checkpoint with the user, commit |
 | `/bussin-autoloop run` | `references/run.md` | One item: implement, pass the gates, mark passing with evidence, commit, stop |
 | `/bussin-autoloop run --item <id>` | `references/run.md` | Worker mode for the parallel driver: that one item in its own worktree, result written to `.loop/results/<id>.json` |
 | `/bussin-autoloop retro` | `references/retro.md` | Turn the loop's `Lesson:` lines and failed items into rules: the project's `CODING_STANDARDS.md`, and a pull request to the skills repository for rules every project should follow |
@@ -22,7 +22,7 @@ Two prompts over one harness. `init` runs once and leaves artifacts in `.loop/`.
 
 Installed as the `bussin` plugin, the command is `/bussin:bussin-autoloop`; everything else is the same. In Codex the skill is mentioned as `$bussin-autoloop`.
 
-The driver `scripts/loop.sh` picks the first failing item that is not blocked and starts one headless agent session on it with `run --item <id> --sequential`, until no item has `passes:false`. It stops after `MAX_STALLS` sessions in a row (default 3) that neither commit nor change the number of failing items, and after `MAX_ITERATIONS` sessions in all (default 40, or twice the failing items at start when that is more); both limits also apply to parallel runs. An item is blocked when `progress.md` has a line `Blocked: <id>` or when it has failed `LOOP_ITEM_ATTEMPTS` sessions (default 3, counted in `.loop/attempts.json`); when every remaining item is blocked, the driver stops. The prompt starts with `/bussin-autoloop run`, the plugin form when the script lives in the plugin cache, or `$bussin-autoloop run` for Codex; override it with `LOOP_SKILL_COMMAND`. A session that exits on a usage limit is not a stall: the driver waits `LIMIT_WAIT` seconds (default 600) and retries. A session that exits non-zero within `LOOP_STARTUP_SECONDS` (default 10) never started working, because the agent CLI itself failed (sign-in, a bad flag or model): the driver does not count the attempt, lets running workers finish, prints the error and stops, instead of burning every item's attempts in seconds. Start it from the project root:
+The driver `scripts/loop.sh` picks the first failing item that is not blocked and starts one headless agent session on it with `run --item <id> --sequential`, until no item has `passes:false`. It stops after `MAX_STALLS` sessions in a row (default 3) that neither commit nor change the number of failing items, and after `MAX_ITERATIONS` sessions in all (default 40, or twice the failing items at start when that is more); both limits also apply to parallel runs. An item is blocked when `progress.md` has a line `Blocked: <id>` or when it has failed `LOOP_ITEM_ATTEMPTS` sessions (default 3, counted in `.loop/attempts.json`); when every remaining item is blocked, the driver stops. The prompt starts with `/bussin-autoloop run`, the plugin form when the script lives in the plugin cache, or `$bussin-autoloop run` for Codex; override it with `LOOP_SKILL_COMMAND`. A session that exits on a usage limit is not a stall: the driver waits `LIMIT_WAIT` seconds (default 600) and retries. A session that exits non-zero within `LOOP_STARTUP_SECONDS` (default 10) never started working, because the agent CLI itself failed (sign-in, a bad flag or model): the driver does not count the attempt, lets running workers finish, prints the error and stops, instead of burning every item's attempts in seconds. Start it from the loop's checkout, the worktree init made or the project root:
 
 ```bash
 bash <skill directory>/scripts/loop.sh
@@ -30,7 +30,7 @@ bash <skill directory>/scripts/loop.sh
 
 Init prints the exact path for the current install, for example `~/.claude/skills/bussin-autoloop/scripts/loop.sh`.
 
-One loop per checkout. The driver holds `.loop/run.lock` while it runs and refuses to start when another driver is live in the same checkout ("a loop is already running here"); a lock or `live.json` left by a driver that died does not block. To run several loops at once, give each its own git worktree or repo. Each loop is named after its checkout's directory (`LOOP_NAME`), which keeps its worker branches, ports and test databases apart from the others'.
+One loop per checkout. The driver holds `.loop/run.lock` while it runs and refuses to start when another driver is live in the same checkout ("a loop is already running here"); a lock or `live.json` left by a driver that died does not block. So init gives each loop its own git worktree, `<repo>.loops/<slug>` on branch `autoloop/<slug>`, and the loop runs there while the original checkout stays free; it stays in place with `--here`, on a re-init, in a checkout that is already a linked worktree, and for a new project. Each loop is named after its checkout's directory (`LOOP_NAME`), which keeps its worker branches, ports and test databases apart from the others'.
 
 To stop without losing work, request a stop instead of pressing Ctrl-C:
 

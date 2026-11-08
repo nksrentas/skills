@@ -43,7 +43,9 @@ source "$script_dir/telemetry.sh"
 source "$script_dir/capacity.sh"
 source "$script_dir/commit-hook.sh"
 source "$script_dir/notify.sh"
+source "$script_dir/inbox.sh"
 notify_init
+ignore_loop_scratch
 
 if [ "${LOOP_WORKERS:-1}" -gt 1 ]; then
   source "$script_dir/parallel.sh"
@@ -61,7 +63,7 @@ notify "The loop started: $(remaining) items left, one session at a time."
 iteration=0
 stalls=0
 item=""
-while [ "$(remaining)" -gt 0 ]; do
+while apply_inbox; [ "$(remaining)" -gt 0 ]; do
   if [ -e "$stop_file" ]; then
     rm -f "$stop_file"
     echo "autoloop: stopped on request${item:+ after $item}"

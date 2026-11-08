@@ -1,0 +1,37 @@
+:root {
+  /* Claude desktop pane, dark: the colours the mod can use (text, subtle, claude, success, warning, error) */
+  --color-bg: #111111;
+  --color-surface: #1a1a1a;
+  --color-surface-2: #222222;
+  --color-border: #2f2f2f;
+  --color-border-strong: #444444;
+  --color-text: #ececec;
+  --color-text-muted: #9a9a9a;
+  --color-primary: #d97757;
+  --color-primary-soft: rgba(217, 119, 87, 0.14);
+  --color-success: #5fbf6a;
+  --color-success-soft: rgba(95, 191, 106, 0.13);
+  --color-warning: #e3b341;
+  --color-warning-soft: rgba(227, 179, 65, 0.14);
+  --color-danger: #f0605d;
+  --color-danger-soft: rgba(240, 96, 93, 0.14);
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+  --font-mono: "SF Mono", "JetBrains Mono", Menlo, monospace;
+  --text-xs: 0.75rem;
+  --text-sm: 0.85rem;
+  --text-base: 0.95rem;
+  --text-lg: 1.1rem;
+  --text-xl: 1.3rem;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-full: 9999px;
+}

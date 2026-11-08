@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sketch 004 · Steer the loop</title>
+<link rel="stylesheet" href="../themes/pane-dark.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 132px 16px 64px; background: var(--color-bg); color: var(--color-text); font: 14px/1.45 var(--font-sans); }
+  button { font: inherit; color: inherit; }
+  #variant-nav { position: fixed; inset: 0 0 auto 0; z-index: 9998; display: flex; flex-direction: column; gap: 8px; padding: 10px 16px; background: var(--color-surface); border-bottom: 1px solid var(--color-border); }
+  #variant-nav .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  #variant-nav .label { font-size: 12px; color: var(--color-text-muted); }
+  .variant-tab, .chip-btn { font-weight: 600; font-size: 13px; padding: 6px 12px; border-radius: 9999px; border: 1px solid var(--color-border); background: transparent; cursor: pointer; transition: all .15s ease; }
+  .variant-tab:hover, .chip-btn:hover { border-color: var(--color-primary); color: var(--color-primary); }
+  .variant-tab.active { background: var(--color-primary); border-color: var(--color-primary); color: #fff; }
+  .chip-btn { font-weight: 500; font-size: 12px; padding: 4px 10px; }
+  .chip-btn.on { border-color: var(--color-text); }
+  .desc { max-width: 1100px; margin: 0 auto 14px; color: var(--color-text-muted); font-size: 13px; }
+  .desc b { color: var(--color-text); }
+
+  /* ===== Mod primitives: one class per element the desktop surface draws ===== */
+  .pane { max-width: 1100px; margin: 0 auto; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px; overflow: hidden; }
+  .pane-title { display: flex; justify-content: space-between; padding: 12px 18px; border-bottom: 1px solid var(--color-border); }
+  .pane-title span { color: var(--color-text-muted); }
+  .pane-body { padding: 18px; }
+  .Box { display: flex; flex-direction: column; min-width: 0; }
+  .Box.row { flex-direction: row; }
+  .Box.round { border: 1px solid var(--color-border-strong); border-radius: 12px; padding: 10px 14px; }
+  .Box.round.claude { border-color: var(--color-primary); }
+  .Box.round.success { border-color: var(--color-success); }
+  .Box.round.warning { border-color: var(--color-warning); }
+  .Box.round.subtle { border-color: var(--color-border); }
+  .Text { white-space: pre-wrap; }
+  .Text.title { font-size: 1.35rem; font-weight: 600; }
+  .Text.heading { font-size: 1.05rem; font-weight: 600; }
+  .Text.caption { font-size: 12px; }
+  .Text.bold { font-weight: 600; }
+  .Text.dim { color: var(--color-text-muted); }
+  .Text.mono { font-family: var(--font-mono); font-size: 13px; }
+  .Text.claude { color: var(--color-primary); }
+  .Text.success { color: var(--color-success); }
+  .Text.warning { color: var(--color-warning); }
+  .Text.error { color: var(--color-danger); }
+  .Text.trunc { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .Button { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 8px; border: 0; background: #3a3a3a; cursor: pointer; font-size: 14px; white-space: nowrap; transition: all .15s ease; flex-shrink: 0; }
+  :root[data-theme=light] .Button { background: #e6e2da; }
+  .Button:hover { filter: brightness(1.25); }
+  .Button.primary { background: var(--color-primary); color: #fff; }
+  .Button.plain { background: none; padding: 0; border-radius: 0; text-align: left; white-space: normal; }
+  .Button.plain:hover { color: var(--color-primary); filter: none; }
+  .Button.dimlink { background: none; padding: 0; color: var(--color-text-muted); font-size: 12px; text-decoration: underline dotted; }
+  .Input { display: flex; flex-direction: column; gap: 4px; }
+  .Input .lab { font-size: 12px; color: var(--color-text-muted); }
+  .Input textarea, .Input input { width: 100%; font: inherit; color: var(--color-text); background: var(--color-bg); border: 1px solid var(--color-border-strong); border-radius: 8px; padding: 8px 10px; resize: none; transition: border-color .15s ease; }
+  .Input textarea:focus, .Input input:focus { outline: none; border-color: var(--color-primary); }
+  .Input .hint { font-size: 11px; color: var(--color-text-muted); align-self: flex-end; }
+  .Select { display: flex; flex-direction: column; gap: 4px; }
+  .Select .lab { font-size: 12px; color: var(--color-text-muted); }
+  .Select select { font: inherit; color: var(--color-text); background: var(--color-bg); border: 1px solid var(--color-border-strong); border-radius: 8px; padding: 7px 10px; }
+  .Code { font: 12px/1.5 var(--font-mono); background: var(--color-bg); border: 1px solid var(--color-border); border-radius: 8px; padding: 10px 12px; white-space: pre; overflow: auto; color: var(--color-text-muted); }
+  .Markdown table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  .Markdown th, .Markdown td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--color-border); }
+  .Markdown th { color: var(--color-text-muted); font-weight: 600; }
+  .Markdown td.num { font-family: var(--font-mono); }
+  .Svg { border-radius: 6px; overflow: hidden; border: 1px solid var(--color-border); display: block; cursor: pointer; transition: border-color .15s ease; }
+  .Svg:hover { border-color: var(--color-primary); }
+  .Link { color: var(--color-primary); font-size: 12px; text-decoration: underline; cursor: pointer; }
+
+  .g4 { gap: 4px; } .g8 { gap: 8px; } .g12 { gap: 12px; } .g16 { gap: 16px; }
+  .grow { flex: 1; min-width: 0; } .wrap { flex-wrap: wrap; } .center { align-items: center; } .between { justify-content: space-between; } .noshrink { flex-shrink: 0; }
+  .indent { padding-left: 22px; }
+
+  /* annotation: outline every mod element with its name */
+  body.annot [data-el] { outline: 1px dashed rgba(95, 191, 255, .55); outline-offset: 1px; position: relative; }
+  body.annot [data-el]::after { content: attr(data-el); position: absolute; top: -9px; left: 4px; font: 600 9px/1 var(--font-mono); background: #2b6cb0; color: #fff; padding: 1px 3px; border-radius: 3px; pointer-events: none; z-index: 5; }
+
+  .toast { position: fixed; bottom: 56px; left: 50%; transform: translateX(-50%) translateY(20px); opacity: 0; background: var(--color-text); color: var(--color-bg); padding: 8px 14px; border-radius: 6px; font-size: 13px; transition: all .2s ease; pointer-events: none; z-index: 9999; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .lightbox { position: fixed; inset: 0; background: rgba(0, 0, 0, .75); display: none; align-items: center; justify-content: center; z-index: 9999; padding: 24px; }
+  .lightbox.show { display: flex; }
+  .lightbox div { max-width: 900px; width: 100%; }
+  .lightbox p { color: #ddd; font-size: 13px; text-align: center; }
+  @media (max-width: 760px) { .loops { display: none !important; } .pane-body { padding: 12px; } .shots { flex-direction: column; } }
+</style>
+</head>
+<body>
+
+<div id="variant-nav">
+  <div class="row"><span class="label">Where changes happen</span><span id="tabs" class="row"></span></div>
+  <div class="row"><span class="label">Jump to</span>
+    <button class="chip-btn" data-jump="F19">A task not started yet</button>
+    <button class="chip-btn" data-jump="Q1">An evaluation with metrics</button>
+    <button class="chip-btn" data-jump="F24">A design task with screenshots</button>
+    <button class="chip-btn" data-jump="add">Add a task</button>
+    <button class="chip-btn" id="annot-btn">Show mod elements</button>
+  </div>
+</div>
+
+<p class="desc" id="desc"></p>
+<div class="pane" data-el="Pane">
+  <div class="pane-title">Autoloop status <span>⤢ ✕</span></div>
+  <div class="pane-body"><div class="Box row g16" id="main"></div></div>
+</div>
+
+<div id="toast" class="toast"></div>
+<div id="lightbox" class="lightbox"><div><div id="lb-img"></div><p>Full size opens in Preview from the real pane (a <b>Link</b> to the PNG under .loop/evidence/)</p></div></div>
+<div id="sketch-tools" style="position:fixed;bottom:12px;right:12px;z-index:9999;font-family:system-ui;font-size:12px;background:rgba(0,0,0,0.75);color:white;padding:8px 12px;border-radius:8px;opacity:0.45;transition:opacity 0.2s;display:flex;gap:8px;align-items:center" onmouseenter="this.style.opacity='1'" onmouseleave="this.style.opacity='0.45'">
+  <select id="theme-switcher" style="font-size:12px"><option value="pane-dark">Pane dark</option><option value="pane-light">Pane light</option></select>
+  <button data-w="375" class="vp">Phone</button><button data-w="768" class="vp">Tablet</button><button data-w="0" class="vp">Full</button>
+</div>
+
+<script src="../shared/loop-data.js"></script>
+<script>
+// ---------- data: the 002 loop plus the item kinds this sketch adds ----------
+const L = structuredClone(LOOP);
+L.areas.splice(3, 0, { key: 'quality', name: 'Matching quality', blurb: 'How well resumes are matched to job offers, measured', color: '#e0a04f' });
+L.items.push(
+  { id: 'Q1', area: 'quality', kind: 'eval', plain: 'Matching quality is measured on 200 labelled resume–job pairs', state: 'done', at: '12:31',
+    metrics: [
+      { name: 'Precision@5', value: 0.82, before: 0.74, target: 0.75 },
+      { name: 'Recall@10', value: 0.68, before: 0.61, target: 0.7 },
+      { name: 'nDCG@10', value: 0.77, before: 0.7, target: null },
+      { name: 'MRR', value: 0.64, before: 0.58, target: null },
+    ], dataset: 'eval/pairs-200.jsonl', ran: 'bun run eval:matching' },
+  { id: 'Q2', area: 'quality', kind: 'eval', plain: 'Senior roles rank higher for senior resumes', state: 'next',
+    will: ['Give years of experience more weight when ranking offers', 'Run the matching evaluation again on the same 200 pairs', 'Return the metrics, with the senior-only subset next to the overall numbers'],
+    doneWhen: 'Precision@5 on senior resumes is 0.85 or higher, and overall Precision@5 does not drop.',
+    returns: '{\n  "precision@5": 0.0,\n  "recall@10": 0.0,\n  "ndcg@10": 0.0,\n  "subsets": { "senior": { "precision@5": 0.0 } }\n}' },
+);
+const F24 = L.items.find(i => i.id === 'F24');
+Object.assign(F24, { kind: 'design', shots: [['Hero', 'dark'], ['Pricing', 'dark'], ['Footer', 'dark']] });
+const F23 = L.items.find(i => i.id === 'F23');
+Object.assign(F23, { kind: 'design', shots: [['Buttons', 'light'], ['Buttons', 'dark']], reviewed: 'approved' });
+Object.assign(L.items.find(i => i.id === 'F19'), {
+  will: ["Add a 'Change password' form to the account page", 'Ask for the current password, then the new one twice', "Say 'Password changed' and keep you logged in"],
+  doneWhen: 'You can change your password and log in with the new one; the old one stops working.' });
+Object.assign(L.items.find(i => i.id === 'F20'), { will: ['Add a Delete account button with a confirmation dialog', 'Ask for the password and for typing DELETE', 'Remove the account and its data, then log out'], doneWhen: 'The account is gone and its email can sign up again.' });
+
+const S = { variant: 'a', open: { accounts: true, quality: true, dark: true }, item: 'F19', view: null, editing: null, adding: false, addKind: 'build', inbox: [], review: {}, ask: [] };
+const area = k => L.areas.find(a => a.key === k);
+const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+const bar = (d, t, n = 12) => '█'.repeat(Math.round(n * d / t)) + '░'.repeat(n - Math.round(n * d / t));
+const T = (text, cls = '', el = 'Text') => `<span class="Text ${cls}" data-el="${el}">${text}</span>`;
+const B = (label, act, cls = '') => `<button class="Button ${cls}" data-el="Button" data-act="${act.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}">${label}</button>`;
+const editable = i => i.state === 'next' || i.state === 'waiting';
+const icon = i => ({ done: T('✓', 'success'), now: T('◆', 'claude'), retry: T('↻', 'warning') })[i.state] || T('○', 'dim');
+const kindTag = i => i.kind === 'eval' ? T(' · returns metrics', 'caption dim') : i.kind === 'design' ? T(' · with screenshots', 'caption dim') : '';
+
+function shotSvg(section, theme, w = 220) {
+  const bg = theme === 'dark' ? '#15151a' : '#f6f3ec', fg = theme === 'dark' ? '#e8e6e1' : '#222', mu = theme === 'dark' ? '#55555f' : '#c9c3b6', ac = '#d97757';
+  const h = Math.round(w * 0.62);
+  const body = section === 'Hero' ? `<rect x="22" y="40" width="120" height="12" rx="3" fill="${fg}"/><rect x="22" y="58" width="90" height="12" rx="3" fill="${fg}"/><rect x="22" y="80" width="140" height="5" rx="2" fill="${mu}"/><rect x="22" y="90" width="110" height="5" rx="2" fill="${mu}"/><rect x="22" y="106" width="46" height="14" rx="7" fill="${ac}"/><circle cx="182" cy="76" r="22" fill="${ac}" opacity=".85"/>`
+    : section === 'Pricing' ? [0, 1, 2].map(n => `<rect x="${16 + n * 64}" y="36" width="56" height="84" rx="6" fill="none" stroke="${n === 1 ? ac : mu}"/><rect x="${24 + n * 64}" y="46" width="30" height="6" rx="2" fill="${fg}"/><rect x="${24 + n * 64}" y="60" width="22" height="10" rx="2" fill="${fg}"/><rect x="${24 + n * 64}" y="100" width="40" height="10" rx="5" fill="${n === 1 ? ac : mu}"/>`).join('')
+    : section === 'Footer' ? `<rect x="0" y="${h - 50}" width="${w}" height="50" fill="${theme === 'dark' ? '#1d1d24' : '#ece7dc'}"/><rect x="20" y="${h - 36}" width="50" height="6" rx="2" fill="${fg}"/><rect x="100" y="${h - 36}" width="40" height="5" rx="2" fill="${mu}"/><rect x="160" y="${h - 36}" width="40" height="5" rx="2" fill="${mu}"/><rect x="20" y="40" width="180" height="40" rx="6" fill="none" stroke="${mu}"/>`
+    : `<rect x="22" y="44" width="60" height="18" rx="9" fill="${ac}"/><rect x="92" y="44" width="60" height="18" rx="9" fill="none" stroke="${fg}"/><rect x="22" y="76" width="130" height="34" rx="6" fill="none" stroke="${mu}"/>`;
+  return `<svg class="Svg" data-el="Svg" data-shot="${section}|${theme}" width="${w}" height="${h}" viewBox="0 0 220 ${Math.round(220 * 0.62)}" xmlns="http://www.w3.org/2000/svg"><rect width="220" height="137" fill="${bg}"/><rect x="0" y="0" width="220" height="20" fill="${theme === 'dark' ? '#1d1d24' : '#ece7dc'}"/><circle cx="10" cy="10" r="3" fill="${mu}"/><rect x="22" y="7" width="40" height="6" rx="2" fill="${fg}"/>${body}</svg>`;
+}
+
+// ---------- pieces ----------
+function header() {
+  const c = counts(L.items);
+  return `<div class="Box g4" data-el="Box">${T(L.name, 'title')}${T(L.plain, 'dim')}
+    <div class="Box row round success between center g8 wrap" data-el="Box" style="margin-top:10px">${T(`● On track · ${c.done} of ${c.total} work · ${L.left} left, done around ${L.finishAt}`, 'success')}<div class="Box row g8" data-el="Box">${B('+ Add a task', 'add')}${B('Stop', 'toast:The loop finishes what it is doing, then stops')}</div></div>
+    ${inboxBox()}</div>`;
+}
+
+function inboxBox() {
+  if (!S.inbox.length) return '';
+  return `<div class="Box round claude g4" data-el="Box" style="margin-top:8px">${T(`Your changes · ${S.inbox.length} waiting`, 'bold claude')}${S.inbox.map((x, n) => `<div class="Box row between center g8" data-el="Box">${T('• ' + esc(x), 'caption')}${B('Undo', 'undo:' + n, 'dimlink')}</div>`).join('')}${T('The loop applies these before it starts its next task, so nothing running is interrupted.', 'caption dim')}</div>`;
+}
+
+function itemDetail(i) {
+  const parts = [];
+  if (i.state === 'done' && i.kind === 'eval') parts.push(evalResult(i));
+  if (i.kind === 'design') parts.push(designShots(i));
+  if (editable(i)) {
+    if (S.editing === i.id) parts.push(editForm(i));
+    else {
+      parts.push(`<div class="Box g4" data-el="Box">${T('What it will do', 'caption bold dim')}${i.will ? i.will.map((w, n) => T(`${n + 1}. ${w}`, 'caption')).join('') : T('1. ' + i.plain, 'caption')}</div>`);
+      parts.push(`<div class="Box g4" data-el="Box">${T('Done when', 'caption bold dim')}${T(i.doneWhen || 'Its checks pass in a real browser.', 'caption')}</div>`);
+      if (i.returns) parts.push(`<div class="Box g4" data-el="Box">${T('Returns', 'caption bold dim')}<div class="Code" data-el="Code">${esc(i.returns)}</div></div>`);
+      parts.push(`<div class="Box row g8 wrap" data-el="Box">${B('Edit', 'edit:' + i.id)}${B('Do it next', 'inbox:Move "' + i.plain + '" to the front')}${B('Skip it', 'inbox:Skip "' + i.plain + '"')}</div>`);
+    }
+  }
+  if (i.state === 'now' && !i.kind) parts.push(T(`${LOOP.phases[i.phase]}: ${i.doing}. ${i.minutes} min in, usually ~${i.usual}.`, 'caption dim'));
+  if (i.state === 'now' && i.kind !== 'design') parts.push(T("Running now, so it can't be edited. You can still add a follow-up task.", 'caption dim'));
+  parts.push(B('technical details', 'toast:Shows ' + i.id + ', the full spec and the raw log', 'dimlink'));
+  return `<div class="Box round subtle g12" data-el="Box" style="margin:6px 0 8px">${parts.join('')}</div>`;
+}
+
+function evalResult(i) {
+  const fmt = v => v.toFixed(2);
+  const rows = i.metrics.map(m => {
+    const d = m.value - m.before, ok = m.target === null ? null : m.value >= m.target;
+    return `<tr><td>${m.name}</td><td class="num">${fmt(m.value)}</td><td class="num" style="color:var(--color-success)">${d >= 0 ? '+' : ''}${fmt(d)}</td><td class="num">${m.target === null ? '—' : '≥ ' + fmt(m.target)}</td><td>${ok === null ? '' : ok ? '<span style="color:var(--color-success)">✓ met</span>' : '<span style="color:var(--color-warning)">✗ below</span>'}</td></tr>`;
+  }).join('');
+  const missed = i.metrics.filter(m => m.target !== null && m.value < m.target);
+  return `<div class="Box g8" data-el="Box">${T('Result', 'caption bold dim')}
+    <div class="Markdown" data-el="Markdown"><table><tr><th>Metric</th><th>Now</th><th>Change</th><th>Target</th><th></th></tr>${rows}</table></div>
+    ${T(`On ${i.dataset} · run with ${i.ran} · compared with the run before this task`, 'caption dim')}
+    ${missed.length ? `<div class="Box row round warning between center g8 wrap" data-el="Box">${T(`${missed.map(m => m.name).join(', ')} is below target. The task still passed because its check only required the run to finish.`, 'caption warning')}${B('Add a task to reach it', 'inbox:New task: raise ' + missed[0].name + ' to ≥ ' + missed[0].target.toFixed(2))}</div>` : ''}
+    <div class="Box row g12" data-el="Box"><span class="Link" data-el="Link" data-act="toast:Opens .loop/outputs/Q1.json">Open the JSON</span><span class="Link" data-el="Link" data-act="toast:Copied to the clipboard">Copy metrics</span></div></div>`;
+}
+
+function designShots(i) {
+  const r = S.review[i.id] || i.reviewed;
+  const shots = `<div class="Box row g8 wrap shots" data-el="Box">${i.shots.map(([s, t]) => `<div class="Box g4" data-el="Box">${shotSvg(s, t, 200)}${T(`${s} · ${t}`, 'caption dim')}</div>`).join('')}</div>`;
+  let review;
+  if (r === 'approved') review = T('✓ You approved these', 'caption success');
+  else if (r === 'changes') review = `<div class="Box g8" data-el="Box"><div class="Input" data-el="Input"><span class="lab">What should change?</span><textarea rows="3" id="fb-${i.id}" placeholder="e.g. The pricing cards are too dark, the middle one should stand out more"></textarea><span class="hint">Enter: Send to the loop</span></div><div class="Box row g8" data-el="Box">${B('Send to the loop', 'feedback:' + i.id, 'primary')}${B('Cancel', 'review:' + i.id + ':none')}</div></div>`;
+  else if (r === 'sent') review = T('↻ Sent. It becomes a fix task that runs right after this one.', 'caption claude');
+  else review = `<div class="Box row g8 center wrap" data-el="Box">${T(i.state === 'now' ? 'Taken in the browser check, 3 min ago. Does it look right?' : 'Does it look right?', 'caption')}${B('Looks right', 'review:' + i.id + ':approved')}${B('Needs changes', 'review:' + i.id + ':changes')}</div>`;
+  return `<div class="Box g8" data-el="Box">${T('Screenshots', 'caption bold dim')}${shots}${review}</div>`;
+}
+
+function editForm(i) {
+  return `<div class="Box g8" data-el="Box">${T('Edit this task', 'caption bold dim')}
+    <div class="Input" data-el="Input"><span class="lab">What it should do</span><textarea rows="2">${esc(i.plain)}</textarea></div>
+    <div class="Input" data-el="Input"><span class="lab">Done when</span><textarea rows="2">${esc(i.doneWhen || '')}</textarea></div>
+    <div class="Box row g8 center" data-el="Box">${B('Save', 'save:' + i.id, 'primary')}${B('Cancel', 'cancel')}${T('Claude rewrites the technical spec from this before the task starts.', 'caption dim')}</div></div>`;
+}
+
+function addForm() {
+  const k = S.addKind;
+  return `<div class="Box round claude g8" data-el="Box" id="add-form">${T('Add a task', 'heading')}
+    <div class="Input" data-el="Input"><span class="lab">What should it do?</span><textarea rows="2" id="add-text" placeholder="${k === 'eval' ? 'e.g. Measure matching quality on the new 500-pair set' : k === 'design' ? 'e.g. Make the pricing section feel lighter' : 'e.g. People can sign in with Google'}"></textarea></div>
+    <div class="Box row g8 wrap" data-el="Box">
+      <div class="Select" data-el="Select"><span class="lab">Area</span><select>${L.areas.map(a => `<option>${a.name}</option>`).join('')}<option>New area…</option></select></div>
+      <div class="Select" data-el="Select"><span class="lab">Kind</span><select id="add-kind"><option value="build" ${k === 'build' ? 'selected' : ''}>Build a feature</option><option value="eval" ${k === 'eval' ? 'selected' : ''}>Evaluation: returns metrics</option><option value="design" ${k === 'design' ? 'selected' : ''}>Design: send me screenshots</option></select></div>
+      <div class="Select" data-el="Select"><span class="lab">When</span><select><option>After what is queued</option><option>Next</option></select></div>
+    </div>
+    ${k === 'eval' ? `<div class="Input" data-el="Input"><span class="lab">Metrics to return</span><input value="precision@5, recall@10, ndcg@10"></div><div class="Input" data-el="Input"><span class="lab">Command that runs the evaluation (optional)</span><input placeholder="bun run eval:matching"></div>` : ''}
+    ${k === 'design' ? T('The browser check saves a screenshot of each page it checks, and the task waits for your “Looks right” before the next design task builds on it.', 'caption dim') : ''}
+    <div class="Box row g8 center" data-el="Box">${B('Add to the loop', 'addsave', 'primary')}${B('Cancel', 'addcancel')}</div></div>`;
+}
+
+function areaBlock(a, opts) {
+  const xs = L.items.filter(i => i.area === a.key);
+  const c = counts(L.items, a.key);
+  const busy = xs.filter(i => i.state === 'now').length;
+  const status = busy ? T(`◆ building ${busy}`, 'caption claude') : c.done === c.total ? T('✓ all work', 'caption success') : T('waiting its turn', 'caption dim');
+  const open = S.open[a.key];
+  const order = { now: 0, retry: 0, next: 1, waiting: 2, done: 3 };
+  const rows = open ? xs.slice().sort((x, y) => order[x.state] - order[y.state]).map(i => `
+    <div class="Box" data-el="Box">
+      <div class="Box row g8 center" data-el="Box">${icon(i)}<button class="Button plain grow" data-el="Button" data-act="item:${i.id}"><span class="Text ${i.state === 'done' ? 'dim' : ''}">${esc(i.plain)}</span>${kindTag(i)}</button>${T(i.state === 'done' ? i.at : i.state === 'now' ? LOOP.phases[i.phase] : i.state === 'waiting' ? 'after ' + i.after : i.state === 'retry' ? 'trying again' : 'not started', 'caption ' + (i.state === 'now' ? 'claude' : 'dim') + ' noshrink')}</div>
+      ${opts.inline && S.item === i.id ? `<div class="indent">${itemDetail(i)}</div>` : ''}
+    </div>`).join('') : '';
+  return `<div class="Box round ${open ? '' : 'subtle'} g8" data-el="Box">
+    <div class="Box row between center g12 wrap" data-el="Box">
+      <div class="Box g4 grow" data-el="Box"><button class="Button plain" data-el="Button" data-act="area:${a.key}"><span class="Text bold">${open ? '▾' : '▸'} <span style="color:${a.color}">●</span> ${a.name}</span></button>${T(a.blurb, 'caption dim')}</div>
+      <div class="Box row g12 center noshrink" data-el="Box">${T(bar(c.done, c.total) + ` ${c.done}/${c.total}`, 'mono')}${status}</div>
+    </div>${rows ? `<div class="Box g4 indent" data-el="Box">${rows}</div>` : ''}</div>`;
+}
+
+function loopsCol() {
+  const card = (n, s, sel) => `<div class="Box round ${sel ? 'claude' : 'subtle'} g4" data-el="Box">${B(n, 'toast:Would switch to this loop', 'plain')}${T(s, 'caption dim')}</div>`;
+  return `<div class="Box g8 loops noshrink" data-el="Box" style="width:210px">${card('● get.offer stage 2 & 3', '21 of 42 work · ~1 h 30 min left', true)}${card('● Production deploy', '3 of 14 work · ~58 min left')}${card('● Dev dock', 'Just started · 1 of 15')}${card('✓ Transactional email', 'Finished yesterday')}</div>`;
+}
+
+// ---------- variants ----------
+function variantA() {
+  return `${header()}${S.adding ? addForm() : ''}<div class="Box g8" data-el="Box">${L.areas.map(a => areaBlock(a, { inline: true })).join('')}</div>`;
+}
+function variantB() {
+  if (S.view) {
+    const i = L.items.find(x => x.id === S.view);
+    return `<div class="Box row g8 center" data-el="Box">${B('← All areas', 'back')}${T(area(i.area).name, 'caption dim')}</div>
+      <div class="Box g4" data-el="Box">${T(esc(i.plain), 'title')}${T(i.state === 'done' ? 'Works · finished ' + i.at : i.state === 'now' ? 'Being built · ' + LOOP.phases[i.phase] : 'Not started' + (i.after ? ' · runs after ' + i.after : ''), 'dim')}</div>${inboxBox()}${itemDetail(i)}`;
+  }
+  return `${header()}${S.adding ? addForm() : ''}<div class="Box g8" data-el="Box">${L.areas.map(a => areaBlock(a, { inline: false })).join('')}</div>`;
+}
+function variantC() {
+  const ask = `<div class="Box round claude g8" data-el="Box">${T('Tell the loop what to change', 'heading')}
+    <div class="Input" data-el="Input"><textarea rows="2" id="ask-text" placeholder="e.g. Skip the delete-account task for now, and add an evaluation that measures recall@10 on the 500-pair set"></textarea><span class="hint">Enter: Send</span></div>
+    <div class="Box row g8" data-el="Box">${B('Send', 'ask', 'primary')}${T('Claude reads the loop and turns this into changes for you to approve. Nothing changes until you approve.', 'caption dim')}</div></div>`;
+  const proposals = S.ask.map((p, n) => `<div class="Box round ${p.done ? 'success' : 'warning'} g8" data-el="Box">${T(p.done ? '✓ Approved, waiting for the next task to finish' : 'Proposed changes', 'bold ' + (p.done ? 'success' : 'warning'))}${p.lines.map(l => T(l, 'caption')).join('')}${p.done ? '' : `<div class="Box row g8" data-el="Box">${B('Approve', 'approve:' + n, 'primary')}${B('Change it', 'toast:Back to the text box with your message')}${B('Discard', 'discard:' + n)}</div>`}</div>`).join('');
+  return `${header()}${ask}${proposals}<div class="Box g8" data-el="Box">${L.areas.map(a => areaBlock(a, { inline: true })).join('')}</div>`;
+}
+
+const VARIANTS = [
+  { key: 'a', label: 'A: In place ★ Selected', desc: '<b>A: In place.</b> Your Areas layout from 002. Click any task to open it right there: what it will do, when it counts as done, Edit / Do it next / Skip for tasks not started, the metrics table for evaluations, screenshots to approve for design tasks. "+ Add a task" sits in the header.' },
+  { key: 'b', label: 'B: Task page', desc: '<b>B: Task page.</b> The same Areas list, but a click swaps the pane to one task with a Back button. More room for screenshots and metrics, and one more click.' },
+  { key: 'c', label: 'C: Tell it in words', desc: '<b>C: Tell it in words.</b> One text box: say what to change in plain words, Claude turns it into concrete task changes, and you approve them. Tasks still open in place to read, review screenshots and see metrics.' },
+];
+
+// ---------- wiring ----------
+function draw() {
+  document.getElementById('tabs').innerHTML = VARIANTS.map(v => `<button class="variant-tab ${S.variant === v.key ? 'active' : ''}" data-v="${v.key}">${v.label}</button>`).join('');
+  document.getElementById('desc').innerHTML = VARIANTS.find(v => v.key === S.variant).desc;
+  const body = S.variant === 'a' ? variantA() : S.variant === 'b' ? variantB() : variantC();
+  document.getElementById('main').innerHTML = loopsCol() + `<div class="Box grow g16" data-el="Box">${body}</div>`;
+  const kind = document.getElementById('add-kind');
+  if (kind) kind.onchange = e => { S.addKind = e.target.value; draw(); };
+}
+function toast(t) { const el = document.getElementById('toast'); el.textContent = t; el.classList.add('show'); clearTimeout(window.__t); window.__t = setTimeout(() => el.classList.remove('show'), 1900); }
+function openItem(id) {
+  const i = L.items.find(x => x.id === id);
+  S.open[i.area] = true; S.editing = null;
+  if (S.variant === 'b') S.view = id; else S.item = S.item === id ? null : id;
+}
+
+document.getElementById('variant-nav').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.v) { S.variant = b.dataset.v; S.view = null; }
+  if (b.dataset.jump) {
+    if (b.dataset.jump === 'add') { S.adding = true; S.view = null; }
+    else { S.item = null; openItem(b.dataset.jump); if (S.variant !== 'b') S.item = b.dataset.jump; }
+  }
+  if (b.id === 'annot-btn') { document.body.classList.toggle('annot'); b.classList.toggle('on'); return; }
+  draw();
+  const target = b.dataset.jump === 'add' ? document.getElementById('add-form') : document.querySelector(`[data-act="item:${b.dataset.jump}"]`);
+  if (target && b.dataset.jump) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+});
+
+document.getElementById('main').addEventListener('click', e => {
+  const shot = e.target.closest('[data-shot]');
+  if (shot) { const [s, t] = shot.dataset.shot.split('|'); document.getElementById('lb-img').innerHTML = shotSvg(s, t, 860); document.getElementById('lightbox').classList.add('show'); return; }
+  const el = e.target.closest('[data-act]'); if (!el) return;
+  const [act, a1, a2] = el.dataset.act.split(/:(.*)/s)[0] === 'toast' ? ['toast', el.dataset.act.slice(6)] : el.dataset.act.split(':');
+  const val = id => (document.getElementById(id) || {}).value || '';
+  switch (act) {
+    case 'toast': return toast(a1);
+    case 'area': S.open[a1] = !S.open[a1]; break;
+    case 'item': openItem(a1); break;
+    case 'back': S.view = null; break;
+    case 'edit': S.editing = a1; break;
+    case 'cancel': S.editing = null; break;
+    case 'save': S.inbox.push(`Reword "${L.items.find(i => i.id === a1).plain}"`); S.editing = null; toast('Saved. The loop applies it before its next task.'); break;
+    case 'inbox': S.inbox.push(el.dataset.act.slice(6)); toast('Added to your changes'); break;
+    case 'undo': S.inbox.splice(+a1, 1); break;
+    case 'add': S.adding = true; S.view = null; break;
+    case 'addcancel': S.adding = false; break;
+    case 'addsave': { const t = val('add-text').trim(); if (!t) return toast('Say what the task should do first'); S.inbox.push(`New ${S.addKind === 'eval' ? 'evaluation' : S.addKind === 'design' ? 'design task' : 'task'}: ${t}`); S.adding = false; toast('Added. It joins the queue before the next task starts.'); break; }
+    case 'review': S.review[a1] = a2 === 'none' ? undefined : a2; if (a2 === 'approved') toast('Approved. The next design task can build on it.'); break;
+    case 'feedback': { const t = val('fb-' + a1).trim(); if (!t) return toast('Say what should change first'); S.review[a1] = 'sent'; S.inbox.push('Fix after review: ' + t); break; }
+    case 'ask': { const t = val('ask-text').trim(); if (!t) return toast('Type what to change first'); S.ask.unshift({ lines: ['• Skip "People can delete their account" (not started)', '• New evaluation in Matching quality: "Recall@10 is measured on the 500-pair set", returns recall@10 and precision@5', '• Runs after "Senior roles rank higher for senior resumes"'] }); toast('Claude proposed 3 changes'); break; }
+    case 'approve': S.ask[+a1].done = true; break;
+    case 'discard': S.ask.splice(+a1, 1); break;
+  }
+  draw();
+});
+document.getElementById('lightbox').addEventListener('click', () => document.getElementById('lightbox').classList.remove('show'));
+document.getElementById('theme-switcher').addEventListener('change', e => { document.querySelector('link[href*=themes]').href = '../themes/' + e.target.value + '.css'; document.documentElement.dataset.theme = e.target.value === 'pane-light' ? 'light' : 'dark'; });
+document.querySelectorAll('#sketch-tools .vp').forEach(b => b.addEventListener('click', () => { const w = +b.dataset.w; document.querySelectorAll('.pane, .desc').forEach(p => { p.style.maxWidth = w ? w + 'px' : ''; }); }));
+draw();
+</script>
+</body>
+</html>

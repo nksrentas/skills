@@ -1,0 +1,28 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "sketches",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8765",
+        "--bind",
+        "127.0.0.1",
+        "--directory",
+        ".planning/sketches"
+      ],
+      "port": 8765
+    },
+    {
+      "name": "sketches-status",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "exec python3 -m http.server \"${PORT:-8766}\" --bind 127.0.0.1 --directory .planning/sketches"
+      ],
+      "port": 8766
+    }
+  ]
+}
