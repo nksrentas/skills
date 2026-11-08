@@ -882,6 +882,28 @@ test('the pane lists areas with counts and status, opens and closes them, and ne
   }
 })
 
+test('the pane shows a loop from before areas with areas from its categories and plain titles from its descriptions', async ($, on) => {
+  const files: Record<string, string> = {
+    '/project/.loop/feature_list.json': JSON.stringify({
+      features: [
+        { id: 'A', category: 'functional', description: 'CSV export: download paid invoices as CSV', passes: true },
+        { id: 'B', category: 'edge', description: 'Empty export', passes: false },
+        { id: 'C', description: 'Filters unchanged', passes: false },
+      ],
+    }),
+  }
+  answerLogged(on, files, [], {})
+  await $.command.run(RUN_COMMAND)
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const pane = await $.ui.mount({ ...PANE_TARGET, surface })
+    expect((await pane.findAll({ type: 'Button', text: /^[▾▸] / })).map(button => button.text)).toEqual(['▸ Features', '▸ Edge cases', '▸ Other'])
+    for (const area of ['Features', 'Edge cases', 'Other']) await pane.press({ key: `area-${area}` })
+    expect((await pane.findAll({ type: 'Text', text: /^(CSV export|Empty export|Filters unchanged)$/ })).map(text => text.text)).toEqual(['CSV export', 'Empty export', 'Filters unchanged'])
+    for (const area of ['Features', 'Edge cases', 'Other']) await pane.press({ key: `area-${area}` })
+    await pane.unmount()
+  }
+})
+
 const OPEN_FEATURES = JSON.stringify({
   features: [
     { id: 'A1', area: 'Search', plain: 'Search finds products by name', done_when: 'Typing a name lists matches.', description: 'Search index over product names', verify: 'Type mug, see two rows', passes: false },
