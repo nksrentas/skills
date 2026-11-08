@@ -1,0 +1,9 @@
+{
+  "id": "F11",
+  "passes": true,
+  "evidence": {
+    "commit": "7fc6e7a",
+    "ran": "bash .loop/verify.sh (commands.test incl. claude plugin test mods/bussin-loop-status: 54 pass)"
+  },
+  "notes": "Did: workingOn() in register.tsx now lists snapshot.items in state 'running' as '<shortTitle(plain)> · <phase>' (phase from the session log via loadLoop, 'Reading the plan' when there is no log yet), joined by ', '. The band row reads e.g. '● wt-a ██░░ 1/4 · CSV download · Reading the plan · ETA 22m'. compactLine and the status line are unchanged. The four band tests now expect the plain title and phase, anchored so no item id can appear.\nLearned: a task live.json calls running but feature_list has as passed (the moment after a merge) or does not list at all is left out of the band now, where it used to show its bare id; review judged that fine, since there is no plain title to show. The band follows feature_list order, not live.json order. shortTitle on plain cuts a hand-written plain at its first ': ', as the spec asked; the pane shows plain whole.\nLesson: [tests] perl -pi to rewrite test expectations was refused by the unattended Bash allowlist → edit test files with the Edit tool (replace_all for repeated strings)."
+}
