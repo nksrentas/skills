@@ -142,11 +142,15 @@ To stop a loop without losing in-flight work, run `bash ~/.claude/skills/bussin-
 
 Inside Claude Code, the `bussin-loop-status` mod puts every running loop in a band above the prompt, one row per loop, including loops in git worktrees. The status line stays empty while loops run and shows a loop's outcome once none is running. `/autoloop-status`, or a row's Details button, opens a pane. The band rows and the pane each have a Stop button that works like `--stop`. The pane shows:
 - a card per loop on the left, and the selected loop's task, progress and ETA; a loop finished more than a day ago, or not running for more than a week, leaves the list, while its `.loop` files stay for `retro`; Dismiss takes a finished or stopped loop off the list now, until it runs again
-- each running item's step strip and its last log lines, with worker and attempt
+- the tasks grouped by area, each area with its progress and a word on how it is going; areas with running or failing tasks start open
+- each task as a plain sentence; pressing it opens what it is doing and for how long, its Done when line, and Technical details with its id, description, verify steps and, while it runs, its last log lines
+- Edit, Do it next and Skip it on a task that is neither done nor running, and `+ Add a task` for a new build, eval or design task in any area (on mobile, no text fields: no Edit, Add or Needs changes)
+- Your changes: every change waiting in the loop's inbox, each with Undo; while the loop runs, the driver applies them before the next task starts, otherwise when the loop runs next
+- an eval task's metrics against their targets, with a button that adds a task to reach a missed one
+- a task's screenshots as thumbnails, each with Open full size, with Looks right and Needs changes
 - elapsed time and the estimated finish
 - Rename and Stop, and how many loop sessions this Mac runs
 - a warning, and a copyable resume command, when the driver process is gone
-- blocked items grouped by what they wait for, and the latest sessions
 - input, output and cache tokens
 - cost, per model and per session
 
