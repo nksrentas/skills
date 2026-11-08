@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# a loop session running this suite must not hand its own session state to the loops under test
+unset AUTOLOOP_SESSION $(compgen -v LOOP_)
 
 skill="$(cd "$(dirname "$0")/../bussin-autoloop" && pwd)"
 tmp="$(mktemp -d)"

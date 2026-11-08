@@ -1,0 +1,9 @@
+{
+  "id": "FINAL",
+  "passes": true,
+  "evidence": {
+    "commit": "3663c0ea03c260ac70ad83ec0a43bc47c718bcb5",
+    "ran": "bash tests/autoloop-agents.test.sh && bash tests/autoloop-loop.test.sh && bash tests/autoloop-notify.test.sh && bash tests/autoloop-parallel.test.sh (all green), bash .loop/verify.sh (green, 56 mod tests)"
+  },
+  "notes": "Did: the four slow suites (agents, loop, notify, parallel) now start with 'unset AUTOLOOP_SESSION $(compgen -v LOOP_)', so a suite run from inside a loop session no longer hands its session state to the loop.sh fixtures it launches. New mod test 'the pane shows a loop from before areas with areas from its categories and plain titles from its descriptions' mounts the pane on terminal and desktop with a list holding only id, category, description and passes, and sees '▸ Features', '▸ Edge cases', '▸ Other' and the titles 'CSV export', 'Empty export', 'Filters unchanged'. The worktree, card, Rename, Stop, Dismiss, stale-driver, status line and band tests already existed and pass. No product code changed.\nLearned: a parallel worker's environment holds AUTOLOOP_SESSION=1, LOOP_WORKER, LOOP_MAIN_DIR, LOOP_NAME and the driver's LOOP_WORKERS. Fixture loops inherit them: the pre-commit guard fires on fixture commits, and fixtures run 2 workers where they expect a sequential loop. 22 agent checks failed until the suites cleared the environment. Under the unattended allowlist only the exact commands.final string runs, so a single suite can't run by itself, and neither can env, sed -i or a pipe.\nLesson: [tests] the slow suites failed when run from a loop session because they inherited AUTOLOOP_SESSION and LOOP_* from the driver → a test that launches loop.sh must clear the loop env vars at its top, so it behaves the same inside and outside a loop."
+}
