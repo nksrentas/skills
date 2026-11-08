@@ -15,8 +15,29 @@ Flags, all optional:
 | `--no-checkpoint` | off | Skip the single human review of the item list |
 | `--base <ref>` | HEAD before init | Only when the loop should diff against another ref |
 | `--name <text>` | from the task | The loop's display name in the status band, pane and `loop-status.sh` |
+| `--here` | off | Run the loop in this checkout instead of its own worktree (step 1b) |
 
 Everything else in the message is the task text. If it points at a file (`brief.md`, a spec, a PRD), read that file and treat its contents as the task. Detect `new_project` when `--new` is given or the directory has no git history with source files.
+
+## 1b. Give the loop its own worktree
+
+The loop commits for hours with nobody watching, so it gets its own checkout and branch, and this checkout stays free for other work. Skip this step and work in the current directory when any of these holds:
+
+- `--here` was given.
+- `.loop/` already exists here: a re-init stays with its loop.
+- This checkout is already a linked worktree, so `git rev-parse --git-dir` and `git rev-parse --git-common-dir` differ (a Claude desktop session, or one the user made for this loop).
+- `new_project`, or the repo has no commits yet.
+
+Otherwise pick a slug from `--name`, or from the short title you will write for `name` in step 4: lowercase, words joined by `-`, at most 30 characters (`invoice-reminders`). The folder name becomes the loop's name for branches, ports and test databases (`LOOP_NAME`), so add `-2`, `-3` when the folder or branch already exists.
+
+```bash
+root="$(git rev-parse --show-toplevel)"
+git worktree add -b "autoloop/$slug" "$root.loops/$slug" HEAD
+```
+
+The branch is `autoloop/<slug>`, not `loop/<slug>`, because worker branches are `loop/<loop name>/<id>` and git cannot hold `loop/x` beside `loop/x/F1`. Copy the untracked files the app needs to run (`.env`, `.env.local` and the like, never `node_modules`) from `$root` into the worktree. Uncommitted changes in this checkout do not come along; when the task builds on them, ask the user to commit them first or rerun with `--here`.
+
+Do every later step inside the worktree: run commands there and write files there. If creating it is refused (a sandbox that writes only inside the project), say why and continue in place.
 
 ## 2. Fold in earlier retros
 
@@ -146,7 +167,7 @@ In the Claude desktop app, rename this session now to the line `bash "$SKILL_DIR
 Tell the user they can change `depends_on` and `touches` at any time by editing `.loop/feature_list.json`: the driver re-reads them before every launch, and the commit guard ignores those two fields. Then tell them how to start:
 
 ```bash
-bash "$SKILL_DIR/scripts/loop.sh"
+cd "<loop checkout>" && bash "$SKILL_DIR/scripts/loop.sh"
 ```
 
-with `$SKILL_DIR` written out as the real base directory, because the user's shell does not have that variable. When this init runs in Codex or GitHub Copilot, prefix the command with `LOOP_AGENT=codex` or `LOOP_AGENT=copilot` so the sessions use the same agent. When two or more items could run at once, also show the parallel form, `LOOP_WORKERS=3 bash "$SKILL_DIR/scripts/loop.sh"`, and say that it runs up to that many sessions at once, each in its own worktree, and uses usage that many times faster. Mention that `bash "$SKILL_DIR/scripts/loop-status.sh" --watch` shows progress, ETA, tokens and cost in any terminal while it runs, and `/autoloop-status` does the same in Claude Code with the `bussin-loop-status` mod. In the GitHub Copilot desktop app, open the dashboard canvas now, and again right after you start `loop.sh` yourself: call `open_canvas` with canvasId `autoloop-dashboard`, extensionId `user:bussin-autoloop-dashboard`, instanceId `autoloop-<repo folder name>` and input `{"projectPath": "<absolute repo root>"}`. Skip this silently when that canvas or tool is not available. Add that a single iteration can be run by hand with `/bussin-autoloop run`, or `/bussin:bussin-autoloop run` when the skill came from the `bussin` plugin.
+with `$SKILL_DIR` written out as the real base directory, because the user's shell does not have that variable, and `<loop checkout>` as the absolute path of the worktree from step 1b, or the current directory when there is none. When step 1b made a worktree, also say that the work lands on branch `autoloop/<slug>`, and that once the loop is done they merge it or open a pull request, then remove the folder with `git worktree remove "<loop checkout>"`. When this init runs in Codex or GitHub Copilot, prefix the command with `LOOP_AGENT=codex` or `LOOP_AGENT=copilot` so the sessions use the same agent. When two or more items could run at once, also show the parallel form, `LOOP_WORKERS=3 bash "$SKILL_DIR/scripts/loop.sh"`, and say that it runs up to that many sessions at once, each in its own worktree, and uses usage that many times faster. Mention that `bash "$SKILL_DIR/scripts/loop-status.sh" --watch` shows progress, ETA, tokens and cost in any terminal while it runs, and `/autoloop-status` does the same in Claude Code with the `bussin-loop-status` mod. In the GitHub Copilot desktop app, open the dashboard canvas now, and again right after you start `loop.sh` yourself: call `open_canvas` with canvasId `autoloop-dashboard`, extensionId `user:bussin-autoloop-dashboard`, instanceId `autoloop-<repo folder name>` and input `{"projectPath": "<absolute repo root>"}`. Skip this silently when that canvas or tool is not available. Add that a single iteration can be run by hand with `/bussin-autoloop run`, or `/bussin:bussin-autoloop run` when the skill came from the `bussin` plugin.

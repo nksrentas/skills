@@ -110,11 +110,13 @@ npx skills add emilkowalski/skills --skill emil-design-eng --skill animate --ski
 /bussin-autoloop init "Invoice reminders" --skills bussin-ts-architecture,bussin-drizzle
 ```
 
-Init researches the codebase and writes `.loop/`. That holds the feature list (functional, edge-case and regression items), a verify gate, and a commit guard that only allows commits of code that passed the gate. Init then shows you the list to confirm, and prints the command that runs one fresh session per item until every item passes:
+Init first gives the loop its own git worktree, `<repo>.loops/<slug>` on branch `autoloop/<slug>`, so your checkout stays free while the loop works (`--here` keeps it in the current checkout). Then it researches the codebase and writes `.loop/`. That holds the feature list (functional, edge-case and regression items), a verify gate, and a commit guard that only allows commits of code that passed the gate. Init then shows you the list to confirm, and prints the command that runs one fresh session per item until every item passes:
 
 ```bash
-bash ~/.claude/skills/bussin-autoloop/scripts/loop.sh
+cd ../app.loops/invoice-reminders && bash ~/.claude/skills/bussin-autoloop/scripts/loop.sh
 ```
+
+When it is done, merge `autoloop/<slug>` or open a pull request, then `git worktree remove` the folder.
 
 To run independent items at the same time, each in its own git worktree, set a cap: `LOOP_WORKERS=3 bash ~/.claude/skills/bussin-autoloop/scripts/loop.sh`. Init works out which items depend on which and what files each touches; you can edit both in `.loop/feature_list.json`.
 
@@ -122,7 +124,7 @@ For UI work add `bussin-ui` and `review:review-animations` to `--skills`.
 
 ### Running several loops
 
-Run one loop per checkout; a second `loop.sh` in the same checkout refuses to start while the first runs. For several loops at once, from different chats or terminals, give each its own git worktree (`git worktree add ../app-billing`) or repo. Each loop is named after its directory, so its worker branches (`loop/<name>/<id>`), dev-server ports and test databases never collide with another loop's.
+Run one loop per checkout; a second `loop.sh` in the same checkout refuses to start while the first runs. Init already puts each loop in its own git worktree, so several loops can run at once from different chats or terminals. Each loop is named after its directory, so its worker branches (`loop/<name>/<id>`), dev-server ports and test databases never collide with another loop's.
 
 The loop runs with Codex or GitHub Copilot too: install the skill for that agent, start init there (`$bussin-autoloop init …` in Codex, `/bussin-autoloop init …` in Copilot), then run the driver with `LOOP_AGENT=codex` or `LOOP_AGENT=copilot`. Every agent's commits go through the same commit guard, here as a git `pre-commit` hook, and the driver re-runs the gate after Codex and Copilot sessions. See [Agents](./bussin-autoloop/SKILL.md#agents) for what each one limits and reports.
 
