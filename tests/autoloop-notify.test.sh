@@ -119,4 +119,14 @@ check "an unmuted loop notifies again" '[ "$(grep -c "^---$" "$muted/messages")"
 check "the muted list lives next to the config, never in the repo" '[ -z "$(find "$muted" -name telegram-muted)" ] && [ -f "$tmp/telegram-muted" ]'
 check "--telegram off on a folder with no loop is refused" '! LOOP_NOTIFY_CONFIG="$tmp/muted.env" bash "$status" --telegram off "$tmp" 2> /dev/null'
 
+limit="$tmp/limit"
+make_project "$limit"
+config "$tmp/limit.env" 600
+sed -i.bak 's/^sleep 2$/echo "You'"'"'ve hit your session limit"; exit 1/' "$limit/bin/claude"
+# the loop exits 1 when it gives up, so run it outside run_loop, which stops this script on failure
+(cd "$limit" && env LOOP_NOTIFY_CONFIG="$tmp/limit.env" SUMMARY_FAIL=1 LIMIT_WAIT=0 LOOP_LIMIT_RETRIES=3 PATH="$limit/bin:$PATH" bash "$loop" > "$limit/out" 2>&1) || true
+for _ in 1 2 3 4 5 6 7 8 9 10; do grep -q "Stopped because" "$limit/messages" 2> /dev/null && break; sleep 1; done
+check "a usage limit is sent once per streak, not on every retry" '[ "$(grep -c "Usage limit at" "$limit/messages")" = 1 ]'
+check "the loop stops after LOOP_LIMIT_RETRIES and says why" 'grep -q "Stopped because the usage limit outlasted 3 retries" "$limit/messages"'
+
 [ "$failures" = 0 ] && echo "all notify checks passed" || { echo "$failures notify checks failed"; exit 1; }

@@ -14,6 +14,20 @@ startup_seconds="${LOOP_STARTUP_SECONDS:-10}"
 failed_to_start() { [ "$1" -ne 0 ] && [ $(($3 - $2)) -lt "$startup_seconds" ]; }
 startup_failure() { echo "autoloop: the $agent CLI exited within ${startup_seconds}s without working on $1, so the loop stopped and did not count the attempt. Fix the error above (sign-in, LOOP_AGENT_ARGS, LOOP_MODEL), then run loop.sh again." >&2; }
 limit_pattern="hit your .*limit|usage limit reached"
+# a weekly or monthly limit will not lift between pauses, so the loop stops instead of retrying (and pinging Telegram) for days
+long_limit_pattern="weekly|monthly|[0-9]+ days"
+limit_retries="${LOOP_LIMIT_RETRIES:-30}"
+limit_hits=0
+limit_stop=""
+# count_limit <session tail>: counts usage-limit hits in a row and sets limit_stop once waiting is pointless
+count_limit() {
+  limit_hits=$((limit_hits + 1))
+  if grep -iE "$limit_pattern" <<< "$1" | grep -iqE "$long_limit_pattern"; then
+    limit_stop="the usage limit will not reset soon"
+  elif [ "$limit_hits" -gt "$limit_retries" ]; then
+    limit_stop="the usage limit outlasted $limit_retries retries"
+  fi
+}
 
 user_config_count="${GIT_CONFIG_COUNT:-0}"
 [[ "$user_config_count" =~ ^[0-9]+$ ]] || { echo "autoloop: GIT_CONFIG_COUNT=$user_config_count is not a number" >&2; exit 1; }
@@ -118,7 +132,12 @@ while apply_inbox; [ "$(remaining)" -gt 0 ]; do
   else
     outcome=failed
   fi
-  if [ "$outcome" = limit ]; then set_attempts "$item" $(($(attempts_of "$item") - 1)); fi
+  if [ "$outcome" = limit ]; then
+    set_attempts "$item" $(($(attempts_of "$item") - 1))
+    count_limit "$(session_tail "$session_output" "$session_errors")"
+  else
+    limit_hits=0
+  fi
   write_live running sequential 1 "[]"
   ended="$(date +%s)"
   if ! audit_session "$before_head"; then
@@ -129,6 +148,10 @@ while apply_inbox; [ "$(remaining)" -gt 0 ]; do
   if [ "$outcome" = error ] && failed_to_start "$status" "$started" "$ended"; then
     set_attempts "$item" $(($(attempts_of "$item") - 1))
     startup_failure "$item"
+    exit 1
+  fi
+  if [ -n "$limit_stop" ]; then
+    echo "autoloop: stopped because $limit_stop; run loop.sh again once it resets" >&2
     exit 1
   fi
   if [ "$before" = "$after" ] && [ "$hit_limit" = true ]; then

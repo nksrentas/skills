@@ -203,6 +203,25 @@ pause_started=$SECONDS
 (cd "$pause" && PATH="$pause/bin:$PATH" LIMIT_WAIT=30 bash "$loop" > "$pause/out" 2>&1) || true
 [ $((SECONDS - pause_started)) -lt 15 ] && grep -q "stopped on request" "$pause/out" || { cat "$pause/out"; echo "FAIL: a stop request did not cut the usage-limit wait short"; exit 1; }
 
+weekly="$tmp/weekly"
+make_project "$weekly" pass
+cat > "$weekly/bin/claude" <<EOF
+#!/usr/bin/env bash
+echo x >> "$weekly/calls"
+echo "You've hit your weekly limit · resets Nov 20"
+exit 1
+EOF
+weekly_status=0
+(cd "$weekly" && PATH="$weekly/bin:$PATH" LIMIT_WAIT=0 bash "$loop" > "$weekly/out" 2>&1) || weekly_status=$?
+[ "$weekly_status" = 1 ] && [ "$(wc -l < "$weekly/calls" | tr -d ' ')" = 1 ] && grep -q "will not reset soon" "$weekly/out" || { cat "$weekly/out"; echo "FAIL: a weekly limit was retried instead of stopping the loop"; exit 1; }
+
+capped="$tmp/capped"
+make_project "$capped" pass
+sed 's#weekly/calls#capped/calls#; s/weekly limit/session limit/' "$weekly/bin/claude" > "$capped/bin/claude"
+capped_status=0
+(cd "$capped" && PATH="$capped/bin:$PATH" LIMIT_WAIT=0 LOOP_LIMIT_RETRIES=2 bash "$loop" > "$capped/out" 2>&1) || capped_status=$?
+[ "$capped_status" = 1 ] && [ "$(wc -l < "$capped/calls" | tr -d ' ')" = 3 ] && grep -q "outlasted 2 retries" "$capped/out" || { cat "$capped/out"; echo "FAIL: a usage limit was retried past LOOP_LIMIT_RETRIES"; exit 1; }
+
 full="$tmp/full"
 make_project "$full" pass
 mkdir -p "$tmp/full-slots/1"

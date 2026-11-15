@@ -252,6 +252,7 @@ finish() {
     set_attempts "$id" $(($(attempts_of "$id") - 1))
     launched=$((launched - 1))
     pause_after_poll=1
+    count_limit "$(session_tail "$result" "$output")"
     log "worker $slot hit a usage limit on $id; it runs again after a ${limit_wait}s pause"
   else
     outcome=failed
@@ -264,6 +265,7 @@ finish() {
       outcome=error
     fi
   fi
+  [ "$outcome" = limit ] || limit_hits=0
   record_usage "$id" "$slot" "$started" "$result" "$outcome" "$(date +%s)" "$output"
 }
 
@@ -344,7 +346,7 @@ run_parallel() {
       if [ -n "${slot_pid[$i]}" ] && ! kill -0 "${slot_pid[$i]}" 2>/dev/null; then finish "$i"; fi
     done
     if [ "$pause_after_poll" = 1 ]; then
-      pause "$limit_wait"
+      [ -n "$limit_stop" ] || pause "$limit_wait"
       pause_after_poll=0
     fi
     apply_inbox
@@ -354,9 +356,13 @@ run_parallel() {
       continue
     fi
     [ "$left" -gt 0 ] || break
-    if [ -e "$stop_file" ] || [ "$agent_broken" != 0 ]; then
+    if [ -e "$stop_file" ] || [ "$agent_broken" != 0 ] || [ -n "$limit_stop" ]; then
       if [ "$(busy_workers)" -eq 0 ] && [ "$agent_broken" != 0 ]; then
         startup_failure "$agent_broken"
+        exit 1
+      fi
+      if [ "$(busy_workers)" -eq 0 ] && [ -n "$limit_stop" ]; then
+        log "stopped because $limit_stop; run loop.sh again once it resets"
         exit 1
       fi
       if [ "$(busy_workers)" -eq 0 ]; then

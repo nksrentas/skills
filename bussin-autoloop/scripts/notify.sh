@@ -121,7 +121,10 @@ notify_session() {
   id="<code>$(printf '%s' "$item" | html_escape)</code>"
   case "$outcome" in
     passed | merged) notify "$item passed: $what" "<i>$id $what passed.</i>" ;;
-    limit) notify "A usage limit paused the loop at $item; it retries after ${limit_wait}s." "<i>Usage limit at $id; retrying in ${limit_wait}s.</i>" ;;
+    # once per streak: the stop message covers the rest, so a long limit cannot ping every pause
+    limit) [ "$limit_hits" = 1 ] && [ -z "$limit_stop" ] || return 0
+      notify "A usage limit paused the loop at $item; it retries every ${limit_wait}s, up to $limit_retries times." \
+        "<i>Usage limit at $id; retrying every ${limit_wait}s, up to $limit_retries times.</i>" ;;
     *) notify "$item did not pass ($outcome, attempt $(attempts_of "$item") of $item_attempts): $what${reason:+. Last output: $reason}" \
       "<b>$id $what failed</b>, try $(attempts_of "$item") of $item_attempts${reason:+
 <i>$(printf '%s' "$reason" | cut -c1-200 | html_escape)</i>}" ;;
@@ -143,6 +146,7 @@ notify_loop_end() {
     [ -z "$blocked" ] || facts="$facts Blocked items: $blocked."
     last="$(tail -n 1 "$usage_file" 2> /dev/null | jq -r 'select(.outcome != "passed" and .outcome != "merged") | "Last session: \(.item) \(.outcome)" + (if .reason then ", \(.reason)" else "" end)' 2> /dev/null || true)"
     [ -z "$last" ] || facts="$facts $last"
+    [ -z "$limit_stop" ] || { facts="$facts It stopped because $limit_stop; run loop.sh again once it resets."; last="Stopped because $limit_stop"; }
     notify "$facts" "<b>Loop stopped, needs you</b>
 <i>$(printf '%s' "${last:-check the terminal}" | cut -c1-200 | html_escape)</i>"
   fi
